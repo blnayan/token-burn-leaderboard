@@ -24,4 +24,13 @@ describe("formatTokens", () => {
     expect(formatTokens(12400)).toBe("12.4K");
     expect(formatTokens(12400000)).toBe("12.4M");
   });
+
+  it("truncates compact decimal values", () => {
+    expect(formatTokens(12499)).toBe("12.4K");
+  });
+
+  it("rejects invalid token totals", () => {
+    expect(() => formatTokens(-1)).toThrow("Token totals cannot be negative");
+    expect(() => formatTokens(Number.POSITIVE_INFINITY)).toThrow("Token totals must be finite numbers");
+  });
 });
