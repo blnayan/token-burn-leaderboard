@@ -7,3 +7,8 @@ node_modules/
 .next/
 dist/
 coverage/
+.turbo/
+.DS_Store
+*.tsbuildinfo
+playwright-report/
+test-results/
