@@ -1,0 +1,80 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(cuid())
+  githubId       String   @unique
+  githubLogin    String   @unique
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  member         Member?
+  createdInvites Invite[] @relation("InviteCreator")
+}
+
+model Member {
+  id          String               @id @default(cuid())
+  userId      String               @unique
+  displayName String               @unique
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cliTokens   CliToken[]
+  usage       DailyProviderUsage[]
+}
+
+model Invite {
+  id           String    @id @default(cuid())
+  codeHash     String    @unique
+  createdById  String
+  redeemedById String?
+  expiresAt    DateTime
+  redeemedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  createdBy    User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+}
+
+model CliLoginSession {
+  id         String    @id @default(cuid())
+  codeHash   String    @unique
+  memberId   String?
+  approvedAt DateTime?
+  expiresAt  DateTime
+  createdAt  DateTime  @default(now())
+}
+
+model CliToken {
+  id         String    @id @default(cuid())
+  tokenHash  String    @unique
+  memberId   String
+  label      String
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
+}
+
+model DailyProviderUsage {
+  id              String   @id @default(cuid())
+  memberId        String
+  provider        String
+  date            DateTime
+  tokenCategories Json
+  totalTokens     BigInt
+  cliVersion      String
+  ccusageVersion  String
+  os              String
+  syncedAt        DateTime
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  member          Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, provider, date])
+  @@index([provider, date])
+  @@index([date])
+}
