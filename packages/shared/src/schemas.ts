@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { sumTokenCategories } from "./tokens.js";
 
 export const providerSchema = z.enum(["claude_code", "codex"]);
 export type Provider = z.infer<typeof providerSchema>;
@@ -10,16 +11,21 @@ export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const tokenCategoriesSchema = z.record(z.string(), z.number().int().nonnegative());
 
-export const syncPayloadSchema = z.object({
-  provider: providerSchema,
-  date: isoDateSchema,
-  tokenCategories: tokenCategoriesSchema,
-  totalTokens: z.number().int().nonnegative(),
-  cliVersion: z.string().min(1),
-  ccusageVersion: z.string().min(1),
-  os: z.enum(["darwin", "linux", "win32"]),
-  syncedAt: z.string().datetime(),
-});
+export const syncPayloadSchema = z
+  .object({
+    provider: providerSchema,
+    date: isoDateSchema,
+    tokenCategories: tokenCategoriesSchema,
+    totalTokens: z.number().int().nonnegative(),
+    cliVersion: z.string().min(1),
+    ccusageVersion: z.string().min(1),
+    os: z.enum(["darwin", "linux", "win32"]),
+    syncedAt: z.string().datetime(),
+  })
+  .refine((payload) => payload.totalTokens === sumTokenCategories(payload.tokenCategories), {
+    message: "totalTokens must equal the sum of tokenCategories",
+    path: ["totalTokens"],
+  });
 
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
 
