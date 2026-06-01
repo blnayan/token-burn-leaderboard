@@ -141,6 +141,7 @@ describe("normalizeCcusageDailyRows", () => {
         models: {
           "gpt-5.5": {
             cachedInputTokens: 850,
+            costUSD: 0.42,
             inputTokens: 100,
             isFallback: false,
             outputTokens: 50,
@@ -191,6 +192,7 @@ describe("normalizeCcusageDailyRows", () => {
               reasoningOutput: 20,
             },
             totalTokens: 1000,
+            costUsd: 0.42,
             metadata: {
               isFallback: false,
             },

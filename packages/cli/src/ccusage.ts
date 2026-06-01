@@ -41,8 +41,6 @@ export type NormalizedModelUsage = {
   tokenDetails?: NormalizedTokenDetails;
   totalTokens: number;
   costUsd?: number;
-  costSource?: "ccusage";
-  costMetadata?: CostMetadata;
   metadata?: {
     isFallback?: boolean;
   };
@@ -358,7 +356,6 @@ function normalizeModelUsage(models: unknown): NormalizedModelUsage[] {
 
       if (costUsd !== undefined) {
         normalized.costUsd = costUsd;
-        normalized.costSource = "ccusage";
       }
 
       if (typeof modelRecord.isFallback === "boolean") {
