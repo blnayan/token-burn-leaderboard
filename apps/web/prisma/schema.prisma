@@ -8,24 +8,26 @@ datasource db {
 }
 
 model User {
-  id             String   @id @default(cuid())
-  githubId       String   @unique
-  githubLogin    String   @unique
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  member         Member?
-  createdInvites Invite[] @relation("InviteCreator")
+  id              String   @id @default(cuid())
+  githubId        String   @unique
+  githubLogin     String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  member          Member?
+  createdInvites  Invite[] @relation("InviteCreator")
+  redeemedInvites Invite[] @relation("InviteRedeemer")
 }
 
 model Member {
-  id          String               @id @default(cuid())
-  userId      String               @unique
-  displayName String               @unique
-  createdAt   DateTime             @default(now())
-  updatedAt   DateTime             @updatedAt
-  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  cliTokens   CliToken[]
-  usage       DailyProviderUsage[]
+  id               String             @id @default(cuid())
+  userId           String             @unique
+  displayName      String             @unique
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  cliLoginSessions CliLoginSession[]
+  cliTokens        CliToken[]
+  usage            DailyProviderUsage[]
 }
 
 model Invite {
@@ -37,6 +39,9 @@ model Invite {
   redeemedAt   DateTime?
   createdAt    DateTime  @default(now())
   createdBy    User      @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  redeemedBy   User?     @relation("InviteRedeemer", fields: [redeemedById], references: [id], onDelete: SetNull)
+
+  @@index([redeemedById])
 }
 
 model CliLoginSession {
@@ -46,6 +51,9 @@ model CliLoginSession {
   approvedAt DateTime?
   expiresAt  DateTime
   createdAt  DateTime  @default(now())
+  member     Member?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
+
+  @@index([memberId])
 }
 
 model CliToken {
@@ -63,7 +71,7 @@ model DailyProviderUsage {
   id              String   @id @default(cuid())
   memberId        String
   provider        String
-  date            DateTime
+  date            DateTime @db.Date
   tokenCategories Json
   totalTokens     BigInt
   cliVersion      String
