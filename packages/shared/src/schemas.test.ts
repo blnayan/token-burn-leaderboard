@@ -147,6 +147,125 @@ describe("syncPayloadSchema", () => {
       }),
     ).toThrow();
   });
+
+  it("accepts cost, token details, and model usage rows", () => {
+    const payload = syncPayloadSchema.parse({
+      provider: "codex",
+      date: "2026-06-01",
+      tokenCategories: {
+        input: 100,
+        output: 50,
+        cacheCreate: 0,
+        cacheRead: 850,
+      },
+      tokenDetails: {
+        reasoningOutput: 20,
+      },
+      totalTokens: 1000,
+      costUsd: 1.234567,
+      costSource: "ccusage",
+      costMetadata: {
+        speed: "fast",
+      },
+      sourceSnapshot: {
+        costUSD: 1.234567,
+        totalTokens: 1000,
+      },
+      models: [
+        {
+          modelName: "gpt-5.5",
+          tokenCategories: {
+            input: 100,
+            output: 50,
+            cacheCreate: 0,
+            cacheRead: 850,
+          },
+          tokenDetails: {
+            reasoningOutput: 20,
+          },
+          totalTokens: 1000,
+          costUsd: 1.234567,
+          metadata: {
+            isFallback: false,
+          },
+        },
+      ],
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      ccusageVersion: "20.0.6",
+      os: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+    });
+
+    expect(payload.costUsd).toBe(1.234567);
+    expect(payload.tokenDetails?.reasoningOutput).toBe(20);
+    expect(payload.models?.[0]?.modelName).toBe("gpt-5.5");
+  });
+
+  it("rejects negative cost and model totals that do not match scoring categories", () => {
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-06-01",
+        tokenCategories: { input: 100 },
+        totalTokens: 100,
+        costUsd: -1,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+        cliVersion: "0.1.0",
+        ccusageVersion: "20.0.6",
+        os: "linux",
+        syncedAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-06-01",
+        tokenCategories: { input: 100 },
+        totalTokens: 100,
+        models: [
+          {
+            modelName: "gpt-5.5",
+            tokenCategories: { input: 100 },
+            totalTokens: 101,
+          },
+        ],
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+        cliVersion: "0.1.0",
+        ccusageVersion: "20.0.6",
+        os: "linux",
+        syncedAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ).toThrow("model totalTokens must equal the sum of tokenCategories");
+  });
+
+  it("keeps reasoning output out of scoring token totals", () => {
+    const payload = syncPayloadSchema.parse({
+      provider: "codex",
+      date: "2026-06-01",
+      tokenCategories: {
+        input: 10,
+        output: 20,
+      },
+      tokenDetails: {
+        reasoningOutput: 7,
+      },
+      totalTokens: 30,
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      ccusageVersion: "20.0.6",
+      os: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+    });
+
+    expect(payload.totalTokens).toBe(30);
+    expect(payload.tokenDetails).toEqual({ reasoningOutput: 7 });
+  });
 });
 
 describe("leaderboardRowSchema", () => {
