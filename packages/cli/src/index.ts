@@ -14,4 +14,9 @@ program.addCommand(createLoginCommand());
 program.addCommand(createLogoutCommand());
 program.addCommand(createStatusCommand());
 
-await program.parseAsync();
+program.parseAsync().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+
+  console.error(message);
+  process.exitCode = 1;
+});

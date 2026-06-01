@@ -37,6 +37,9 @@ describe("runLogin", () => {
 
 describe("createLoginCommand", () => {
   it("exposes --server as the server URL option", () => {
-    expect(createLoginCommand().helpInformation()).toContain("--server <url>");
+    const help = createLoginCommand().helpInformation();
+
+    expect(help).toContain("--server <url>");
+    expect(help).not.toContain("--server-url");
   });
 });

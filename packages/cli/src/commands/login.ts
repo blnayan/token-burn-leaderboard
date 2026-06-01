@@ -70,7 +70,7 @@ export function createLoginCommand(): Command {
   return new Command("login")
     .description("Authenticate the Token Burn CLI")
     .option(
-      "-s, --server <url>, --server-url <url>",
+      "-s, --server <url>",
       "Token Burn server URL",
       process.env.TOKEN_BURN_SERVER_URL ?? "http://localhost:3000",
     )
