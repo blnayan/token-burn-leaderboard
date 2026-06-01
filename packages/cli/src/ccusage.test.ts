@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   UnsupportedCcusageProviderError,
@@ -6,6 +6,10 @@ import {
   normalizeCcusageDailyRows,
   readProviderUsage,
 } from "./ccusage.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("normalizeCcusageDailyRows", () => {
   it("normalizes common daily token fields into shared token categories", () => {
@@ -104,22 +108,13 @@ describe("normalizeCcusageDailyRows", () => {
 
 describe("buildCcusageArgs", () => {
   it("uses the supported UTC daily JSON report for Claude Code", () => {
-    expect(buildCcusageArgs("claude_code", { TOKEN_BURN_TIMEZONE: "UTC" })).toEqual([
-      "daily",
-      "--json",
-      "--timezone",
-      "UTC",
-    ]);
+    expect(buildCcusageArgs("claude_code")).toEqual(["daily", "--json", "--timezone", "UTC"]);
   });
 
-  it("defaults the Token Burn timezone to UTC", () => {
-    expect(buildCcusageArgs("claude_code", {})).toEqual(["daily", "--json", "--timezone", "UTC"]);
-  });
+  it("treats UTC as an invariant instead of reading TOKEN_BURN_TIMEZONE", () => {
+    vi.stubEnv("TOKEN_BURN_TIMEZONE", "America/New_York");
 
-  it("rejects non-UTC Token Burn timezones", () => {
-    expect(() => buildCcusageArgs("claude_code", { TOKEN_BURN_TIMEZONE: "America/New_York" })).toThrow(
-      "TOKEN_BURN_TIMEZONE must be UTC.",
-    );
+    expect(buildCcusageArgs("claude_code")).toEqual(["daily", "--json", "--timezone", "UTC"]);
   });
 
   it("rejects Codex because installed ccusage does not expose a Codex report", () => {

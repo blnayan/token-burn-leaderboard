@@ -32,7 +32,6 @@ services:
       AUTH_URL: ${AUTH_URL}
       DATABASE_URL: ${DATABASE_URL}
       TOKEN_BURN_PUBLIC_URL: ${TOKEN_BURN_PUBLIC_URL}
-      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
@@ -49,7 +48,6 @@ services:
     environment:
       TZ: UTC
       DATABASE_URL: ${DATABASE_URL}
-      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy

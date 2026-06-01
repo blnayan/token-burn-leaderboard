@@ -28,10 +28,6 @@ type CommandResult = {
 
 type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
 
-type CcusageEnv = {
-  TOKEN_BURN_TIMEZONE?: string;
-};
-
 export class UnsupportedCcusageProviderError extends Error {
   readonly provider: CcusageProvider;
 
@@ -74,9 +70,9 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
 
 export async function readProviderUsage(
   provider: CcusageProvider,
-  { runCommand = spawnCommand, env = process.env }: { runCommand?: CommandRunner; env?: CcusageEnv } = {},
+  { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
 ): Promise<NormalizedUsageRow[]> {
-  const args = buildCcusageArgs(provider, env);
+  const args = buildCcusageArgs(provider);
   const result = await runCommand(resolveCcusageCommand(), args);
   const parsed = JSON.parse(result.stdout) as unknown;
   const rows = Array.isArray(parsed) ? parsed : readDailyArray(parsed);
@@ -84,9 +80,9 @@ export async function readProviderUsage(
   return normalizeCcusageDailyRows(provider, rows);
 }
 
-export function buildCcusageArgs(provider: CcusageProvider, env: CcusageEnv = process.env): string[] {
+export function buildCcusageArgs(provider: CcusageProvider): string[] {
   if (provider === "claude_code") {
-    return ["daily", "--json", "--timezone", readTokenBurnTimezone(env)];
+    return ["daily", "--json", "--timezone", "UTC"];
   }
 
   throw new UnsupportedCcusageProviderError(provider);
@@ -111,16 +107,6 @@ function resolveCcusageCommand(): string {
   const bundledBin = fileURLToPath(new URL(`../node_modules/.bin/${binName}`, import.meta.url));
 
   return existsSync(bundledBin) ? bundledBin : "ccusage";
-}
-
-function readTokenBurnTimezone(env: CcusageEnv): "UTC" {
-  const timezone = env.TOKEN_BURN_TIMEZONE ?? "UTC";
-
-  if (timezone !== "UTC") {
-    throw new Error("TOKEN_BURN_TIMEZONE must be UTC.");
-  }
-
-  return timezone;
 }
 
 function spawnCommand(command: string, args: string[]): Promise<CommandResult> {

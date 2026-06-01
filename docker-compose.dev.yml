@@ -37,7 +37,6 @@ services:
       AUTH_URL: ${AUTH_URL:-https://tokenburn-dev.nayanbhut.dev}
       DATABASE_URL: ${DATABASE_URL:-postgresql://tokenburn:change-this-password@postgres:5432/tokenburn}
       TOKEN_BURN_PUBLIC_URL: ${TOKEN_BURN_PUBLIC_URL:-https://tokenburn-dev.nayanbhut.dev}
-      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
       CI: "1"
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:

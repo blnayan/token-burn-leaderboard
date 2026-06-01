@@ -5,7 +5,7 @@ Token Burn runs behind the host-level Caddy reverse proxy. Docker Compose runs P
 ## Setup
 
 1. Copy `.env.example` to `.env.prod`.
-2. Fill in GitHub OAuth values, `AUTH_SECRET`, `ADMIN_GITHUB_LOGIN`, and Postgres credentials. Keep `TOKEN_BURN_TIMEZONE=UTC`; leaderboard periods and CLI usage grouping are normalized to UTC.
+2. Fill in GitHub OAuth values, `AUTH_SECRET`, `ADMIN_GITHUB_LOGIN`, and Postgres credentials. Token Burn normalizes leaderboard periods and CLI usage grouping to UTC.
 3. Run `docker compose --env-file .env.prod build`.
 4. Run `docker compose --env-file .env.prod up -d postgres`.
 5. Run `docker compose --env-file .env.prod --profile tools run --rm migrate`.
