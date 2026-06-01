@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { Command } from "commander";
 
+import { createDoctorCommand } from "./commands/doctor.js";
 import { createLoginCommand } from "./commands/login.js";
 import { createLogoutCommand } from "./commands/logout.js";
+import { createInstallSchedulerCommand, createUninstallSchedulerCommand } from "./commands/scheduler.js";
 import { createSyncCommand } from "./commands/sync.js";
 import { createStatusCommand } from "./commands/status.js";
 
@@ -15,6 +17,9 @@ program.addCommand(createLoginCommand());
 program.addCommand(createLogoutCommand());
 program.addCommand(createStatusCommand());
 program.addCommand(createSyncCommand());
+program.addCommand(createDoctorCommand());
+program.addCommand(createInstallSchedulerCommand());
+program.addCommand(createUninstallSchedulerCommand());
 
 program.parseAsync().catch((error: unknown) => {
   const message = error instanceof Error ? error.message : String(error);
