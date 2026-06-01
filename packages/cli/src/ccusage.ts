@@ -33,14 +33,21 @@ const providerCommands: Record<CcusageProvider, string[]> = {
   codex: ["codex", "daily", "--json"],
 };
 
+const tokenFieldAliases = {
+  input: ["inputTokens", "input_tokens", "input"],
+  output: ["outputTokens", "output_tokens", "output"],
+  cacheCreate: ["cacheCreationTokens", "cacheCreateTokens", "cache_creation_tokens"],
+  cacheRead: ["cacheReadTokens", "cache_read_tokens"],
+} as const;
+
 export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): NormalizedUsageRow[] {
   return rows.map((row) => {
     const record = toRecord(row);
     const tokenCategories = {
-      input: readTokenField(record, "inputTokens"),
-      output: readTokenField(record, "outputTokens"),
-      cacheCreate: readTokenField(record, "cacheCreationTokens"),
-      cacheRead: readTokenField(record, "cacheReadTokens"),
+      input: readTokenField(record, tokenFieldAliases.input),
+      output: readTokenField(record, tokenFieldAliases.output),
+      cacheCreate: readTokenField(record, tokenFieldAliases.cacheCreate),
+      cacheRead: readTokenField(record, tokenFieldAliases.cacheRead),
     };
 
     return {
@@ -133,11 +140,12 @@ function readDate(record: Record<string, unknown>): string {
   return date;
 }
 
-function readTokenField(record: Record<string, unknown>, field: string): number {
-  const value = record[field] ?? 0;
+function readTokenField(record: Record<string, unknown>, fields: readonly string[]): number {
+  const field = fields.find((candidate) => record[candidate] !== undefined);
+  const value = field ? record[field] : 0;
 
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
-    throw new Error(`ccusage daily row has an invalid ${field} value.`);
+    throw new Error(`ccusage daily row has an invalid ${field ?? fields[0]} value.`);
   }
 
   return Math.trunc(value);
