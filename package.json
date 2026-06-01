@@ -7,6 +7,7 @@
     "dev": "pnpm --filter @token-burn/web dev",
     "dev:public": "docker compose --env-file .env.dev -f docker-compose.dev.yml up web",
     "dev:public:down": "docker compose --env-file .env.dev -f docker-compose.dev.yml down",
+    "dev:public:reset": "docker compose --env-file .env.dev -f docker-compose.dev.yml down -v",
     "prod:config": "docker compose --env-file .env.prod config",
     "prod:build": "docker compose --env-file .env.prod build",
     "prod:up": "docker compose --env-file .env.prod up -d",

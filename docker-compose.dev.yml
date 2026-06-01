@@ -40,6 +40,7 @@ services:
       - .:/app
       - root-node-modules:/app/node_modules
       - web-node-modules:/app/apps/web/node_modules
+      - web-next:/app/apps/web/.next
       - shared-node-modules:/app/packages/shared/node_modules
       - cli-node-modules:/app/packages/cli/node_modules
       - pnpm-store:/root/.local/share/pnpm/store
@@ -53,6 +54,7 @@ services:
 volumes:
   root-node-modules:
   web-node-modules:
+  web-next:
   shared-node-modules:
   cli-node-modules:
   postgres-dev-data:
