@@ -4,6 +4,7 @@ import { signIn, auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
+import { createDefaultDisplayName } from "@/server/display-name";
 import { hashInviteCode, isInviteExpired } from "@/server/invites";
 
 async function signInWithGitHub(formData: FormData) {
@@ -47,7 +48,7 @@ async function acceptInvite(formData: FormData) {
       where: { userId: user.id },
       create: {
         userId: user.id,
-        displayName: `member-${user.id.slice(0, 8)}`,
+        displayName: createDefaultDisplayName(user.id),
       },
       update: {},
     });

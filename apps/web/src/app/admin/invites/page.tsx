@@ -79,7 +79,18 @@ export default async function AdminInvitesPage({
   }
 
   const { code } = await searchParams;
-  const inviteUrl = code ? `${env.TOKEN_BURN_PUBLIC_URL.replace(/\/$/, "")}/invite/${code}` : null;
+  const invite = code
+    ? await prisma.invite.findFirst({
+        where: {
+          codeHash: hashInviteCode(code),
+          redeemedAt: null,
+          expiresAt: { gt: new Date() },
+        },
+        select: { id: true },
+      })
+    : null;
+  const inviteUrl = code && invite ? `${env.TOKEN_BURN_PUBLIC_URL.replace(/\/$/, "")}/invite/${code}` : null;
+  const ignoredCode = code && !invite;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-6 px-5 py-8">
@@ -98,6 +109,7 @@ export default async function AdminInvitesPage({
           <Input id="inviteUrl" value={inviteUrl} readOnly />
         </div>
       ) : null}
+      {ignoredCode ? <p className="text-sm text-muted-foreground">That invite link is no longer available.</p> : null}
     </main>
   );
 }
