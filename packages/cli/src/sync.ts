@@ -5,7 +5,11 @@ import type { Provider, SyncPayload } from "@token-burn/shared";
 import { syncPayloadSchema } from "@token-burn/shared";
 
 import type { NormalizedUsageRow } from "./ccusage.js";
-import { readCcusageVersion as readCcusageVersionFromPackage, readProviderUsage as readProviderUsageFromCcusage } from "./ccusage.js";
+import {
+  isUnsupportedCcusageProviderError,
+  readCcusageVersion as readCcusageVersionFromPackage,
+  readProviderUsage as readProviderUsageFromCcusage,
+} from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
 import { postJson as postJsonRequest } from "./http.js";
@@ -49,6 +53,7 @@ export async function syncUsage({
   const ccusageVersion = await readCcusageVersion();
   const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const failures: Array<{ provider: Provider; error: Error }> = [];
+  const skipped: Array<{ provider: Provider; error: Error }> = [];
   let submitted = 0;
 
   for (const provider of providers) {
@@ -61,11 +66,17 @@ export async function syncUsage({
         submitted += 1;
       }
     } catch (error) {
-      failures.push({ provider, error: toError(error) });
+      const normalizedError = toError(error);
+
+      if (isUnsupportedCcusageProviderError(error)) {
+        skipped.push({ provider, error: normalizedError });
+      } else {
+        failures.push({ provider, error: normalizedError });
+      }
     }
   }
 
-  const message = formatSyncMessage(submitted, failures);
+  const message = formatSyncMessage(submitted, failures, skipped);
   const lastSync = {
     ok: failures.length === 0,
     message,
@@ -74,8 +85,8 @@ export async function syncUsage({
 
   await writeConfig({ ...config, lastSync });
 
-  if (submitted === 0 && failures.length === providers.length) {
-    throw new Error(`All providers failed: ${formatFailures(failures)}.`);
+  if (submitted === 0 && failures.length > 0) {
+    throw new Error(`All supported providers failed: ${formatFailures(failures)}.`);
   }
 
   log(message);
@@ -126,14 +137,22 @@ function normalizePlatform(value: NodeJS.Platform): SyncPlatform {
   throw new Error(`Unsupported platform for sync: ${value}.`);
 }
 
-function formatSyncMessage(submitted: number, failures: Array<{ provider: Provider; error: Error }>): string {
-  const submittedText = `Submitted ${submitted} usage ${submitted === 1 ? "row" : "rows"}.`;
+function formatSyncMessage(
+  submitted: number,
+  failures: Array<{ provider: Provider; error: Error }>,
+  skipped: Array<{ provider: Provider; error: Error }>,
+): string {
+  const parts = [`Submitted ${submitted} usage ${submitted === 1 ? "row" : "rows"}`];
 
-  if (failures.length === 0) {
-    return submittedText;
+  if (failures.length > 0) {
+    parts.push(`Failed providers: ${formatFailures(failures)}`);
   }
 
-  return `${submittedText} Failed providers: ${formatFailures(failures)}.`;
+  if (skipped.length > 0) {
+    parts.push(`Skipped providers: ${formatFailures(skipped)}`);
+  }
+
+  return `${parts.join(". ")}.`;
 }
 
 function formatFailures(failures: Array<{ provider: Provider; error: Error }>): string {

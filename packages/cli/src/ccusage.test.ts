@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildCcusageArgs, normalizeCcusageDailyRows, readProviderUsage } from "./ccusage.js";
+import {
+  UnsupportedCcusageProviderError,
+  buildCcusageArgs,
+  normalizeCcusageDailyRows,
+  readProviderUsage,
+} from "./ccusage.js";
 
 describe("normalizeCcusageDailyRows", () => {
   it("normalizes common daily token fields into shared token categories", () => {
@@ -104,6 +109,7 @@ describe("buildCcusageArgs", () => {
 
   it("rejects Codex because installed ccusage does not expose a Codex report", () => {
     expect(() => buildCcusageArgs("codex")).toThrow("ccusage does not support Codex usage in the installed version.");
+    expect(() => buildCcusageArgs("codex")).toThrow(UnsupportedCcusageProviderError);
   });
 });
 
@@ -132,5 +138,34 @@ describe("readProviderUsage", () => {
 
     expect(runCommand).toHaveBeenCalledOnce();
     expect(runCommand.mock.calls[0]?.[1]).toEqual(["daily", "--json"]);
+  });
+
+  it("normalizes daily rows from object output", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({
+        daily: [
+          {
+            date: "2026-05-31",
+            input_tokens: 100,
+            output_tokens: 50,
+          },
+        ],
+      }),
+      stderr: "",
+    });
+
+    await expect(readProviderUsage("claude_code", { runCommand })).resolves.toEqual([
+      {
+        provider: "claude_code",
+        date: "2026-05-31",
+        tokenCategories: {
+          input: 100,
+          output: 50,
+          cacheCreate: 0,
+          cacheRead: 0,
+        },
+        totalTokens: 150,
+      },
+    ]);
   });
 });

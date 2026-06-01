@@ -28,6 +28,20 @@ type CommandResult = {
 
 type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
 
+export class UnsupportedCcusageProviderError extends Error {
+  readonly provider: CcusageProvider;
+
+  constructor(provider: CcusageProvider) {
+    super("ccusage does not support Codex usage in the installed version.");
+    this.name = "UnsupportedCcusageProviderError";
+    this.provider = provider;
+  }
+}
+
+export function isUnsupportedCcusageProviderError(error: unknown): error is UnsupportedCcusageProviderError {
+  return error instanceof UnsupportedCcusageProviderError;
+}
+
 const tokenFieldAliases = {
   input: ["inputTokens", "input_tokens", "input"],
   output: ["outputTokens", "output_tokens", "output"],
@@ -71,7 +85,7 @@ export function buildCcusageArgs(provider: CcusageProvider): string[] {
     return ["daily", "--json"];
   }
 
-  throw new Error("ccusage does not support Codex usage in the installed version.");
+  throw new UnsupportedCcusageProviderError(provider);
 }
 
 export async function readCcusageVersion(): Promise<string> {

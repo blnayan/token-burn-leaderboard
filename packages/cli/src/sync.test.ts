@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import { syncUsage } from "./sync.js";
 
@@ -84,7 +85,7 @@ describe("syncUsage", () => {
     expect(logs).toEqual(["Submitted 2 usage rows."]);
   });
 
-  it("records failed lastSync but does not throw when at least one provider submits", async () => {
+  it("records skipped unsupported providers as a successful sync when supported providers submit", async () => {
     const writes: CliConfig[] = [];
     const logs: string[] = [];
 
@@ -96,7 +97,57 @@ describe("syncUsage", () => {
       postJson: async () => ({ ok: true }),
       readProviderUsage: async (provider) => {
         if (provider === "codex") {
-          throw new Error("ccusage does not support Codex usage in the installed version.");
+          throw new UnsupportedCcusageProviderError(provider);
+        }
+
+        return [
+          {
+            provider,
+            date: "2026-05-31",
+            tokenCategories: { input: 100 },
+            totalTokens: 100,
+          },
+        ];
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      log: (message) => {
+        logs.push(message);
+      },
+    });
+
+    expect(writes).toEqual([
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        lastSync: {
+          ok: true,
+          message:
+            "Submitted 1 usage row. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+          at: "2026-06-01T00:00:00.000Z",
+        },
+      },
+    ]);
+    expect(logs).toEqual([
+      "Submitted 1 usage row. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+    ]);
+  });
+
+  it("records actual provider failures as failed even when another provider submits", async () => {
+    const writes: CliConfig[] = [];
+    const logs: string[] = [];
+
+    await syncUsage({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      writeConfig: async (config) => {
+        writes.push(config);
+      },
+      postJson: async () => ({ ok: true }),
+      readProviderUsage: async (provider) => {
+        if (provider === "claude_code") {
+          throw new Error("ccusage daily failed");
         }
 
         return [
@@ -123,14 +174,50 @@ describe("syncUsage", () => {
         token: "secret",
         lastSync: {
           ok: false,
-          message:
-            "Submitted 1 usage row. Failed providers: codex: ccusage does not support Codex usage in the installed version.",
+          message: "Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },
     ]);
-    expect(logs).toEqual([
-      "Submitted 1 usage row. Failed providers: codex: ccusage does not support Codex usage in the installed version.",
+    expect(logs).toEqual(["Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed."]);
+  });
+
+  it("writes failed lastSync before throwing when supported providers fail and unsupported providers are skipped", async () => {
+    const writes: CliConfig[] = [];
+
+    await expect(
+      syncUsage({
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+        writeConfig: async (config) => {
+          writes.push(config);
+        },
+        postJson: async () => ({ ok: true }),
+        readProviderUsage: async (provider) => {
+          if (provider === "codex") {
+            throw new UnsupportedCcusageProviderError(provider);
+          }
+
+          throw new Error("ccusage daily failed");
+        },
+        readCcusageVersion: async () => "16.2.5",
+        now: () => new Date("2026-06-01T00:00:00.000Z"),
+        platform: "linux",
+        cliVersion: "0.1.0",
+        log: () => {},
+      }),
+    ).rejects.toThrow("All supported providers failed: claude_code: ccusage daily failed.");
+
+    expect(writes).toEqual([
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        lastSync: {
+          ok: false,
+          message:
+            "Submitted 0 usage rows. Failed providers: claude_code: ccusage daily failed. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+          at: "2026-06-01T00:00:00.000Z",
+        },
+      },
     ]);
   });
 });
