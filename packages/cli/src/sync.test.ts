@@ -31,8 +31,28 @@ describe("syncUsage", () => {
         {
           provider,
           date: "2026-05-31",
-          tokenCategories: { input: provider === "codex" ? 100 : 50, output: 25 },
+          tokenCategories:
+            provider === "codex"
+              ? { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 }
+              : { input: 50, output: 25 },
+          ...(provider === "codex" ? { tokenDetails: { reasoningOutput: 5 } } : {}),
           totalTokens: provider === "codex" ? 125 : 75,
+          ...(provider === "codex"
+            ? {
+                costUsd: 0.123456,
+                costSource: "ccusage" as const,
+                sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
+                models: [
+                  {
+                    modelName: "gpt-5.5",
+                    tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
+                    tokenDetails: { reasoningOutput: 5 },
+                    totalTokens: 125,
+                    metadata: { isFallback: false },
+                  },
+                ],
+              }
+            : {}),
         },
       ],
       readCcusageVersion: async () => "16.2.5",
@@ -67,8 +87,21 @@ describe("syncUsage", () => {
       {
         provider: "codex",
         date: "2026-05-31",
-        tokenCategories: { input: 100, output: 25 },
+        tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
+        tokenDetails: { reasoningOutput: 5 },
         totalTokens: 125,
+        costUsd: 0.123456,
+        costSource: "ccusage",
+        sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
+        models: [
+          {
+            modelName: "gpt-5.5",
+            tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
+            tokenDetails: { reasoningOutput: 5 },
+            totalTokens: 125,
+            metadata: { isFallback: false },
+          },
+        ],
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
         cliVersion: "0.1.0",
