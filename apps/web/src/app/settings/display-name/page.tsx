@@ -26,11 +26,11 @@ async function updateDisplayName(
   "use server";
 
   const session = await auth();
-  const githubLogin = session?.user?.githubLogin;
-  if (!githubLogin) return { message: "You must sign in with GitHub" };
+  const githubId = session?.user?.githubId;
+  if (!githubId) return { message: "You must sign in with GitHub" };
 
   const user = await prisma.user.findUnique({
-    where: { githubLogin },
+    where: { githubId },
     select: { member: { select: { id: true } } },
   });
 
@@ -79,10 +79,10 @@ export default async function DisplayNamePage() {
     );
   }
 
-  const githubLogin = session.user.githubLogin;
-  const user = githubLogin
+  const githubId = session.user.githubId;
+  const user = githubId
     ? await prisma.user.findUnique({
-        where: { githubLogin },
+        where: { githubId },
         select: { member: { select: { displayName: true } } },
       })
     : null;

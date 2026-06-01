@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 declare module "next-auth" {
   interface Session {
     user?: DefaultSession["user"] & {
+      githubId?: string;
       githubLogin?: string;
     };
   }
@@ -50,6 +51,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     },
     async session({ session, token }) {
       if (session.user) {
+        session.user.githubId = typeof token.githubId === "string" ? token.githubId : undefined;
         session.user.githubLogin = typeof token.githubLogin === "string" ? token.githubLogin : undefined;
       }
 

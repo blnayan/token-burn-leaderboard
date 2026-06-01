@@ -18,11 +18,11 @@ async function createInvite() {
   "use server";
 
   const session = await auth();
-  const githubLogin = session?.user?.githubLogin;
-  if (!githubLogin) throw new Error("You must sign in with GitHub");
+  const githubId = session?.user?.githubId;
+  if (!githubId) throw new Error("You must sign in with GitHub");
 
   const user = await prisma.user.findUnique({
-    where: { githubLogin },
+    where: { githubId },
     select: { id: true, githubLogin: true },
   });
 
@@ -61,10 +61,10 @@ export default async function AdminInvitesPage({
     );
   }
 
-  const githubLogin = session.user.githubLogin;
-  const user = githubLogin
+  const githubId = session.user.githubId;
+  const user = githubId
     ? await prisma.user.findUnique({
-        where: { githubLogin },
+        where: { githubId },
         select: { githubLogin: true },
       })
     : null;

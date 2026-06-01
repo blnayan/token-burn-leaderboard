@@ -7,27 +7,20 @@ import { prisma } from "@/lib/prisma";
 import { createDefaultDisplayName } from "@/server/display-name";
 import { hashInviteCode, isInviteExpired } from "@/server/invites";
 
-async function signInWithGitHub(formData: FormData) {
-  "use server";
-
-  const redirectTo = String(formData.get("redirectTo") ?? "/");
-  await signIn("github", { redirectTo });
-}
-
 async function acceptInvite(formData: FormData) {
   "use server";
 
   const code = String(formData.get("code") ?? "");
   const session = await auth();
-  const githubLogin = session?.user?.githubLogin;
+  const githubId = session?.user?.githubId;
 
-  if (!githubLogin) {
-    await signIn("github", { redirectTo: `/invite/${code}` });
+  if (!githubId) {
+    await signIn("github", { redirectTo: `/invite/${encodeURIComponent(code)}` });
     return;
   }
 
   const user = await prisma.user.findUnique({
-    where: { githubLogin },
+    where: { githubId },
     select: { id: true },
   });
 
@@ -80,6 +73,12 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
   });
   const unavailable = !invite || invite.redeemedAt || isInviteExpired(invite.expiresAt);
 
+  async function signInWithGitHub() {
+    "use server";
+
+    await signIn("github", { redirectTo: `/invite/${encodeURIComponent(code)}` });
+  }
+
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-5 py-8">
       <div className="flex flex-col gap-2">
@@ -98,7 +97,6 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
         </form>
       ) : (
         <form action={signInWithGitHub} className="flex flex-col gap-4">
-          <input type="hidden" name="redirectTo" value={`/invite/${code}`} />
           <Button type="submit">Sign in with GitHub</Button>
         </form>
       )}
