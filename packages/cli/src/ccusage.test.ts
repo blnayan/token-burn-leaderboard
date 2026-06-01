@@ -130,17 +130,100 @@ describe("normalizeCcusageDailyRows", () => {
       },
     ]);
   });
+
+  it("normalizes Codex cost, model usage, and reasoning token details", () => {
+    const rows = normalizeCcusageDailyRows("codex", [
+      {
+        cachedInputTokens: 850,
+        costUSD: 1.234567,
+        date: "2026-06-01",
+        inputTokens: 100,
+        models: {
+          "gpt-5.5": {
+            cachedInputTokens: 850,
+            inputTokens: 100,
+            isFallback: false,
+            outputTokens: 50,
+            reasoningOutputTokens: 20,
+            totalTokens: 1000,
+          },
+        },
+        outputTokens: 50,
+        reasoningOutputTokens: 20,
+        totalTokens: 1000,
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        provider: "codex",
+        date: "2026-06-01",
+        tokenCategories: {
+          input: 100,
+          output: 50,
+          cacheCreate: 0,
+          cacheRead: 850,
+        },
+        tokenDetails: {
+          reasoningOutput: 20,
+        },
+        totalTokens: 1000,
+        costUsd: 1.234567,
+        costSource: "ccusage",
+        sourceSnapshot: {
+          cachedInputTokens: 850,
+          costUSD: 1.234567,
+          inputTokens: 100,
+          outputTokens: 50,
+          reasoningOutputTokens: 20,
+          totalTokens: 1000,
+        },
+        models: [
+          {
+            modelName: "gpt-5.5",
+            tokenCategories: {
+              input: 100,
+              output: 50,
+              cacheCreate: 0,
+              cacheRead: 850,
+            },
+            tokenDetails: {
+              reasoningOutput: 20,
+            },
+            totalTokens: 1000,
+            metadata: {
+              isFallback: false,
+            },
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("buildCcusageArgs", () => {
   it("uses the supported UTC daily JSON report for Claude Code", () => {
-    expect(buildCcusageArgs("claude_code")).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+    expect(buildCcusageArgs("claude_code")).toEqual([
+      "claude",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--breakdown",
+    ]);
   });
 
   it("treats UTC as an invariant instead of reading TOKEN_BURN_TIMEZONE", () => {
     vi.stubEnv("TOKEN_BURN_TIMEZONE", "America/New_York");
 
-    expect(buildCcusageArgs("claude_code")).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+    expect(buildCcusageArgs("claude_code")).toEqual([
+      "claude",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--breakdown",
+    ]);
   });
 
   it("uses the supported UTC daily JSON report for Codex", () => {
@@ -163,7 +246,33 @@ describe("readProviderUsage", () => {
     await readProviderUsage("claude_code", { runCommand });
 
     expect(runCommand).toHaveBeenCalledOnce();
-    expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC", "--breakdown"]);
+  });
+
+  it("uses Claude breakdown first and falls back to standard daily args", async () => {
+    const runCommand = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("breakdown unavailable"))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([
+          {
+            date: "2026-06-01",
+            inputTokens: 10,
+          },
+        ]),
+        stderr: "",
+      });
+
+    await expect(readProviderUsage("claude_code", { runCommand })).resolves.toMatchObject([
+      {
+        provider: "claude_code",
+        date: "2026-06-01",
+        totalTokens: 10,
+      },
+    ]);
+
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC", "--breakdown"]);
+    expect(runCommand.mock.calls[1]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
   });
 
   it("passes Codex UTC daily JSON args to ccusage", async () => {

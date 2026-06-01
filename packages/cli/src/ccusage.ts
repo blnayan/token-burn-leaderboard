@@ -7,16 +7,58 @@ import { fileURLToPath } from "node:url";
 import type { Provider } from "@token-burn/shared";
 import { sumTokenCategories } from "@token-burn/shared";
 
+type NormalizedTokenCategories = {
+  input: number;
+  output: number;
+  cacheCreate: number;
+  cacheRead: number;
+};
+
+type NormalizedTokenDetails = {
+  reasoningOutput?: number;
+};
+
+type CostMetadata = Record<string, unknown>;
+
+type SourceSnapshot = Partial<
+  Record<
+    | "cachedInputTokens"
+    | "cacheCreationTokens"
+    | "cacheReadTokens"
+    | "costUSD"
+    | "inputTokens"
+    | "outputTokens"
+    | "reasoningOutputTokens"
+    | "totalCost"
+    | "totalTokens",
+    number
+  >
+>;
+
+export type NormalizedModelUsage = {
+  modelName: string;
+  tokenCategories: NormalizedTokenCategories;
+  tokenDetails?: NormalizedTokenDetails;
+  totalTokens: number;
+  costUsd?: number;
+  costSource?: "ccusage";
+  costMetadata?: CostMetadata;
+  metadata?: {
+    isFallback?: boolean;
+  };
+};
+
 export type NormalizedUsageRow = {
   provider: Provider;
   date: string;
-  tokenCategories: {
-    input: number;
-    output: number;
-    cacheCreate: number;
-    cacheRead: number;
-  };
+  tokenCategories: NormalizedTokenCategories;
+  tokenDetails?: NormalizedTokenDetails;
   totalTokens: number;
+  costUsd?: number;
+  costSource?: "ccusage";
+  costMetadata?: CostMetadata;
+  sourceSnapshot?: SourceSnapshot;
+  models?: NormalizedModelUsage[];
 };
 
 type CcusageProvider = Extract<Provider, "claude_code" | "codex">;
@@ -49,6 +91,10 @@ const tokenFieldAliases = {
   cacheRead: ["cacheReadTokens", "cachedInputTokens", "cache_read_tokens"],
 } as const;
 
+const tokenDetailAliases = {
+  reasoningOutput: ["reasoningOutputTokens", "reasoning_output_tokens"],
+} as const;
+
 export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): NormalizedUsageRow[] {
   return rows.map((row) => {
     const record = toRecord(row);
@@ -58,13 +104,36 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
       cacheCreate: readTokenField(record, tokenFieldAliases.cacheCreate),
       cacheRead: readTokenField(record, tokenFieldAliases.cacheRead),
     };
+    const tokenDetails = readOptionalTokenDetails(record);
+    const costUsd = readOptionalCostUsd(record);
+    const sourceSnapshot = sanitizeSourceSnapshot(record);
+    const models = normalizeModelUsage(record.models);
 
-    return {
+    const normalized: NormalizedUsageRow = {
       provider,
       date: readDate(record),
       tokenCategories,
-      totalTokens: sumTokenCategories(tokenCategories),
+      totalTokens: readTotalTokens(record, tokenCategories),
     };
+
+    if (tokenDetails) {
+      normalized.tokenDetails = tokenDetails;
+    }
+
+    if (costUsd !== undefined) {
+      normalized.costUsd = costUsd;
+      normalized.costSource = "ccusage";
+    }
+
+    if ((costUsd !== undefined || tokenDetails || models.length > 0) && Object.keys(sourceSnapshot).length > 0) {
+      normalized.sourceSnapshot = sourceSnapshot;
+    }
+
+    if (models.length > 0) {
+      normalized.models = models;
+    }
+
+    return normalized;
   });
 }
 
@@ -72,17 +141,29 @@ export async function readProviderUsage(
   provider: CcusageProvider,
   { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
 ): Promise<NormalizedUsageRow[]> {
-  const args = buildCcusageArgs(provider);
-  const result = await runCommand(resolveCcusageCommand(), args);
+  const command = resolveCcusageCommand();
+  let result: CommandResult;
+
+  try {
+    result = await runCommand(command, buildCcusageArgs(provider));
+  } catch (error) {
+    if (provider !== "claude_code") {
+      throw error;
+    }
+
+    result = await runCommand(command, buildCcusageArgs(provider, true));
+  }
+
   const parsed = JSON.parse(result.stdout) as unknown;
   const rows = Array.isArray(parsed) ? parsed : readDailyArray(parsed);
 
   return normalizeCcusageDailyRows(provider, rows);
 }
 
-export function buildCcusageArgs(provider: CcusageProvider): string[] {
+export function buildCcusageArgs(provider: CcusageProvider, fallback = false): string[] {
   if (provider === "claude_code") {
-    return ["claude", "daily", "--json", "--timezone", "UTC"];
+    const args = ["claude", "daily", "--json", "--timezone", "UTC"];
+    return fallback ? args : [...args, "--breakdown"];
   }
 
   return ["codex", "daily", "--json", "--timezone", "UTC"];
@@ -166,6 +247,129 @@ function readTokenField(record: Record<string, unknown>, fields: readonly string
   }
 
   return Math.trunc(value);
+}
+
+function readOptionalTokenDetails(record: Record<string, unknown>): NormalizedTokenDetails | undefined {
+  const reasoningOutput = readOptionalTokenDetail(record, tokenDetailAliases.reasoningOutput);
+
+  return reasoningOutput > 0 ? { reasoningOutput } : undefined;
+}
+
+function readOptionalTokenDetail(record: Record<string, unknown>, fields: readonly string[]): number {
+  const field = fields.find((candidate) => record[candidate] !== undefined);
+
+  if (!field) {
+    return 0;
+  }
+
+  const value = record[field];
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`ccusage daily row has an invalid ${field} value.`);
+  }
+
+  return Math.trunc(value);
+}
+
+function readOptionalCostUsd(record: Record<string, unknown>): number | undefined {
+  const field = ["costUSD", "costUsd", "totalCost"].find((candidate) => record[candidate] !== undefined);
+
+  if (!field) {
+    return undefined;
+  }
+
+  const value = record[field];
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1_000_000) {
+    throw new Error(`ccusage daily row has an invalid ${field} value.`);
+  }
+
+  return value;
+}
+
+function readTotalTokens(record: Record<string, unknown>, tokenCategories: NormalizedTokenCategories): number {
+  const field = ["totalTokens", "total_tokens"].find((candidate) => record[candidate] !== undefined);
+
+  if (!field) {
+    return sumTokenCategories(tokenCategories);
+  }
+
+  const value = record[field];
+
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`ccusage daily row has an invalid ${field} value.`);
+  }
+
+  return Math.trunc(value);
+}
+
+function sanitizeSourceSnapshot(record: Record<string, unknown>): SourceSnapshot {
+  const snapshot: SourceSnapshot = {};
+  const fields = [
+    "cachedInputTokens",
+    "cacheCreationTokens",
+    "cacheReadTokens",
+    "costUSD",
+    "inputTokens",
+    "outputTokens",
+    "reasoningOutputTokens",
+    "totalCost",
+    "totalTokens",
+  ] as const;
+
+  for (const field of fields) {
+    const value = record[field];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      snapshot[field] = value;
+    }
+  }
+
+  return snapshot;
+}
+
+function normalizeModelUsage(models: unknown): NormalizedModelUsage[] {
+  if (models === undefined) {
+    return [];
+  }
+
+  const record = toRecord(models);
+
+  return Object.entries(record)
+    .map(([modelName, value]) => {
+      const modelRecord = toRecord(value);
+      const tokenCategories = {
+        input: readTokenField(modelRecord, tokenFieldAliases.input),
+        output: readTokenField(modelRecord, tokenFieldAliases.output),
+        cacheCreate: readTokenField(modelRecord, tokenFieldAliases.cacheCreate),
+        cacheRead: readTokenField(modelRecord, tokenFieldAliases.cacheRead),
+      };
+      const normalized: NormalizedModelUsage = {
+        modelName,
+        tokenCategories,
+        totalTokens: readTotalTokens(modelRecord, tokenCategories),
+      };
+      const tokenDetails = readOptionalTokenDetails(modelRecord);
+      const costUsd = readOptionalCostUsd(modelRecord);
+
+      if (tokenDetails) {
+        normalized.tokenDetails = tokenDetails;
+      }
+
+      if (costUsd !== undefined) {
+        normalized.costUsd = costUsd;
+        normalized.costSource = "ccusage";
+      }
+
+      if (typeof modelRecord.isFallback === "boolean") {
+        normalized.metadata = {
+          isFallback: modelRecord.isFallback,
+        };
+      }
+
+      return normalized;
+    })
+    .sort((left, right) => left.modelName.localeCompare(right.modelName));
 }
 
 function toRecord(value: unknown): Record<string, unknown> {
