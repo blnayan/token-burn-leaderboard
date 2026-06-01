@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Token Burn",
-  description: "Token burn leaderboard",
+  description: "A public token usage leaderboard for invited AI tool users.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
