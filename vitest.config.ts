@@ -5,6 +5,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)),
       "@token-burn/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
     },
   },
