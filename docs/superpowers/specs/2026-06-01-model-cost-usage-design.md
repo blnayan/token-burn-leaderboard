@@ -10,7 +10,7 @@ The server will store daily provider totals as it does today, plus child rows fo
 
 - Store model-level daily token usage for Claude Code and Codex when available from `ccusage`.
 - Store daily cost estimates in USD when available from `ccusage`.
-- Store reasoning output tokens as a first-class token category.
+- Store reasoning output tokens as first-class token detail data without adding it to leaderboard scoring totals.
 - Preserve aggregate-only privacy boundaries: no prompts, commands, project paths, file paths, raw sessions, or conversation contents.
 - Keep leaderboard scoring based on token totals unless a later product decision changes it.
 - Make repeated syncs idempotent by upserting per device, provider, date, and model.
@@ -56,6 +56,7 @@ Claude Code supports `--breakdown` for per-model cost breakdowns. The CLI should
 costUsd        Decimal? @db.Decimal(18, 6)
 costSource     String?
 costMetadata   Json?
+tokenDetails   Json?
 sourceSnapshot Json?
 ```
 
@@ -64,6 +65,7 @@ Meanings:
 - `costUsd`: the daily provider cost in USD as reported by `ccusage`.
 - `costSource`: initially `ccusage`.
 - `costMetadata`: provider-specific cost context, such as Codex speed tier or offline pricing mode if available.
+- `tokenDetails`: non-scoring token details such as `reasoningOutput`.
 - `sourceSnapshot`: optional aggregate-only source row from `ccusage`, with sensitive or unstable data excluded. This preserves future flexibility without storing prompts or sessions.
 
 Add a child table for daily model totals:
@@ -78,6 +80,7 @@ model DailyModelUsage {
   date                 DateTime @db.Date
   modelName            String
   tokenCategories      Json
+  tokenDetails         Json?
   totalTokens          BigInt
   costUsd              Decimal? @db.Decimal(18, 6)
   metadata             Json?
@@ -111,6 +114,7 @@ Extend the shared sync schema with optional cost and model data:
   provider: "claude_code" | "codex";
   date: "YYYY-MM-DD";
   tokenCategories: Record<string, number>;
+  tokenDetails?: Record<string, number>;
   totalTokens: number;
   costUsd?: number;
   costSource?: "ccusage";
@@ -119,6 +123,7 @@ Extend the shared sync schema with optional cost and model data:
   models?: Array<{
     modelName: string;
     tokenCategories: Record<string, number>;
+    tokenDetails?: Record<string, number>;
     totalTokens: number;
     costUsd?: number;
     metadata?: Record<string, unknown>;
@@ -134,19 +139,23 @@ Extend the shared sync schema with optional cost and model data:
 
 Validation rules:
 
-- `totalTokens` must equal the sum of top-level `tokenCategories`.
-- Each model `totalTokens` must equal the sum of that model's `tokenCategories`.
+- `totalTokens` must equal the sum of top-level scoring `tokenCategories`.
+- Each model `totalTokens` must equal the sum of that model's scoring `tokenCategories`.
+- `tokenDetails` values must be finite, non-negative, safe integers, but they do not contribute to `totalTokens`.
 - Cost values must be finite, non-negative numbers no greater than 1,000,000 USD per daily provider or model row.
 - `modelName` must be non-empty and bounded in length.
 - Unknown token categories are allowed so newer `ccusage` fields can pass through.
 - Unknown providers remain rejected.
 
-The token categories should include the existing categories and add `reasoningOutput`:
+The scoring token categories should remain:
 
 - `input`
 - `output`
 - `cacheCreate`
 - `cacheRead`
+
+The non-scoring `tokenDetails` object should include:
+
 - `reasoningOutput`
 
 ## CLI Behavior
@@ -161,7 +170,7 @@ Provider command choices:
 Normalization should:
 
 - Map `cachedInputTokens` to `cacheRead`.
-- Map `reasoningOutputTokens` to `reasoningOutput`.
+- Map `reasoningOutputTokens` to `tokenDetails.reasoningOutput`.
 - Map cost fields like `costUSD` to `costUsd`.
 - Convert `models` objects into sorted model rows.
 - Keep model metadata small and aggregate-only, for example `isFallback`.
@@ -226,7 +235,7 @@ No display work is included in this design.
 Shared schema tests should cover:
 
 - payloads with cost and model rows
-- reasoning output token categories
+- reasoning output token details
 - rejection of negative cost
 - rejection of model totals that do not match model token category sums
 - backward compatibility for payloads without cost/model fields
