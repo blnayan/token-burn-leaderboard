@@ -105,7 +105,7 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
     const tokenDetails = readOptionalTokenDetails(record);
     const costUsd = readOptionalCostUsd(record);
     const sourceSnapshot = sanitizeSourceSnapshot(record);
-    const models = normalizeModelUsage(record.models);
+    const models = normalizeModelUsage(record.models ?? record.modelBreakdowns);
 
     const normalized: NormalizedUsageRow = {
       provider,

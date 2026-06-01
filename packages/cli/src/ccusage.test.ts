@@ -226,6 +226,67 @@ describe("normalizeCcusageDailyRows", () => {
       totalTokens: 150,
     });
   });
+
+  it("normalizes ccusage modelBreakdowns into model usage rows", () => {
+    const rows = normalizeCcusageDailyRows("claude_code", [
+      {
+        date: "2026-06-01",
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheCreationTokens: 10,
+        cacheReadTokens: 20,
+        totalTokens: 180,
+        totalCost: 0.42,
+        modelBreakdowns: {
+          "claude-sonnet-4": {
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 10,
+            cacheReadTokens: 20,
+            totalTokens: 180,
+            totalCost: 0.42,
+          },
+        },
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        provider: "claude_code",
+        date: "2026-06-01",
+        tokenCategories: {
+          input: 100,
+          output: 50,
+          cacheCreate: 10,
+          cacheRead: 20,
+        },
+        totalTokens: 180,
+        costUsd: 0.42,
+        costSource: "ccusage",
+        sourceSnapshot: {
+          cacheCreationTokens: 10,
+          cacheReadTokens: 20,
+          inputTokens: 100,
+          outputTokens: 50,
+          totalCost: 0.42,
+          totalTokens: 180,
+        },
+        models: [
+          {
+            modelName: "claude-sonnet-4",
+            tokenCategories: {
+              input: 100,
+              output: 50,
+              cacheCreate: 10,
+              cacheRead: 20,
+            },
+            totalTokens: 180,
+            costUsd: 0.42,
+          },
+        ],
+      },
+    ]);
+  });
 });
 
 describe("buildCcusageArgs", () => {
