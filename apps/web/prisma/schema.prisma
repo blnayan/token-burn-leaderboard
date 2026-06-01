@@ -28,6 +28,7 @@ model Member {
   cliTokens        CliToken[]
   devices          Device[]
   usage            DailyProviderUsage[]
+  modelUsage       DailyModelUsage[]
 }
 
 model Invite {
@@ -80,6 +81,7 @@ model Device {
   updatedAt      DateTime             @updatedAt
   member         Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
   usage          DailyProviderUsage[]
+  modelUsage     DailyModelUsage[]
 
   @@unique([memberId, clientDeviceId])
   @@index([memberId])
@@ -93,6 +95,11 @@ model DailyProviderUsage {
   date            DateTime @db.Date
   tokenCategories Json
   totalTokens     BigInt
+  costUsd         Decimal? @db.Decimal(18, 6)
+  costSource      String?
+  costMetadata    Json?
+  tokenDetails    Json?
+  sourceSnapshot  Json?
   cliVersion      String
   ccusageVersion  String
   os              String
@@ -101,9 +108,34 @@ model DailyProviderUsage {
   updatedAt       DateTime @updatedAt
   member          Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
   device          Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  models          DailyModelUsage[]
 
   @@unique([deviceId, provider, date])
   @@index([memberId, deviceId])
   @@index([provider, date])
   @@index([date])
+}
+
+model DailyModelUsage {
+  id                   String             @id @default(cuid())
+  dailyProviderUsageId String
+  memberId             String
+  deviceId             String
+  provider             String
+  date                 DateTime           @db.Date
+  modelName            String
+  tokenCategories      Json
+  tokenDetails         Json?
+  totalTokens          BigInt
+  costUsd              Decimal?           @db.Decimal(18, 6)
+  metadata             Json?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+  dailyProviderUsage   DailyProviderUsage @relation(fields: [dailyProviderUsageId], references: [id], onDelete: Cascade)
+  member               Member             @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  device               Device             @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, provider, date, modelName])
+  @@index([memberId, date])
+  @@index([provider, modelName, date])
 }
