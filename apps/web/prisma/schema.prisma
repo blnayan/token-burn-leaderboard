@@ -26,6 +26,7 @@ model Member {
   user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   cliLoginSessions CliLoginSession[]
   cliTokens        CliToken[]
+  devices          Device[]
   usage            DailyProviderUsage[]
 }
 
@@ -68,9 +69,26 @@ model CliToken {
   member     Member    @relation(fields: [memberId], references: [id], onDelete: Cascade)
 }
 
+model Device {
+  id             String               @id @default(cuid())
+  memberId       String
+  clientDeviceId String
+  name           String
+  os             String
+  lastSeenAt     DateTime
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  member         Member               @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  usage          DailyProviderUsage[]
+
+  @@unique([memberId, clientDeviceId])
+  @@index([memberId])
+}
+
 model DailyProviderUsage {
   id              String   @id @default(cuid())
   memberId        String
+  deviceId        String
   provider        String
   date            DateTime @db.Date
   tokenCategories Json
@@ -82,8 +100,10 @@ model DailyProviderUsage {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   member          Member   @relation(fields: [memberId], references: [id], onDelete: Cascade)
+  device          Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
 
-  @@unique([memberId, provider, date])
+  @@unique([deviceId, provider, date])
+  @@index([memberId, deviceId])
   @@index([provider, date])
   @@index([date])
 }

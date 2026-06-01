@@ -64,9 +64,24 @@ CREATE TABLE "CliToken" (
 );
 
 -- CreateTable
+CREATE TABLE "Device" (
+    "id" TEXT NOT NULL,
+    "memberId" TEXT NOT NULL,
+    "clientDeviceId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "os" TEXT NOT NULL,
+    "lastSeenAt" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "Device_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
 CREATE TABLE "DailyProviderUsage" (
     "id" TEXT NOT NULL,
     "memberId" TEXT NOT NULL,
+    "deviceId" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "date" DATE NOT NULL,
     "tokenCategories" JSONB NOT NULL,
@@ -112,13 +127,22 @@ CREATE INDEX "CliLoginSession_memberId_idx" ON "CliLoginSession"("memberId");
 CREATE UNIQUE INDEX "CliToken_tokenHash_key" ON "CliToken"("tokenHash");
 
 -- CreateIndex
+CREATE INDEX "Device_memberId_idx" ON "Device"("memberId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "Device_memberId_clientDeviceId_key" ON "Device"("memberId", "clientDeviceId");
+
+-- CreateIndex
+CREATE INDEX "DailyProviderUsage_memberId_deviceId_idx" ON "DailyProviderUsage"("memberId", "deviceId");
+
+-- CreateIndex
 CREATE INDEX "DailyProviderUsage_provider_date_idx" ON "DailyProviderUsage"("provider", "date");
 
 -- CreateIndex
 CREATE INDEX "DailyProviderUsage_date_idx" ON "DailyProviderUsage"("date");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "DailyProviderUsage_memberId_provider_date_key" ON "DailyProviderUsage"("memberId", "provider", "date");
+CREATE UNIQUE INDEX "DailyProviderUsage_deviceId_provider_date_key" ON "DailyProviderUsage"("deviceId", "provider", "date");
 
 -- AddForeignKey
 ALTER TABLE "Member" ADD CONSTRAINT "Member_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -136,5 +160,10 @@ ALTER TABLE "CliLoginSession" ADD CONSTRAINT "CliLoginSession_memberId_fkey" FOR
 ALTER TABLE "CliToken" ADD CONSTRAINT "CliToken_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE "Device" ADD CONSTRAINT "Device_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE "DailyProviderUsage" ADD CONSTRAINT "DailyProviderUsage_memberId_fkey" FOREIGN KEY ("memberId") REFERENCES "Member"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "DailyProviderUsage" ADD CONSTRAINT "DailyProviderUsage_deviceId_fkey" FOREIGN KEY ("deviceId") REFERENCES "Device"("id") ON DELETE CASCADE ON UPDATE CASCADE;

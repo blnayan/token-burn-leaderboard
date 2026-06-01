@@ -8,6 +8,22 @@ describe("getConfigPath", () => {
 });
 
 describe("configSchema", () => {
+  it("supports remembered device identity", () => {
+    expect(
+      configSchema.parse({
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+      }),
+    ).toEqual({
+      serverUrl: "https://token-burn.test",
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+    });
+  });
+
   it("supports a logged-out config with last sync metadata", () => {
     expect(
       configSchema.parse({

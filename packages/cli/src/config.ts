@@ -7,6 +7,8 @@ import { z } from "zod";
 export const configSchema = z.object({
   serverUrl: z.string().url(),
   token: z.string().min(1).optional(),
+  deviceId: z.string().uuid().optional(),
+  deviceName: z.string().trim().min(1).max(80).optional(),
   lastSync: z
     .object({
       ok: z.boolean(),

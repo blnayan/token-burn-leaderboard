@@ -435,6 +435,7 @@ Create `apps/web/package.json`:
     "build": "next build",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",

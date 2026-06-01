@@ -17,6 +17,8 @@ export const syncPayloadSchema = z
     date: isoDateSchema,
     tokenCategories: tokenCategoriesSchema,
     totalTokens: z.number().int().nonnegative().safe(),
+    deviceId: z.string().uuid(),
+    deviceName: z.string().trim().min(1).max(80),
     cliVersion: z.string().min(1),
     ccusageVersion: z.string().min(1),
     os: z.enum(["darwin", "linux", "win32"]),

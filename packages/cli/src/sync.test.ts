@@ -39,6 +39,8 @@ describe("syncUsage", () => {
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
       log: (message) => {
         logs.push(message);
       },
@@ -55,6 +57,8 @@ describe("syncUsage", () => {
         date: "2026-05-31",
         tokenCategories: { input: 50, output: 25 },
         totalTokens: 75,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         cliVersion: "0.1.0",
         ccusageVersion: "16.2.5",
         os: "linux",
@@ -65,6 +69,8 @@ describe("syncUsage", () => {
         date: "2026-05-31",
         tokenCategories: { input: 100, output: 25 },
         totalTokens: 125,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         cliVersion: "0.1.0",
         ccusageVersion: "16.2.5",
         os: "linux",
@@ -75,6 +81,8 @@ describe("syncUsage", () => {
       {
         serverUrl: "https://token-burn.test",
         token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message: "Submitted 2 usage rows.",
@@ -83,6 +91,52 @@ describe("syncUsage", () => {
       },
     ]);
     expect(logs).toEqual(["Submitted 2 usage rows."]);
+  });
+
+  it("reuses remembered device identity instead of creating a new one", async () => {
+    const posts: Array<{ body: unknown }> = [];
+
+    await syncUsage({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "workstation",
+      }),
+      writeConfig: async () => {},
+      postJson: async (_url, body) => {
+        posts.push({ body });
+        return { ok: true };
+      },
+      readProviderUsage: async (provider) => [
+        {
+          provider,
+          date: "2026-05-31",
+          tokenCategories: { input: 1 },
+          totalTokens: 1,
+        },
+      ],
+      readCcusageVersion: async () => "20.0.6",
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      createDeviceId: () => {
+        throw new Error("should not create a new device id");
+      },
+      readDeviceName: () => "renamed-workstation",
+      log: () => {},
+    });
+
+    expect(posts.map((post) => post.body)).toMatchObject([
+      {
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "renamed-workstation",
+      },
+      {
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "renamed-workstation",
+      },
+    ]);
   });
 
   it("records skipped unsupported providers as a successful sync when supported providers submit", async () => {
@@ -113,6 +167,8 @@ describe("syncUsage", () => {
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
       log: (message) => {
         logs.push(message);
       },
@@ -122,6 +178,8 @@ describe("syncUsage", () => {
       {
         serverUrl: "https://token-burn.test",
         token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message:
@@ -159,6 +217,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
       log: (message) => {
         logs.push(message);
       },
@@ -168,6 +228,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       {
         serverUrl: "https://token-burn.test",
         token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message:
@@ -209,6 +271,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
       log: (message) => {
         logs.push(message);
       },
@@ -218,6 +282,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       {
         serverUrl: "https://token-burn.test",
         token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: false,
           message: "Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed.",
@@ -249,6 +315,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         now: () => new Date("2026-06-01T00:00:00.000Z"),
         platform: "linux",
         cliVersion: "0.1.0",
+        createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        readDeviceName: () => "nayan-vps",
         log: () => {},
       }),
     ).rejects.toThrow("All supported providers failed: claude_code: ccusage daily failed.");
@@ -257,6 +325,8 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       {
         serverUrl: "https://token-burn.test",
         token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: false,
           message:

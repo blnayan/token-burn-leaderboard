@@ -50,6 +50,8 @@ describe("syncPayloadSchema", () => {
         cacheRead: 25,
       },
       totalTokens: 375,
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
       cliVersion: "0.1.0",
       ccusageVersion: "1.2.3",
       os: "linux",
@@ -69,6 +71,8 @@ describe("syncPayloadSchema", () => {
           output: 200,
         },
         totalTokens: 301,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         cliVersion: "0.1.0",
         ccusageVersion: "1.2.3",
         os: "linux",
@@ -86,6 +90,8 @@ describe("syncPayloadSchema", () => {
           input: Number.MAX_SAFE_INTEGER,
         },
         totalTokens: Number.MAX_SAFE_INTEGER + 1,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         cliVersion: "0.1.0",
         ccusageVersion: "1.2.3",
         os: "linux",
@@ -101,6 +107,39 @@ describe("syncPayloadSchema", () => {
         date: "2026-05-31",
         tokenCategories: { input: -1 },
         totalTokens: -1,
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+        cliVersion: "0.1.0",
+        ccusageVersion: "1.2.3",
+        os: "linux",
+        syncedAt: "2026-05-31T23:00:00.000Z",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects missing or invalid device identity", () => {
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-05-31",
+        tokenCategories: { input: 100 },
+        totalTokens: 100,
+        deviceName: "nayan-vps",
+        cliVersion: "0.1.0",
+        ccusageVersion: "1.2.3",
+        os: "linux",
+        syncedAt: "2026-05-31T23:00:00.000Z",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-05-31",
+        tokenCategories: { input: 100 },
+        totalTokens: 100,
+        deviceId: "not-a-uuid",
+        deviceName: "",
         cliVersion: "0.1.0",
         ccusageVersion: "1.2.3",
         os: "linux",

@@ -28,18 +28,43 @@ export async function POST(request: NextRequest) {
   try {
     const payload = syncPayloadSchema.parse(body);
     const date = parseUtcDate(payload.date);
+    const memberId = cliToken.member.id;
+    const syncedAt = new Date(payload.syncedAt);
 
-    await prisma.$transaction([
-      prisma.dailyProviderUsage.upsert({
+    await prisma.$transaction(async (tx) => {
+      const device = await tx.device.upsert({
         where: {
-          memberId_provider_date: {
-            memberId: cliToken.member.id,
+          memberId_clientDeviceId: {
+            memberId,
+            clientDeviceId: payload.deviceId,
+          },
+        },
+        create: {
+          memberId,
+          clientDeviceId: payload.deviceId,
+          name: payload.deviceName,
+          os: payload.os,
+          lastSeenAt: syncedAt,
+        },
+        update: {
+          name: payload.deviceName,
+          os: payload.os,
+          lastSeenAt: syncedAt,
+        },
+        select: { id: true },
+      });
+
+      await tx.dailyProviderUsage.upsert({
+        where: {
+          deviceId_provider_date: {
+            deviceId: device.id,
             provider: payload.provider,
             date,
           },
         },
         create: {
-          memberId: cliToken.member.id,
+          memberId,
+          deviceId: device.id,
           provider: payload.provider,
           date,
           tokenCategories: payload.tokenCategories,
@@ -47,7 +72,7 @@ export async function POST(request: NextRequest) {
           cliVersion: payload.cliVersion,
           ccusageVersion: payload.ccusageVersion,
           os: payload.os,
-          syncedAt: new Date(payload.syncedAt),
+          syncedAt,
         },
         update: {
           tokenCategories: payload.tokenCategories,
@@ -55,14 +80,15 @@ export async function POST(request: NextRequest) {
           cliVersion: payload.cliVersion,
           ccusageVersion: payload.ccusageVersion,
           os: payload.os,
-          syncedAt: new Date(payload.syncedAt),
+          syncedAt,
         },
-      }),
-      prisma.cliToken.update({
+      });
+
+      await tx.cliToken.update({
         where: { id: cliToken.id },
         data: { lastUsedAt: new Date() },
-      }),
-    ]);
+      });
+    });
 
     return NextResponse.json({ accepted: true });
   } catch (error) {

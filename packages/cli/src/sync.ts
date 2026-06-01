@@ -1,5 +1,6 @@
+import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
-import { platform as readPlatform } from "node:os";
+import { hostname, platform as readPlatform } from "node:os";
 
 import type { Provider, SyncPayload } from "@token-burn/shared";
 import { syncPayloadSchema } from "@token-burn/shared";
@@ -25,6 +26,8 @@ export type SyncDependencies = {
   now?: () => Date;
   platform?: SyncPlatform;
   cliVersion?: string;
+  createDeviceId?: () => string;
+  readDeviceName?: () => string;
   log?: (message: string) => void;
 };
 
@@ -39,6 +42,8 @@ export async function syncUsage({
   now = () => new Date(),
   platform = normalizePlatform(readPlatform()),
   cliVersion,
+  createDeviceId = randomUUID,
+  readDeviceName = hostname,
   log = console.log,
 }: SyncDependencies = {}): Promise<void> {
   const config = await readConfig();
@@ -52,6 +57,9 @@ export async function syncUsage({
   const version = cliVersion ?? (await readCliVersion());
   const ccusageVersion = await readCcusageVersion();
   const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
+  const deviceId = config.deviceId ?? createDeviceId();
+  const deviceName = normalizeDeviceName(readDeviceName());
+  const configWithDevice = { ...config, deviceId, deviceName };
   const failures: Array<{ provider: Provider; error: Error }> = [];
   const skipped: Array<{ provider: Provider; error: Error }> = [];
   let submitted = 0;
@@ -61,7 +69,7 @@ export async function syncUsage({
       const rows = await readProviderUsage(provider);
 
       for (const row of rows) {
-        const payload = buildPayload(row, { cliVersion: version, ccusageVersion, platform, syncedAt });
+        const payload = buildPayload(row, { cliVersion: version, ccusageVersion, deviceId, deviceName, platform, syncedAt });
         await postJson(syncUrl, payload, config.token);
         submitted += 1;
       }
@@ -83,7 +91,7 @@ export async function syncUsage({
     at: syncedAt,
   };
 
-  await writeConfig({ ...config, lastSync });
+  await writeConfig({ ...configWithDevice, lastSync });
 
   if (submitted === 0 && failures.length > 0) {
     throw new Error(`All supported providers failed: ${formatFailures(failures)}.`);
@@ -97,6 +105,8 @@ function buildPayload(
   metadata: {
     cliVersion: string;
     ccusageVersion: string;
+    deviceId: string;
+    deviceName: string;
     platform: SyncPlatform;
     syncedAt: string;
   },
@@ -106,11 +116,18 @@ function buildPayload(
     date: row.date,
     tokenCategories: row.tokenCategories,
     totalTokens: row.totalTokens,
+    deviceId: metadata.deviceId,
+    deviceName: metadata.deviceName,
     cliVersion: metadata.cliVersion,
     ccusageVersion: metadata.ccusageVersion,
     os: metadata.platform,
     syncedAt: metadata.syncedAt,
   });
+}
+
+function normalizeDeviceName(value: string): string {
+  const trimmed = value.trim();
+  return trimmed || "Unknown device";
 }
 
 async function readCliVersion(): Promise<string> {
