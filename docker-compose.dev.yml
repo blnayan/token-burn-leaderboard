@@ -18,6 +18,8 @@ services:
     image: node:22-alpine
     container_name: token-burn-dev-web
     working_dir: /app
+    env_file:
+      - .env.dev
     command: >
       sh -lc "corepack enable &&
       pnpm install --frozen-lockfile &&
