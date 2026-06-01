@@ -5,16 +5,24 @@ import { getPeriodRange } from "../lib/time";
 
 export type RawRow = { displayName: string; totalTokens: bigint };
 
+export function bigIntToSafeNumber(total: bigint): number {
+  if (total > BigInt(Number.MAX_SAFE_INTEGER)) {
+    throw new Error("Token total exceeds JavaScript safe integer precision");
+  }
+
+  return Number(total);
+}
+
 export function rankRows(rows: RawRow[]): LeaderboardRow[] {
   return [...rows]
     .sort((a, b) => {
-      if (a.totalTokens === b.totalTokens) return 0;
+      if (a.totalTokens === b.totalTokens) return a.displayName.localeCompare(b.displayName);
       return a.totalTokens > b.totalTokens ? -1 : 1;
     })
     .map((row, index) => ({
       rank: index + 1,
       displayName: row.displayName,
-      totalTokens: Number(row.totalTokens),
+      totalTokens: bigIntToSafeNumber(row.totalTokens),
     }));
 }
 
@@ -28,20 +36,38 @@ export async function getLeaderboard(period: LeaderboardPeriod): Promise<Leaderb
         }
       : undefined;
 
-  const rows = await prisma.member.findMany({
-    select: {
-      displayName: true,
-      usage: {
-        where: dateFilter ? { date: dateFilter } : {},
-        select: { totalTokens: true },
-      },
+  const totals = await prisma.dailyProviderUsage.groupBy({
+    by: ["memberId"],
+    _sum: {
+      totalTokens: true,
     },
+    where: dateFilter ? { date: dateFilter } : undefined,
   });
 
+  const positiveTotals = totals.filter((total) => (total._sum.totalTokens ?? 0n) > 0n);
+  if (positiveTotals.length === 0) return [];
+
+  const members = await prisma.member.findMany({
+    where: {
+      id: {
+        in: positiveTotals.map((total) => total.memberId),
+      },
+    },
+    select: {
+      id: true,
+      displayName: true,
+    },
+  });
+  const displayNamesByMemberId = new Map(members.map((member) => [member.id, member.displayName]));
+
   return rankRows(
-    rows.map((row) => ({
-      displayName: row.displayName,
-      totalTokens: row.usage.reduce((sum, usage) => sum + usage.totalTokens, 0n),
-    })),
-  ).filter((row) => row.totalTokens > 0);
+    positiveTotals.flatMap((total) => {
+      const displayName = displayNamesByMemberId.get(total.memberId);
+      const totalTokens = total._sum.totalTokens;
+
+      if (!displayName || totalTokens === null) return [];
+
+      return [{ displayName, totalTokens }];
+    }),
+  );
 }

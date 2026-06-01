@@ -30,7 +30,7 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
         </TableHeader>
         <TableBody>
           {rows.map((row) => (
-            <TableRow key={row.rank}>
+            <TableRow key={row.displayName}>
               <TableCell className="font-mono text-muted-foreground">#{row.rank}</TableCell>
               <TableCell className="font-medium">{row.displayName}</TableCell>
               <TableCell className="text-right font-mono">{formatTokens(row.totalTokens)}</TableCell>
