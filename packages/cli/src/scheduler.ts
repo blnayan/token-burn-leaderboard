@@ -6,7 +6,7 @@ const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
 
 export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
-  return `*/15 * * * * ${commandArgv.map(shellQuoteIfNeeded).join(" ")} >> ${cronLogPath} 2>&1`;
+  return `*/15 * * * * ${commandArgv.map(shellQuote).join(" ")} >> ${cronLogPath} 2>&1`;
 }
 
 export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
@@ -68,8 +68,7 @@ export function buildSchedulerUninstallGuidance(platform: SchedulerPlatform): st
   return "Remove the token-burn sync entry from your crontab.";
 }
 
-function shellQuoteIfNeeded(value: string): string {
-  if (!/[\s'"\\$`!]/.test(value)) return value;
+function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 

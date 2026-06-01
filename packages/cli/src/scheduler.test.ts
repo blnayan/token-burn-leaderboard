@@ -7,13 +7,19 @@ import { buildCronLine, buildLaunchdPlist, buildWindowsTaskCommand } from "./sch
 describe("scheduler builders", () => {
   it("builds a cron line that syncs every 15 minutes and logs to tmp", () => {
     expect(buildCronLine(["/usr/local/bin/token-burn", "sync"])).toBe(
-      "*/15 * * * * /usr/local/bin/token-burn sync >> /tmp/token-burn-sync.log 2>&1",
+      "*/15 * * * * '/usr/local/bin/token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
   it("shell-quotes every cron command argument independently", () => {
     expect(buildCronLine(["/opt/node bin/node", "/tmp/token burn/dist/index.js", "sync"])).toBe(
-      "*/15 * * * * '/opt/node bin/node' '/tmp/token burn/dist/index.js' sync >> /tmp/token-burn-sync.log 2>&1",
+      "*/15 * * * * '/opt/node bin/node' '/tmp/token burn/dist/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+    );
+  });
+
+  it("shell-quotes cron command arguments with shell metacharacters", () => {
+    expect(buildCronLine(["/tmp/a&b/node", "/tmp/project;rm/index.js", "sync"])).toBe(
+      "*/15 * * * * '/tmp/a&b/node' '/tmp/project;rm/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
@@ -76,7 +82,7 @@ describe("scheduler commands", () => {
     });
 
     expect(log).toHaveBeenCalledWith(
-      "*/15 * * * * /usr/bin/node /repo/packages/cli/dist/index.js sync >> /tmp/token-burn-sync.log 2>&1",
+      "*/15 * * * * '/usr/bin/node' '/repo/packages/cli/dist/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
