@@ -1,16 +1,34 @@
 import { Command } from "commander";
 
-import { readConfig } from "../config.js";
+import type { CliConfig } from "../config.js";
+import { readConfig as readConfigFile } from "../config.js";
 
-export async function runStatus(): Promise<void> {
+export type StatusDependencies = {
+  readConfig?: () => Promise<CliConfig | null>;
+  log?: (message: string) => void;
+};
+
+export async function runStatus({
+  readConfig = readConfigFile,
+  log = console.log,
+}: StatusDependencies = {}): Promise<void> {
   const config = await readConfig();
 
   if (!config) {
-    console.log("Not authenticated.");
+    log("Not authenticated.");
     return;
   }
 
-  console.log(`Authenticated with ${config.serverUrl}.`);
+  if (!config.token) {
+    log("Not authenticated.");
+    log(`Remembered server: ${config.serverUrl}.`);
+  } else {
+    log(`Authenticated with ${config.serverUrl}.`);
+  }
+
+  if (config.lastSync) {
+    log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
+  }
 }
 
 export function createStatusCommand(): Command {

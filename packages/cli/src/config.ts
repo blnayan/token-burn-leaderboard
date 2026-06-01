@@ -6,7 +6,14 @@ import { z } from "zod";
 
 export const configSchema = z.object({
   serverUrl: z.string().url(),
-  token: z.string().min(1),
+  token: z.string().min(1).optional(),
+  lastSync: z
+    .object({
+      ok: z.boolean(),
+      message: z.string(),
+      at: z.string().datetime(),
+    })
+    .optional(),
 });
 
 export type CliConfig = z.infer<typeof configSchema>;
