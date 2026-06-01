@@ -145,7 +145,7 @@ export async function readProviderUsage(
   try {
     result = await runCommand(command, buildCcusageArgs(provider));
   } catch (error) {
-    if (provider !== "claude_code") {
+    if (provider !== "claude_code" || !isUnsupportedBreakdownError(error)) {
       throw error;
     }
 
@@ -165,6 +165,18 @@ export function buildCcusageArgs(provider: CcusageProvider, fallback = false): s
   }
 
   return ["codex", "daily", "--json", "--timezone", "UTC"];
+}
+
+function isUnsupportedBreakdownError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+
+  return (
+    normalized.includes("breakdown unavailable") ||
+    (normalized.includes("--breakdown") &&
+      (normalized.includes("unknown option") || normalized.includes("not supported"))) ||
+    (normalized.includes("breakdown") && normalized.includes("not supported"))
+  );
 }
 
 export async function readCcusageVersion(): Promise<string> {

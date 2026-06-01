@@ -151,6 +151,9 @@ describe("normalizeCcusageDailyRows", () => {
         },
         outputTokens: 50,
         reasoningOutputTokens: 20,
+        sessionId: "session-123",
+        projectPath: "/tmp/project",
+        prompt: "summarize the project",
         totalTokens: 1000,
       },
     ]);
@@ -200,6 +203,28 @@ describe("normalizeCcusageDailyRows", () => {
         ],
       },
     ]);
+  });
+
+  it("excludes unexpected fields from source snapshots", () => {
+    const rows = normalizeCcusageDailyRows("codex", [
+      {
+        costUSD: 0.5,
+        date: "2026-06-01",
+        inputTokens: 100,
+        outputTokens: 50,
+        prompt: "write some code",
+        projectPath: "/home/user/private-project",
+        sessionId: "abc123",
+        totalTokens: 150,
+      },
+    ]);
+
+    expect(rows[0]?.sourceSnapshot).toEqual({
+      costUSD: 0.5,
+      inputTokens: 100,
+      outputTokens: 50,
+      totalTokens: 150,
+    });
   });
 });
 
@@ -275,6 +300,24 @@ describe("readProviderUsage", () => {
 
     expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC", "--breakdown"]);
     expect(runCommand.mock.calls[1]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+  });
+
+  it("does not fall back after a generic Claude primary failure", async () => {
+    const error = new Error("Unable to load ccusage config.");
+    const runCommand = vi.fn().mockRejectedValueOnce(error).mockResolvedValueOnce({
+      stdout: JSON.stringify([
+        {
+          date: "2026-06-01",
+          inputTokens: 10,
+        },
+      ]),
+      stderr: "",
+    });
+
+    await expect(readProviderUsage("claude_code", { runCommand })).rejects.toBe(error);
+
+    expect(runCommand).toHaveBeenCalledOnce();
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC", "--breakdown"]);
   });
 
   it("passes Codex UTC daily JSON args to ccusage", async () => {
