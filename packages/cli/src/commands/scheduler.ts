@@ -3,6 +3,7 @@ import { Command } from "commander";
 import {
   buildSchedulerInstallGuidance,
   buildSchedulerInstallOutput,
+  type SchedulerCommandArgv,
   buildSchedulerUninstallGuidance,
   type SchedulerPlatform,
 } from "../scheduler.js";
@@ -10,7 +11,7 @@ import {
 export type InstallSchedulerOptions = {
   dryRun: boolean;
   platform?: SchedulerPlatform;
-  binaryPath?: string;
+  syncCommandArgv?: SchedulerCommandArgv;
   log?: (message: string) => void;
 };
 
@@ -22,11 +23,11 @@ export type UninstallSchedulerOptions = {
 export function runInstallScheduler({
   dryRun,
   platform = process.platform,
-  binaryPath = getDefaultBinaryPath(),
+  syncCommandArgv = getDefaultSyncCommandArgv(),
   log = console.log,
 }: InstallSchedulerOptions): void {
   if (dryRun) {
-    log(buildSchedulerInstallOutput(platform, binaryPath));
+    log(buildSchedulerInstallOutput(platform, syncCommandArgv));
     return;
   }
 
@@ -55,6 +56,15 @@ export function createUninstallSchedulerCommand(): Command {
   });
 }
 
-function getDefaultBinaryPath(): string {
-  return process.argv[1] ?? "token-burn";
+export function getDefaultSyncCommandArgv({
+  argv = process.argv,
+  execPath = process.execPath,
+}: {
+  argv?: readonly string[];
+  execPath?: string;
+} = {}): SchedulerCommandArgv {
+  const cliEntrypoint = argv[1];
+  if (!cliEntrypoint) return ["token-burn", "sync"];
+
+  return [execPath, cliEntrypoint, "sync"];
 }

@@ -1,14 +1,17 @@
 export type SchedulerPlatform = NodeJS.Platform;
+export type SchedulerCommandArgv = readonly [string, ...string[]];
 
 const cronLogPath = "/tmp/token-burn-sync.log";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
 
-export function buildCronLine(binaryPath: string): string {
-  return `*/15 * * * * ${shellQuoteIfNeeded(binaryPath)} sync >> ${cronLogPath} 2>&1`;
+export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
+  return `*/15 * * * * ${commandArgv.map(shellQuoteIfNeeded).join(" ")} >> ${cronLogPath} 2>&1`;
 }
 
-export function buildLaunchdPlist(binaryPath: string): string {
+export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
+  const programArguments = commandArgv.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
+
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -17,8 +20,7 @@ export function buildLaunchdPlist(binaryPath: string): string {
   <string>${escapeXml(launchdLabel)}</string>
   <key>ProgramArguments</key>
   <array>
-    <string>${escapeXml(binaryPath)}</string>
-    <string>sync</string>
+${programArguments}
   </array>
   <key>StartInterval</key>
   <integer>900</integer>
@@ -30,14 +32,16 @@ export function buildLaunchdPlist(binaryPath: string): string {
 </plist>`;
 }
 
-export function buildWindowsTaskCommand(binaryPath: string): string {
-  return `schtasks /Create /TN ${windowsTaskName} /SC MINUTE /MO 15 /TR "\\"${binaryPath}\\" sync" /F`;
+export function buildWindowsTaskCommand(commandArgv: SchedulerCommandArgv): string {
+  const taskCommand = commandArgv.map(windowsQuoteIfNeeded).join(" ").replaceAll('"', '\\"');
+
+  return `schtasks /Create /TN ${windowsTaskName} /SC MINUTE /MO 15 /TR "${taskCommand}" /F`;
 }
 
-export function buildSchedulerInstallOutput(platform: SchedulerPlatform, binaryPath: string): string {
-  if (platform === "darwin") return buildLaunchdPlist(binaryPath);
-  if (platform === "win32") return buildWindowsTaskCommand(binaryPath);
-  return buildCronLine(binaryPath);
+export function buildSchedulerInstallOutput(platform: SchedulerPlatform, commandArgv: SchedulerCommandArgv): string {
+  if (platform === "darwin") return buildLaunchdPlist(commandArgv);
+  if (platform === "win32") return buildWindowsTaskCommand(commandArgv);
+  return buildCronLine(commandArgv);
 }
 
 export function buildSchedulerInstallGuidance(platform: SchedulerPlatform): string {
@@ -67,6 +71,11 @@ export function buildSchedulerUninstallGuidance(platform: SchedulerPlatform): st
 function shellQuoteIfNeeded(value: string): string {
   if (!/[\s'"\\$`!]/.test(value)) return value;
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function windowsQuoteIfNeeded(value: string): string {
+  if (!/[\s"]/.test(value)) return value;
+  return `"${value.replaceAll('"', '\\"')}"`;
 }
 
 function escapeXml(value: string): string {
