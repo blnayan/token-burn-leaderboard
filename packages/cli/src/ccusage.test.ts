@@ -104,35 +104,51 @@ describe("normalizeCcusageDailyRows", () => {
       },
     ]);
   });
+
+  it("normalizes latest Codex daily token fields", () => {
+    const rows = normalizeCcusageDailyRows("codex", [
+      {
+        cachedInputTokens: 478_876_672,
+        date: "2026-06-01",
+        inputTokens: 13_561_893,
+        outputTokens: 1_446_779,
+        totalTokens: 493_885_344,
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        provider: "codex",
+        date: "2026-06-01",
+        tokenCategories: {
+          input: 13_561_893,
+          output: 1_446_779,
+          cacheCreate: 0,
+          cacheRead: 478_876_672,
+        },
+        totalTokens: 493_885_344,
+      },
+    ]);
+  });
 });
 
 describe("buildCcusageArgs", () => {
   it("uses the supported UTC daily JSON report for Claude Code", () => {
-    expect(buildCcusageArgs("claude_code")).toEqual(["daily", "--json", "--timezone", "UTC"]);
+    expect(buildCcusageArgs("claude_code")).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
   });
 
   it("treats UTC as an invariant instead of reading TOKEN_BURN_TIMEZONE", () => {
     vi.stubEnv("TOKEN_BURN_TIMEZONE", "America/New_York");
 
-    expect(buildCcusageArgs("claude_code")).toEqual(["daily", "--json", "--timezone", "UTC"]);
+    expect(buildCcusageArgs("claude_code")).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
   });
 
-  it("rejects Codex because installed ccusage does not expose a Codex report", () => {
-    expect(() => buildCcusageArgs("codex")).toThrow("ccusage does not support Codex usage in the installed version.");
-    expect(() => buildCcusageArgs("codex")).toThrow(UnsupportedCcusageProviderError);
+  it("uses the supported UTC daily JSON report for Codex", () => {
+    expect(buildCcusageArgs("codex")).toEqual(["codex", "daily", "--json", "--timezone", "UTC"]);
   });
 });
 
 describe("readProviderUsage", () => {
-  it("does not invoke the command runner for unsupported Codex usage", async () => {
-    const runCommand = vi.fn();
-
-    await expect(readProviderUsage("codex", { runCommand })).rejects.toThrow(
-      "ccusage does not support Codex usage in the installed version.",
-    );
-    expect(runCommand).not.toHaveBeenCalled();
-  });
-
   it("passes Claude Code UTC daily JSON args to ccusage", async () => {
     const runCommand = vi.fn().mockResolvedValue({
       stdout: JSON.stringify([
@@ -147,7 +163,28 @@ describe("readProviderUsage", () => {
     await readProviderUsage("claude_code", { runCommand });
 
     expect(runCommand).toHaveBeenCalledOnce();
-    expect(runCommand.mock.calls[0]?.[1]).toEqual(["daily", "--json", "--timezone", "UTC"]);
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+  });
+
+  it("passes Codex UTC daily JSON args to ccusage", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({
+        daily: [
+          {
+            cachedInputTokens: 100,
+            date: "2026-06-01",
+            inputTokens: 25,
+            outputTokens: 5,
+          },
+        ],
+      }),
+      stderr: "",
+    });
+
+    await readProviderUsage("codex", { runCommand });
+
+    expect(runCommand).toHaveBeenCalledOnce();
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["codex", "daily", "--json", "--timezone", "UTC"]);
   });
 
   it("normalizes daily rows from object output", async () => {

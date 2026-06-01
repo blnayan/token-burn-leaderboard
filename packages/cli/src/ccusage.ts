@@ -46,7 +46,7 @@ const tokenFieldAliases = {
   input: ["inputTokens", "input_tokens", "input"],
   output: ["outputTokens", "output_tokens", "output"],
   cacheCreate: ["cacheCreationTokens", "cacheCreateTokens", "cache_creation_tokens"],
-  cacheRead: ["cacheReadTokens", "cache_read_tokens"],
+  cacheRead: ["cacheReadTokens", "cachedInputTokens", "cache_read_tokens"],
 } as const;
 
 export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): NormalizedUsageRow[] {
@@ -82,10 +82,10 @@ export async function readProviderUsage(
 
 export function buildCcusageArgs(provider: CcusageProvider): string[] {
   if (provider === "claude_code") {
-    return ["daily", "--json", "--timezone", "UTC"];
+    return ["claude", "daily", "--json", "--timezone", "UTC"];
   }
 
-  throw new UnsupportedCcusageProviderError(provider);
+  return ["codex", "daily", "--json", "--timezone", "UTC"];
 }
 
 export async function readCcusageVersion(): Promise<string> {

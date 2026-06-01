@@ -135,6 +135,52 @@ describe("syncUsage", () => {
     ]);
   });
 
+  it("records providers without local usage data as skipped instead of failed", async () => {
+    const writes: CliConfig[] = [];
+    const logs: string[] = [];
+
+    await syncUsage({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      writeConfig: async (config) => {
+        writes.push(config);
+      },
+      postJson: async () => ({ ok: true }),
+      readProviderUsage: async (provider) => {
+        if (provider === "claude_code") {
+          throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
+Error: No valid Claude data directories found. Please ensure at least one of the following exists:
+- /home/me/.config/claude/projects
+- /home/me/.claude/projects`);
+        }
+
+        throw new UnsupportedCcusageProviderError(provider);
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      log: (message) => {
+        logs.push(message);
+      },
+    });
+
+    expect(writes).toEqual([
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        lastSync: {
+          ok: true,
+          message:
+            "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: ccusage does not support Codex usage in the installed version.",
+          at: "2026-06-01T00:00:00.000Z",
+        },
+      },
+    ]);
+    expect(logs).toEqual([
+      "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: ccusage does not support Codex usage in the installed version.",
+    ]);
+  });
+
   it("records actual provider failures as failed even when another provider submits", async () => {
     const writes: CliConfig[] = [];
     const logs: string[] = [];

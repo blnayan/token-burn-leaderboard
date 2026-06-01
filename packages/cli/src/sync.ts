@@ -66,9 +66,9 @@ export async function syncUsage({
         submitted += 1;
       }
     } catch (error) {
-      const normalizedError = toError(error);
+      const normalizedError = normalizeProviderError(error);
 
-      if (isUnsupportedCcusageProviderError(error)) {
+      if (isSkippableProviderError(error)) {
         skipped.push({ provider, error: normalizedError });
       } else {
         failures.push({ provider, error: normalizedError });
@@ -161,6 +161,26 @@ function formatFailures(failures: Array<{ provider: Provider; error: Error }>): 
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function normalizeProviderError(error: unknown): Error {
+  const normalizedError = toError(error);
+
+  if (isMissingClaudeDataError(normalizedError)) {
+    return new Error("No valid Claude data directories found");
+  }
+
+  return normalizedError;
+}
+
+function isSkippableProviderError(error: unknown): boolean {
+  if (isUnsupportedCcusageProviderError(error)) return true;
+
+  return isMissingClaudeDataError(toError(error));
+}
+
+function isMissingClaudeDataError(error: Error): boolean {
+  return error.message.includes("No valid Claude data directories found");
 }
 
 function trimTrailingPeriod(message: string): string {
