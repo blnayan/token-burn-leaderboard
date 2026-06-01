@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
+      TZ: UTC
+      PGTZ: UTC
       POSTGRES_DB: ${POSTGRES_DB:-tokenburn}
       POSTGRES_USER: ${POSTGRES_USER:-tokenburn}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
@@ -27,6 +29,7 @@ services:
       pnpm --filter @token-burn/web db:deploy &&
       pnpm --filter @token-burn/web exec next dev --hostname 0.0.0.0 --port 3000"
     environment:
+      TZ: UTC
       ADMIN_GITHUB_LOGIN: ${ADMIN_GITHUB_LOGIN:-octocat}
       AUTH_GITHUB_ID: ${AUTH_GITHUB_ID:-github-client-id}
       AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET:-github-client-secret}
@@ -34,6 +37,7 @@ services:
       AUTH_URL: ${AUTH_URL:-https://tokenburn-dev.nayanbhut.dev}
       DATABASE_URL: ${DATABASE_URL:-postgresql://tokenburn:change-this-password@postgres:5432/tokenburn}
       TOKEN_BURN_PUBLIC_URL: ${TOKEN_BURN_PUBLIC_URL:-https://tokenburn-dev.nayanbhut.dev}
+      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
       CI: "1"
       NEXT_TELEMETRY_DISABLED: "1"
     volumes:

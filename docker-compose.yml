@@ -3,6 +3,8 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
+      TZ: UTC
+      PGTZ: UTC
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -22,6 +24,7 @@ services:
     env_file:
       - .env.prod
     environment:
+      TZ: UTC
       ADMIN_GITHUB_LOGIN: ${ADMIN_GITHUB_LOGIN}
       AUTH_GITHUB_ID: ${AUTH_GITHUB_ID}
       AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET}
@@ -29,6 +32,7 @@ services:
       AUTH_URL: ${AUTH_URL}
       DATABASE_URL: ${DATABASE_URL}
       TOKEN_BURN_PUBLIC_URL: ${TOKEN_BURN_PUBLIC_URL}
+      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +47,9 @@ services:
     profiles:
       - tools
     environment:
+      TZ: UTC
       DATABASE_URL: ${DATABASE_URL}
+      TOKEN_BURN_TIMEZONE: ${TOKEN_BURN_TIMEZONE:-UTC}
     depends_on:
       postgres:
         condition: service_healthy

@@ -8,6 +8,7 @@ const envSchema = z.object({
   AUTH_URL: z.string().url(),
   DATABASE_URL: z.string().min(1),
   TOKEN_BURN_PUBLIC_URL: z.string().url(),
+  TOKEN_BURN_TIMEZONE: z.literal("UTC").default("UTC"),
 });
 
 export const env = envSchema.parse(process.env);
