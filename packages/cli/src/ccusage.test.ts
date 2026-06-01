@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
-import { normalizeCcusageDailyRows } from "./ccusage.js";
+import { buildCcusageArgs, normalizeCcusageDailyRows, readProviderUsage } from "./ccusage.js";
 
 describe("normalizeCcusageDailyRows", () => {
   it("normalizes common daily token fields into shared token categories", () => {
@@ -94,5 +94,43 @@ describe("normalizeCcusageDailyRows", () => {
         totalTokens: 100,
       },
     ]);
+  });
+});
+
+describe("buildCcusageArgs", () => {
+  it("uses the supported daily JSON report for Claude Code", () => {
+    expect(buildCcusageArgs("claude_code")).toEqual(["daily", "--json"]);
+  });
+
+  it("rejects Codex because installed ccusage does not expose a Codex report", () => {
+    expect(() => buildCcusageArgs("codex")).toThrow("ccusage does not support Codex usage in the installed version.");
+  });
+});
+
+describe("readProviderUsage", () => {
+  it("does not invoke the command runner for unsupported Codex usage", async () => {
+    const runCommand = vi.fn();
+
+    await expect(readProviderUsage("codex", { runCommand })).rejects.toThrow(
+      "ccusage does not support Codex usage in the installed version.",
+    );
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("passes Claude Code daily JSON args to ccusage", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify([
+        {
+          date: "2026-05-31",
+          inputTokens: 100,
+        },
+      ]),
+      stderr: "",
+    });
+
+    await readProviderUsage("claude_code", { runCommand });
+
+    expect(runCommand).toHaveBeenCalledOnce();
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["daily", "--json"]);
   });
 });

@@ -28,11 +28,6 @@ type CommandResult = {
 
 type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
 
-const providerCommands: Record<CcusageProvider, string[]> = {
-  claude_code: ["claude", "daily", "--json"],
-  codex: ["codex", "daily", "--json"],
-};
-
 const tokenFieldAliases = {
   input: ["inputTokens", "input_tokens", "input"],
   output: ["outputTokens", "output_tokens", "output"],
@@ -63,12 +58,20 @@ export async function readProviderUsage(
   provider: CcusageProvider,
   { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
 ): Promise<NormalizedUsageRow[]> {
-  const args = providerCommands[provider];
+  const args = buildCcusageArgs(provider);
   const result = await runCommand(resolveCcusageCommand(), args);
   const parsed = JSON.parse(result.stdout) as unknown;
   const rows = Array.isArray(parsed) ? parsed : readDailyArray(parsed);
 
   return normalizeCcusageDailyRows(provider, rows);
+}
+
+export function buildCcusageArgs(provider: CcusageProvider): string[] {
+  if (provider === "claude_code") {
+    return ["daily", "--json"];
+  }
+
+  throw new Error("ccusage does not support Codex usage in the installed version.");
 }
 
 export async function readCcusageVersion(): Promise<string> {

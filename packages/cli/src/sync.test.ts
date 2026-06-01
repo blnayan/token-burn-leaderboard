@@ -95,8 +95,8 @@ describe("syncUsage", () => {
       },
       postJson: async () => ({ ok: true }),
       readProviderUsage: async (provider) => {
-        if (provider === "claude_code") {
-          throw new Error("ccusage claude failed");
+        if (provider === "codex") {
+          throw new Error("ccusage does not support Codex usage in the installed version.");
         }
 
         return [
@@ -123,11 +123,14 @@ describe("syncUsage", () => {
         token: "secret",
         lastSync: {
           ok: false,
-          message: "Submitted 1 usage row. Failed providers: claude_code: ccusage claude failed.",
+          message:
+            "Submitted 1 usage row. Failed providers: codex: ccusage does not support Codex usage in the installed version.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },
     ]);
-    expect(logs).toEqual(["Submitted 1 usage row. Failed providers: claude_code: ccusage claude failed."]);
+    expect(logs).toEqual([
+      "Submitted 1 usage row. Failed providers: codex: ccusage does not support Codex usage in the installed version.",
+    ]);
   });
 });

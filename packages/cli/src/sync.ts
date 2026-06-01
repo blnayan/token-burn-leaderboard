@@ -137,9 +137,13 @@ function formatSyncMessage(submitted: number, failures: Array<{ provider: Provid
 }
 
 function formatFailures(failures: Array<{ provider: Provider; error: Error }>): string {
-  return failures.map(({ provider, error }) => `${provider}: ${error.message}`).join("; ");
+  return failures.map(({ provider, error }) => `${provider}: ${trimTrailingPeriod(error.message)}`).join("; ");
 }
 
 function toError(error: unknown): Error {
   return error instanceof Error ? error : new Error(String(error));
+}
+
+function trimTrailingPeriod(message: string): string {
+  return message.replace(/\.$/, "");
 }
