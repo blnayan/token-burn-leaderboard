@@ -19,12 +19,12 @@ model User {
 }
 
 model Member {
-  id               String             @id @default(cuid())
-  userId           String             @unique
-  displayName      String             @unique
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  user             User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id               String               @id @default(cuid())
+  userId           String               @unique
+  displayName      String               @unique
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  user             User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   cliLoginSessions CliLoginSession[]
   cliTokens        CliToken[]
   usage            DailyProviderUsage[]
@@ -45,13 +45,14 @@ model Invite {
 }
 
 model CliLoginSession {
-  id         String    @id @default(cuid())
-  codeHash   String    @unique
-  memberId   String?
-  approvedAt DateTime?
-  expiresAt  DateTime
-  createdAt  DateTime  @default(now())
-  member     Member?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
+  id            String    @id @default(cuid())
+  codeHash      String    @unique
+  pollTokenHash String    @unique
+  memberId      String?
+  approvedAt    DateTime?
+  expiresAt     DateTime
+  createdAt     DateTime  @default(now())
+  member        Member?   @relation(fields: [memberId], references: [id], onDelete: SetNull)
 
   @@index([memberId])
 }
