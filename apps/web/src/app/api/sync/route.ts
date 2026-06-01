@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     where: {
       tokenHash: hashSecret(token),
       revokedAt: null,
+      expiresAt: { gt: new Date() },
     },
     select: {
       id: true,

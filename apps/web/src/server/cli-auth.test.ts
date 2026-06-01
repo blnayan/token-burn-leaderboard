@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createCliLoginCode, hashSecret, isCliLoginExpired } from "./cli-auth";
+import { createCliLoginCode, createCliTokenExpiration, hashSecret, isCliLoginExpired } from "./cli-auth";
 
 describe("cli auth helpers", () => {
   it("creates human-copyable login codes", () => {
@@ -15,5 +15,11 @@ describe("cli auth helpers", () => {
     expect(
       isCliLoginExpired(new Date("2026-05-31T00:10:00.000Z"), new Date("2026-05-31T00:10:00.000Z")),
     ).toBe(true);
+  });
+
+  it("creates long-lived CLI token expirations", () => {
+    expect(createCliTokenExpiration(new Date("2026-05-31T00:00:00.000Z")).toISOString()).toBe(
+      "2027-05-31T00:00:00.000Z",
+    );
   });
 });

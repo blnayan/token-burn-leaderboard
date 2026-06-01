@@ -21,6 +21,10 @@ export function createCliToken(): string {
   return `tb_${crypto.randomBytes(32).toString("base64url")}`;
 }
 
+export function createCliTokenExpiration(now = new Date()): Date {
+  return new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+}
+
 export function isCliLoginExpired(expiresAt: Date, now = new Date()): boolean {
   return expiresAt.getTime() <= now.getTime();
 }

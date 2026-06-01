@@ -32,6 +32,10 @@ describe("tokenCategoriesSchema", () => {
     expect(() => tokenCategoriesSchema.parse({ input: -1 })).toThrow();
     expect(() => tokenCategoriesSchema.parse({ input: 1.5 })).toThrow();
   });
+
+  it("rejects unsafe token category integers", () => {
+    expect(() => tokenCategoriesSchema.parse({ input: Number.MAX_SAFE_INTEGER + 1 })).toThrow();
+  });
 });
 
 describe("syncPayloadSchema", () => {
@@ -71,6 +75,23 @@ describe("syncPayloadSchema", () => {
         syncedAt: "2026-05-31T23:00:00.000Z",
       }),
     ).toThrow("totalTokens must equal the sum of tokenCategories");
+  });
+
+  it("rejects unsafe total token integers", () => {
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-05-31",
+        tokenCategories: {
+          input: Number.MAX_SAFE_INTEGER,
+        },
+        totalTokens: Number.MAX_SAFE_INTEGER + 1,
+        cliVersion: "0.1.0",
+        ccusageVersion: "1.2.3",
+        os: "linux",
+        syncedAt: "2026-05-31T23:00:00.000Z",
+      }),
+    ).toThrow();
   });
 
   it("rejects unknown providers and negative totals", () => {

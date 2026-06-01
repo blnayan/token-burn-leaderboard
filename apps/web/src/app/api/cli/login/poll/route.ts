@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { prisma } from "@/lib/prisma";
-import { createCliToken, hashSecret, isCliLoginExpired } from "@/server/cli-auth";
+import { createCliToken, createCliTokenExpiration, hashSecret, isCliLoginExpired } from "@/server/cli-auth";
 
 export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as { pollToken?: unknown } | null;
@@ -30,23 +30,40 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: "pending" });
   }
 
+  const memberId = session.memberId;
+  const displayName = session.member.displayName;
   const token = createCliToken();
-  await prisma.$transaction([
-    prisma.cliToken.create({
+  const consumed = await prisma.$transaction(async (tx) => {
+    const deleted = await tx.cliLoginSession.deleteMany({
+      where: {
+        id: session.id,
+        approvedAt: { not: null },
+        memberId,
+        expiresAt: { gt: new Date() },
+      },
+    });
+
+    if (deleted.count !== 1) return false;
+
+    await tx.cliToken.create({
       data: {
         tokenHash: hashSecret(token),
-        memberId: session.memberId,
+        memberId,
         label: "CLI",
+        expiresAt: createCliTokenExpiration(),
       },
-    }),
-    prisma.cliLoginSession.delete({
-      where: { id: session.id },
-    }),
-  ]);
+    });
+
+    return true;
+  });
+
+  if (!consumed) {
+    return NextResponse.json({ error: "Login session is invalid or expired" }, { status: 410 });
+  }
 
   return NextResponse.json({
     status: "approved",
     token,
-    member: { displayName: session.member.displayName },
+    member: { displayName },
   });
 }

@@ -9,14 +9,14 @@ export type LeaderboardPeriod = z.infer<typeof periodSchema>;
 
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export const tokenCategoriesSchema = z.record(z.string(), z.number().int().nonnegative());
+export const tokenCategoriesSchema = z.record(z.string(), z.number().int().nonnegative().safe());
 
 export const syncPayloadSchema = z
   .object({
     provider: providerSchema,
     date: isoDateSchema,
     tokenCategories: tokenCategoriesSchema,
-    totalTokens: z.number().int().nonnegative(),
+    totalTokens: z.number().int().nonnegative().safe(),
     cliVersion: z.string().min(1),
     ccusageVersion: z.string().min(1),
     os: z.enum(["darwin", "linux", "win32"]),
