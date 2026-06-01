@@ -70,12 +70,12 @@ export function createLoginCommand(): Command {
   return new Command("login")
     .description("Authenticate the Token Burn CLI")
     .option(
-      "-s, --server-url <url>",
+      "-s, --server <url>, --server-url <url>",
       "Token Burn server URL",
       process.env.TOKEN_BURN_SERVER_URL ?? "http://localhost:3000",
     )
-    .action(async (options: { serverUrl: string }) => {
-      await runLogin({ serverUrl: options.serverUrl });
+    .action(async (options: { server: string }) => {
+      await runLogin({ serverUrl: options.server });
     });
 }
 

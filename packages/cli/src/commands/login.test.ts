@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { runLogin } from "./login.js";
+import { createLoginCommand, runLogin } from "./login.js";
 
 describe("runLogin", () => {
   it("prints the login URL and stores the approved token", async () => {
@@ -32,5 +32,11 @@ describe("runLogin", () => {
     expect(log).toHaveBeenCalledWith("Waiting for approval. Press Ctrl+C to cancel.");
     expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
     expect(log).toHaveBeenCalledWith("Authenticated as Ada.");
+  });
+});
+
+describe("createLoginCommand", () => {
+  it("exposes --server as the server URL option", () => {
+    expect(createLoginCommand().helpInformation()).toContain("--server <url>");
   });
 });
