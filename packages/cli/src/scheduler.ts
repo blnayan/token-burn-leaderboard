@@ -1,3 +1,8 @@
+import { execFile as execFileCallback, spawn } from "node:child_process";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { promisify } from "node:util";
+
 export type SchedulerPlatform = NodeJS.Platform;
 export type SchedulerCommandArgv = readonly [string, ...string[]];
 export type SchedulerRuntime = {
@@ -15,6 +20,7 @@ const cronStartMarker = "# BEGIN Token Burn scheduler";
 const cronEndMarker = "# END Token Burn scheduler";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
+const execFileAsync = promisify(execFileCallback);
 
 export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
   return `*/15 * * * * ${commandArgv.map(shellQuote).join(" ")} >> ${cronLogPath} 2>&1`;
@@ -119,31 +125,16 @@ export function buildWindowsTaskArgs(commandArgv: SchedulerCommandArgv): string[
 export function buildSchedulerInstallOutput(platform: SchedulerPlatform, commandArgv: SchedulerCommandArgv): string {
   if (platform === "darwin") return buildLaunchdPlist(commandArgv);
   if (platform === "win32") return buildWindowsTaskCommand(commandArgv);
-  return buildCronLine(commandArgv);
-}
-
-export function buildSchedulerInstallGuidance(platform: SchedulerPlatform): string {
-  if (platform === "darwin") {
-    return "Run token-burn install-scheduler --dry-run, review the generated launchd plist, then save it to ~/Library/LaunchAgents/com.token-burn.sync.plist and load it with launchctl.";
-  }
-
-  if (platform === "win32") {
-    return "Run token-burn install-scheduler --dry-run, review the generated schtasks command, then run it in an elevated shell.";
-  }
-
-  return "Run token-burn install-scheduler --dry-run, review the generated cron entry, then install it with crontab.";
-}
-
-export function buildSchedulerUninstallGuidance(platform: SchedulerPlatform): string {
-  if (platform === "darwin") {
-    return "Remove ~/Library/LaunchAgents/com.token-burn.sync.plist, then run launchctl unload on that plist if it is loaded.";
-  }
-
-  if (platform === "win32") {
-    return "Remove the scheduled task with: schtasks /Delete /TN TokenBurnSync /F";
-  }
-
-  return "Remove the token-burn sync entry from your crontab.";
+  return [
+    "# ~/.config/systemd/user/token-burn-sync.service",
+    buildSystemdService(commandArgv).trimEnd(),
+    "",
+    "# ~/.config/systemd/user/token-burn-sync.timer",
+    buildSystemdTimer().trimEnd(),
+    "",
+    "# Cron fallback",
+    buildCronBlock(commandArgv),
+  ].join("\n");
 }
 
 export async function installScheduler({
@@ -164,6 +155,29 @@ export async function uninstallScheduler({ runtime }: { runtime: SchedulerRuntim
   if (runtime.platform === "darwin") return uninstallMacScheduler(runtime);
   if (runtime.platform === "win32") return uninstallWindowsScheduler(runtime);
   throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
+}
+
+export function createNodeSchedulerRuntime(platform: SchedulerPlatform = process.platform): SchedulerRuntime {
+  return {
+    platform,
+    homeDir: homedir(),
+    async mkdir(path) {
+      await mkdir(path, { recursive: true });
+    },
+    async writeFile(path, content) {
+      await writeFile(path, content, "utf8");
+    },
+    async rm(path) {
+      await rm(path, { force: true });
+    },
+    async execFile(command, args) {
+      const { stdout } = await execFileAsync(command, args);
+      return stdout;
+    },
+    async execFileWithInput(command, args, input) {
+      await spawnWithInput(command, args, input);
+    },
+  };
 }
 
 async function installLinuxScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
@@ -230,6 +244,27 @@ async function uninstallMacScheduler(runtime: SchedulerRuntime): Promise<string>
 async function uninstallWindowsScheduler(runtime: SchedulerRuntime): Promise<string> {
   await runtime.execFile("schtasks", ["/Delete", "/TN", windowsTaskName, "/F"]);
   return "Removed Token Burn Windows scheduled task TokenBurnSync.";
+}
+
+async function spawnWithInput(command: string, args: string[], input: string): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const child = spawn(command, args, { stdio: ["pipe", "ignore", "pipe"] });
+    let stderr = "";
+
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      reject(new Error(`${command} ${args.join(" ")} exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
+    });
+    child.stdin.end(input);
+  });
 }
 
 function shellQuote(value: string): string {

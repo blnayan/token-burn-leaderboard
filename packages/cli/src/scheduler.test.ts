@@ -251,39 +251,51 @@ describe("scheduler commands", () => {
     ]);
   });
 
-  it("prints generated scheduler content on dry run", () => {
+  it("prints generated scheduler content on dry run", async () => {
     const log = vi.fn();
 
-    runInstallScheduler({
+    await runInstallScheduler({
       dryRun: true,
       platform: "linux",
       syncCommandArgv: ["/usr/bin/node", "/repo/packages/cli/dist/index.js", "sync"],
       log,
     });
 
-    expect(log).toHaveBeenCalledWith(
+    const output = log.mock.calls[0]?.[0] as string;
+    expect(output).toContain("token-burn-sync.service");
+    expect(output).toContain("ExecStart=/usr/bin/node /repo/packages/cli/dist/index.js sync");
+    expect(output).toContain("token-burn-sync.timer");
+    expect(output).toContain("OnUnitActiveSec=15min");
+    expect(output).toContain("# Cron fallback");
+    expect(output).toContain(
       "*/15 * * * * '/usr/bin/node' '/repo/packages/cli/dist/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
-  it("prints dry-run-first guidance when install is not a dry run", () => {
+  it("runs the injected installer when install is not a dry run", async () => {
     const log = vi.fn();
+    const install = vi.fn(async () => "Installed Token Burn cron entry.");
 
-    runInstallScheduler({
+    await runInstallScheduler({
       dryRun: false,
       platform: "linux",
+      syncCommandArgv: ["token-burn", "sync"],
+      install,
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("Run token-burn install-scheduler --dry-run, review the generated cron entry, then install it with crontab.");
+    expect(install).toHaveBeenCalledWith("linux", ["token-burn", "sync"]);
+    expect(log).toHaveBeenCalledWith("Installed Token Burn cron entry.");
   });
 
-  it("prints platform removal guidance", () => {
+  it("runs the injected uninstaller", async () => {
     const log = vi.fn();
+    const uninstall = vi.fn(async () => "Removed Token Burn scheduler.");
 
-    runUninstallScheduler({ platform: "darwin", log });
+    await runUninstallScheduler({ platform: "linux", uninstall, log });
 
-    expect(log).toHaveBeenCalledWith("Remove ~/Library/LaunchAgents/com.token-burn.sync.plist, then run launchctl unload on that plist if it is loaded.");
+    expect(uninstall).toHaveBeenCalledWith("linux");
+    expect(log).toHaveBeenCalledWith("Removed Token Burn scheduler.");
   });
 });
 

@@ -1,58 +1,67 @@
 import { Command } from "commander";
 
 import {
-  buildSchedulerInstallGuidance,
   buildSchedulerInstallOutput,
+  createNodeSchedulerRuntime,
+  installScheduler,
   type SchedulerCommandArgv,
-  buildSchedulerUninstallGuidance,
   type SchedulerPlatform,
+  uninstallScheduler,
 } from "../scheduler.js";
 
 export type InstallSchedulerOptions = {
   dryRun: boolean;
   platform?: SchedulerPlatform;
   syncCommandArgv?: SchedulerCommandArgv;
+  install?: (platform: SchedulerPlatform, syncCommandArgv: SchedulerCommandArgv) => Promise<string>;
   log?: (message: string) => void;
 };
 
 export type UninstallSchedulerOptions = {
   platform?: SchedulerPlatform;
+  uninstall?: (platform: SchedulerPlatform) => Promise<string>;
   log?: (message: string) => void;
 };
 
-export function runInstallScheduler({
+export async function runInstallScheduler({
   dryRun,
   platform = process.platform,
   syncCommandArgv = getDefaultSyncCommandArgv(),
+  install = async (selectedPlatform, selectedSyncCommandArgv) =>
+    installScheduler({
+      runtime: createNodeSchedulerRuntime(selectedPlatform),
+      syncCommandArgv: selectedSyncCommandArgv,
+    }),
   log = console.log,
-}: InstallSchedulerOptions): void {
+}: InstallSchedulerOptions): Promise<void> {
   if (dryRun) {
     log(buildSchedulerInstallOutput(platform, syncCommandArgv));
     return;
   }
 
-  log(buildSchedulerInstallGuidance(platform));
+  log(await install(platform, syncCommandArgv));
 }
 
-export function runUninstallScheduler({
+export async function runUninstallScheduler({
   platform = process.platform,
+  uninstall = async (selectedPlatform) => uninstallScheduler({ runtime: createNodeSchedulerRuntime(selectedPlatform) }),
   log = console.log,
-}: UninstallSchedulerOptions = {}): void {
-  log(buildSchedulerUninstallGuidance(platform));
+}: UninstallSchedulerOptions = {}): Promise<void> {
+  log(await uninstall(platform));
 }
 
 export function createInstallSchedulerCommand(): Command {
   return new Command("install-scheduler")
     .description("Print scheduler setup guidance for automatic sync")
     .option("--dry-run", "Print the generated platform scheduler config or command")
-    .action((options: { dryRun?: boolean }) => {
-      runInstallScheduler({ dryRun: options.dryRun === true });
+    .action(async (options: { dryRun?: boolean }) => {
+      await runInstallScheduler({ dryRun: options.dryRun === true });
     });
 }
 
 export function createUninstallSchedulerCommand(): Command {
-  return new Command("uninstall-scheduler").description("Print scheduler removal guidance").action(() => {
-    runUninstallScheduler();
+  return new Command("uninstall-scheduler").description("Remove automatic Token Burn sync").action(async () => {
+    await runUninstallScheduler();
   });
 }
 
