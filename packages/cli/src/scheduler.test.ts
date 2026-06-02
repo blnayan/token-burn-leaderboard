@@ -9,6 +9,7 @@ import {
   buildSystemdService,
   buildSystemdTimer,
   buildWindowsTaskCommand,
+  installScheduler,
   mergeCronBlock,
 } from "./scheduler.js";
 
@@ -105,6 +106,51 @@ describe("scheduler builders", () => {
   });
 });
 
+describe("scheduler install runtime", () => {
+  it("installs a Linux systemd user timer when systemd is available", async () => {
+    const runtime = createMockSchedulerRuntime({ platform: "linux", homeDir: "/home/me" });
+
+    await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
+
+    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.service")).toContain(
+      "ExecStart=/usr/bin/node /repo/dist/index.js sync",
+    );
+    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain(
+      "OnUnitActiveSec=15min",
+    );
+    expect(runtime.commands).toEqual([
+      ["systemctl", ["--user", "daemon-reload"]],
+      ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
+    ]);
+  });
+
+  it("falls back to cron when Linux user systemd is unavailable", async () => {
+    const runtime = createMockSchedulerRuntime({
+      platform: "linux",
+      homeDir: "/home/me",
+      failingCommands: new Set(["systemctl --user daemon-reload"]),
+      commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n"]]),
+    });
+
+    await installScheduler({ runtime, syncCommandArgv: ["token-burn", "sync"] });
+
+    expect(runtime.commands).toContainEqual(["crontab", ["-l"]]);
+    expect(runtime.stdinCommands).toEqual([
+      {
+        command: "crontab",
+        args: ["-"],
+        input: [
+          "0 0 * * * echo midnight",
+          "# BEGIN Token Burn scheduler",
+          "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+          "# END Token Burn scheduler",
+          "",
+        ].join("\n"),
+      },
+    ]);
+  });
+});
+
 describe("scheduler commands", () => {
   it("defaults to invoking the current CLI entrypoint through node", () => {
     expect(
@@ -157,6 +203,43 @@ describe("scheduler commands", () => {
     expect(log).toHaveBeenCalledWith("Remove ~/Library/LaunchAgents/com.token-burn.sync.plist, then run launchctl unload on that plist if it is loaded.");
   });
 });
+
+function createMockSchedulerRuntime(options: {
+  platform: NodeJS.Platform;
+  homeDir: string;
+  failingCommands?: Set<string>;
+  commandOutput?: Map<string, string>;
+}) {
+  const files = new Map<string, string>();
+  const commands: Array<[string, string[]]> = [];
+  const stdinCommands: Array<{ command: string; args: string[]; input: string }> = [];
+
+  return {
+    platform: options.platform,
+    homeDir: options.homeDir,
+    files,
+    commands,
+    stdinCommands,
+    async mkdir() {},
+    async writeFile(path: string, content: string) {
+      files.set(path, content);
+    },
+    async rm(path: string) {
+      files.delete(path);
+    },
+    async execFile(command: string, args: string[]) {
+      commands.push([command, args]);
+      const key = [command, ...args].join(" ");
+      if (options.failingCommands?.has(key)) throw new Error(`failed: ${key}`);
+      return options.commandOutput?.get(key) ?? "";
+    },
+    async execFileWithInput(command: string, args: string[], input: string) {
+      stdinCommands.push({ command, args, input });
+      const key = [command, ...args].join(" ");
+      if (options.failingCommands?.has(key)) throw new Error(`failed: ${key}`);
+    },
+  };
+}
 
 describe("doctor", () => {
   it("prints auth state, platform, and sync guidance", async () => {

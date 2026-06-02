@@ -1,5 +1,14 @@
 export type SchedulerPlatform = NodeJS.Platform;
 export type SchedulerCommandArgv = readonly [string, ...string[]];
+export type SchedulerRuntime = {
+  platform: SchedulerPlatform;
+  homeDir: string;
+  mkdir(path: string): Promise<void>;
+  writeFile(path: string, content: string): Promise<void>;
+  rm(path: string): Promise<void>;
+  execFile(command: string, args: string[]): Promise<string>;
+  execFileWithInput(command: string, args: string[], input: string): Promise<void>;
+};
 
 const cronLogPath = "/tmp/token-burn-sync.log";
 const cronStartMarker = "# BEGIN Token Burn scheduler";
@@ -113,6 +122,45 @@ export function buildSchedulerUninstallGuidance(platform: SchedulerPlatform): st
   }
 
   return "Remove the token-burn sync entry from your crontab.";
+}
+
+export async function installScheduler({
+  runtime,
+  syncCommandArgv,
+}: {
+  runtime: SchedulerRuntime;
+  syncCommandArgv: SchedulerCommandArgv;
+}): Promise<string> {
+  if (runtime.platform === "linux") return installLinuxScheduler(runtime, syncCommandArgv);
+  throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
+}
+
+async function installLinuxScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+  try {
+    await installLinuxSystemdScheduler(runtime, syncCommandArgv);
+    return "Installed Token Burn systemd user timer token-burn-sync.timer.";
+  } catch (error) {
+    await installLinuxCronScheduler(runtime, syncCommandArgv);
+    const message = error instanceof Error ? error.message : String(error);
+    return `Installed Token Burn cron entry after systemd user timer was unavailable: ${message}`;
+  }
+}
+
+async function installLinuxSystemdScheduler(
+  runtime: SchedulerRuntime,
+  syncCommandArgv: SchedulerCommandArgv,
+): Promise<void> {
+  const dir = `${runtime.homeDir}/.config/systemd/user`;
+  await runtime.mkdir(dir);
+  await runtime.writeFile(`${dir}/token-burn-sync.service`, buildSystemdService(syncCommandArgv));
+  await runtime.writeFile(`${dir}/token-burn-sync.timer`, buildSystemdTimer());
+  await runtime.execFile("systemctl", ["--user", "daemon-reload"]);
+  await runtime.execFile("systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]);
+}
+
+async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<void> {
+  const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
+  await runtime.execFileWithInput("crontab", ["-"], mergeCronBlock(existing, buildCronBlock(syncCommandArgv)));
 }
 
 function shellQuote(value: string): string {
