@@ -5,7 +5,7 @@ Sync local Claude Code and Codex usage totals to a Token Burn leaderboard.
 ## Install
 
 ```bash
-npm install -g token-burn-cli
+npm install -g @blnayan/token-burn
 ```
 
 This installs the `token-burn` command.

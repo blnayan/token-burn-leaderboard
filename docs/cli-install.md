@@ -3,21 +3,21 @@
 ## User Install
 
 ```bash
-npm install -g token-burn-cli
+npm install -g @blnayan/token-burn
 token-burn login --server https://tokenburn.example.com
 token-burn sync
 token-burn install-scheduler
 ```
 
-The npm package is `token-burn-cli`. The installed command is `token-burn`.
+The npm package is `@blnayan/token-burn`. The installed command is `token-burn`.
 
 Use a real production server URL instead of `https://tokenburn.example.com`.
 
 ## Local Smoke Test
 
 ```bash
-pnpm --filter token-burn-cli build
-pnpm --filter token-burn-cli pack:dry-run
+pnpm --filter @blnayan/token-burn build
+pnpm --filter @blnayan/token-burn pack:dry-run
 ```
 
 The dry-run tarball must include `dist/index.js`, `README.md`, and `package.json`.
@@ -37,7 +37,7 @@ If npm asks for a two-factor authentication code, enter the current code from yo
 After publish, verify install from a clean machine or temporary directory:
 
 ```bash
-npm install -g token-burn-cli
+npm install -g @blnayan/token-burn
 token-burn --version
 token-burn status
 ```
@@ -46,5 +46,5 @@ token-burn status
 
 1. Update `packages/cli/package.json` version.
 2. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
-3. Run `pnpm --filter token-burn-cli pack:dry-run`.
+3. Run `pnpm --filter @blnayan/token-burn pack:dry-run`.
 4. Publish from `packages/cli` with `npm publish --access public`.

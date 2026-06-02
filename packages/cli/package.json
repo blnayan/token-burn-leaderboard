@@ -1,5 +1,5 @@
 {
-  "name": "token-burn-cli",
+  "name": "@blnayan/token-burn",
   "version": "0.1.0",
   "description": "CLI for syncing Claude Code and Codex usage to Token Burn.",
   "type": "module",
