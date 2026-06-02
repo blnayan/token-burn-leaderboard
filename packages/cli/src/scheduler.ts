@@ -89,9 +89,22 @@ ${programArguments}
 }
 
 export function buildWindowsTaskCommand(commandArgv: SchedulerCommandArgv): string {
-  const taskCommand = commandArgv.map(windowsQuoteIfNeeded).join(" ").replaceAll('"', '\\"');
+  return `schtasks ${buildWindowsTaskArgs(commandArgv).map(windowsQuoteIfNeeded).join(" ")}`;
+}
 
-  return `schtasks /Create /TN ${windowsTaskName} /SC MINUTE /MO 15 /TR "${taskCommand}" /F`;
+export function buildWindowsTaskArgs(commandArgv: SchedulerCommandArgv): string[] {
+  return [
+    "/Create",
+    "/TN",
+    windowsTaskName,
+    "/SC",
+    "MINUTE",
+    "/MO",
+    "15",
+    "/TR",
+    commandArgv.map(windowsQuoteIfNeeded).join(" "),
+    "/F",
+  ];
 }
 
 export function buildSchedulerInstallOutput(platform: SchedulerPlatform, commandArgv: SchedulerCommandArgv): string {
@@ -132,6 +145,8 @@ export async function installScheduler({
   syncCommandArgv: SchedulerCommandArgv;
 }): Promise<string> {
   if (runtime.platform === "linux") return installLinuxScheduler(runtime, syncCommandArgv);
+  if (runtime.platform === "darwin") return installMacScheduler(runtime, syncCommandArgv);
+  if (runtime.platform === "win32") return installWindowsScheduler(runtime, syncCommandArgv);
   throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
 }
 
@@ -161,6 +176,21 @@ async function installLinuxSystemdScheduler(
 async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<void> {
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
   await runtime.execFileWithInput("crontab", ["-"], mergeCronBlock(existing, buildCronBlock(syncCommandArgv)));
+}
+
+async function installMacScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+  const dir = `${runtime.homeDir}/Library/LaunchAgents`;
+  const plistPath = `${dir}/${launchdLabel}.plist`;
+  await runtime.mkdir(dir);
+  await runtime.writeFile(plistPath, buildLaunchdPlist(syncCommandArgv));
+  await runtime.execFile("launchctl", ["unload", plistPath]).catch(() => "");
+  await runtime.execFile("launchctl", ["load", plistPath]);
+  return `Installed Token Burn launchd agent ${plistPath}.`;
+}
+
+async function installWindowsScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+  await runtime.execFile("schtasks", buildWindowsTaskArgs(syncCommandArgv));
+  return "Installed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
 function shellQuote(value: string): string {

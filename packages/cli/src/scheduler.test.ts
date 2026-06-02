@@ -149,6 +149,46 @@ describe("scheduler install runtime", () => {
       },
     ]);
   });
+
+  it("installs a macOS launchd agent", async () => {
+    const runtime = createMockSchedulerRuntime({ platform: "darwin", homeDir: "/Users/me" });
+
+    await installScheduler({ runtime, syncCommandArgv: ["/usr/local/bin/node", "/repo/dist/index.js", "sync"] });
+
+    const plistPath = "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
+    expect(runtime.files.get(plistPath)).toContain("<string>com.token-burn.sync</string>");
+    expect(runtime.commands).toEqual([
+      ["launchctl", ["unload", plistPath]],
+      ["launchctl", ["load", plistPath]],
+    ]);
+  });
+
+  it("installs a Windows scheduled task", async () => {
+    const runtime = createMockSchedulerRuntime({ platform: "win32", homeDir: "C:\\Users\\Me" });
+
+    await installScheduler({
+      runtime,
+      syncCommandArgv: ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\Me\\token burn\\dist\\index.js", "sync"],
+    });
+
+    expect(runtime.commands).toEqual([
+      [
+        "schtasks",
+        [
+          "/Create",
+          "/TN",
+          "TokenBurnSync",
+          "/SC",
+          "MINUTE",
+          "/MO",
+          "15",
+          "/TR",
+          '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Me\\token burn\\dist\\index.js" sync',
+          "/F",
+        ],
+      ],
+    ]);
+  });
 });
 
 describe("scheduler commands", () => {
