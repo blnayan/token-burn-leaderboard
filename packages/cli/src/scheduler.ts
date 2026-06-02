@@ -65,6 +65,15 @@ export function mergeCronBlock(existingCrontab: string, block: string): string {
   return `${trimmed ? `${trimmed}\n` : ""}${block}\n`;
 }
 
+export function removeCronBlock(existingCrontab: string): string {
+  const markerPattern = new RegExp(
+    `${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`,
+    "m",
+  );
+  const withoutExisting = existingCrontab.replace(markerPattern, "").trimEnd();
+  return withoutExisting ? `${withoutExisting}\n` : "";
+}
+
 export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
   const programArguments = commandArgv.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
 
@@ -150,6 +159,13 @@ export async function installScheduler({
   throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
 }
 
+export async function uninstallScheduler({ runtime }: { runtime: SchedulerRuntime }): Promise<string> {
+  if (runtime.platform === "linux") return uninstallLinuxScheduler(runtime);
+  if (runtime.platform === "darwin") return uninstallMacScheduler(runtime);
+  if (runtime.platform === "win32") return uninstallWindowsScheduler(runtime);
+  throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
+}
+
 async function installLinuxScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
   try {
     await installLinuxSystemdScheduler(runtime, syncCommandArgv);
@@ -191,6 +207,29 @@ async function installMacScheduler(runtime: SchedulerRuntime, syncCommandArgv: S
 async function installWindowsScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
   await runtime.execFile("schtasks", buildWindowsTaskArgs(syncCommandArgv));
   return "Installed Token Burn Windows scheduled task TokenBurnSync.";
+}
+
+async function uninstallLinuxScheduler(runtime: SchedulerRuntime): Promise<string> {
+  const dir = `${runtime.homeDir}/.config/systemd/user`;
+  await runtime.execFile("systemctl", ["--user", "disable", "--now", "token-burn-sync.timer"]).catch(() => "");
+  await runtime.rm(`${dir}/token-burn-sync.service`).catch(() => "");
+  await runtime.rm(`${dir}/token-burn-sync.timer`).catch(() => "");
+  await runtime.execFile("systemctl", ["--user", "daemon-reload"]).catch(() => "");
+  const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
+  await runtime.execFileWithInput("crontab", ["-"], removeCronBlock(existing));
+  return "Removed Token Burn Linux scheduler entries.";
+}
+
+async function uninstallMacScheduler(runtime: SchedulerRuntime): Promise<string> {
+  const plistPath = `${runtime.homeDir}/Library/LaunchAgents/${launchdLabel}.plist`;
+  await runtime.execFile("launchctl", ["unload", plistPath]).catch(() => "");
+  await runtime.rm(plistPath).catch(() => "");
+  return `Removed Token Burn launchd agent ${plistPath}.`;
+}
+
+async function uninstallWindowsScheduler(runtime: SchedulerRuntime): Promise<string> {
+  await runtime.execFile("schtasks", ["/Delete", "/TN", windowsTaskName, "/F"]);
+  return "Removed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
 function shellQuote(value: string): string {

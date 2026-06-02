@@ -11,6 +11,7 @@ import {
   buildWindowsTaskCommand,
   installScheduler,
   mergeCronBlock,
+  uninstallScheduler,
 } from "./scheduler.js";
 
 describe("scheduler builders", () => {
@@ -188,6 +189,48 @@ describe("scheduler install runtime", () => {
         ],
       ],
     ]);
+  });
+
+  it("uninstalls Linux scheduler artifacts", async () => {
+    const runtime = createMockSchedulerRuntime({
+      platform: "linux",
+      homeDir: "/home/me",
+      commandOutput: new Map([
+        [
+          "crontab -l",
+          [
+            "# BEGIN Token Burn scheduler",
+            "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+            "# END Token Burn scheduler",
+            "0 0 * * * echo midnight",
+            "",
+          ].join("\n"),
+        ],
+      ]),
+    });
+
+    await uninstallScheduler({ runtime });
+
+    expect(runtime.commands).toContainEqual(["systemctl", ["--user", "disable", "--now", "token-burn-sync.timer"]]);
+    expect(runtime.commands).toContainEqual(["systemctl", ["--user", "daemon-reload"]]);
+    expect(runtime.stdinCommands).toEqual([{ command: "crontab", args: ["-"], input: "0 0 * * * echo midnight\n" }]);
+  });
+
+  it("uninstalls macOS launchd agent", async () => {
+    const runtime = createMockSchedulerRuntime({ platform: "darwin", homeDir: "/Users/me" });
+
+    await uninstallScheduler({ runtime });
+
+    const plistPath = "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
+    expect(runtime.commands).toEqual([["launchctl", ["unload", plistPath]]]);
+  });
+
+  it("uninstalls Windows scheduled task", async () => {
+    const runtime = createMockSchedulerRuntime({ platform: "win32", homeDir: "C:\\Users\\Me" });
+
+    await uninstallScheduler({ runtime });
+
+    expect(runtime.commands).toEqual([["schtasks", ["/Delete", "/TN", "TokenBurnSync", "/F"]]]);
   });
 });
 
