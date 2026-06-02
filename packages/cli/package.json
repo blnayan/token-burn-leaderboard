@@ -1,28 +1,40 @@
 {
-  "name": "token-burn",
+  "name": "token-burn-cli",
   "version": "0.1.0",
+  "description": "CLI for syncing Claude Code and Codex usage to Token Burn.",
   "type": "module",
   "bin": {
-    "token-burn": "./dist/index.js"
+    "token-burn": "dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "pnpm --filter @token-burn/shared build && tsup",
     "dev": "tsx src/index.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
+    "pack:dry-run": "pnpm build && npm pack --dry-run",
+    "prepublishOnly": "pnpm test && pnpm typecheck && pnpm build && npm pack --dry-run",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@token-burn/shared": "workspace:*",
     "ccusage": "^20.0.6",
     "commander": "^15.0.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@token-burn/shared": "workspace:*",
     "@types/node": "^25.9.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.22.4",
     "vitest": "^4.1.7"
   }

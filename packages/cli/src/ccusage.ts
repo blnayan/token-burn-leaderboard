@@ -1,8 +1,8 @@
 import { spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { platform } from "node:os";
-import { fileURLToPath } from "node:url";
+import { dirname, resolve } from "node:path";
 
 import type { Provider } from "@token-burn/shared";
 import { sumTokenCategories } from "@token-burn/shared";
@@ -67,6 +67,10 @@ type CommandResult = {
 };
 
 type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
+type CommandInvocation = {
+  command: string;
+  args: string[];
+};
 
 export class UnsupportedCcusageProviderError extends Error {
   readonly provider: CcusageProvider;
@@ -92,6 +96,7 @@ const tokenFieldAliases = {
 const tokenDetailAliases = {
   reasoningOutput: ["reasoningOutputTokens", "reasoning_output_tokens"],
 } as const;
+const requireFromCli = createRequire(import.meta.url);
 
 export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): NormalizedUsageRow[] {
   return rows.map((row) => {
@@ -139,17 +144,16 @@ export async function readProviderUsage(
   provider: CcusageProvider,
   { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
 ): Promise<NormalizedUsageRow[]> {
-  const command = resolveCcusageCommand();
   let result: CommandResult;
 
   try {
-    result = await runCommand(command, buildCcusageArgs(provider));
+    result = await runCommand("ccusage", buildCcusageArgs(provider));
   } catch (error) {
     if (provider !== "claude_code" || !isUnsupportedBreakdownError(error)) {
       throw error;
     }
 
-    result = await runCommand(command, buildCcusageArgs(provider, true));
+    result = await runCommand("ccusage", buildCcusageArgs(provider, true));
   }
 
   const parsed = JSON.parse(result.stdout) as unknown;
@@ -180,7 +184,7 @@ function isUnsupportedBreakdownError(error: unknown): boolean {
 }
 
 export async function readCcusageVersion(): Promise<string> {
-  const packageJsonPath = fileURLToPath(new URL("../node_modules/ccusage/package.json", import.meta.url));
+  const packageJsonPath = requireFromCli.resolve("ccusage/package.json");
   const raw = await readFile(packageJsonPath, "utf8");
   const parsed = JSON.parse(raw) as unknown;
   const record = toRecord(parsed);
@@ -193,16 +197,11 @@ export async function readCcusageVersion(): Promise<string> {
   return version;
 }
 
-function resolveCcusageCommand(): string {
-  const binName = platform() === "win32" ? "ccusage.cmd" : "ccusage";
-  const bundledBin = fileURLToPath(new URL(`../node_modules/.bin/${binName}`, import.meta.url));
-
-  return existsSync(bundledBin) ? bundledBin : "ccusage";
-}
-
 function spawnCommand(command: string, args: string[]): Promise<CommandResult> {
+  const invocation = command === "ccusage" ? resolveCcusageInvocation(args) : { command, args };
+
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(invocation.command, invocation.args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
 
@@ -225,6 +224,24 @@ function spawnCommand(command: string, args: string[]): Promise<CommandResult> {
       reject(new Error(message));
     });
   });
+}
+
+function resolveCcusageInvocation(args: string[]): CommandInvocation {
+  const binPath = resolveCcusageBinPath();
+  return { command: process.execPath, args: [binPath, ...args] };
+}
+
+function resolveCcusageBinPath(): string {
+  const packageJsonPath = requireFromCli.resolve("ccusage/package.json");
+  const packageRoot = dirname(packageJsonPath);
+  const parsed = requireFromCli(packageJsonPath) as { bin?: string | Record<string, string> };
+  const bin = typeof parsed.bin === "string" ? parsed.bin : parsed.bin?.ccusage;
+
+  if (!bin) {
+    throw new Error("Unable to determine ccusage executable path.");
+  }
+
+  return resolve(packageRoot, bin);
 }
 
 function readDailyArray(value: unknown): unknown[] {
