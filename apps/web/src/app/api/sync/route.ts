@@ -4,11 +4,47 @@ import { ZodError } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { hashSecret } from "@/server/cli-auth";
+import { buildClientRateLimitKey, checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 import { persistSyncPayload } from "@/server/sync-ingest";
+
+const missingAuthLimit = {
+  limit: 60,
+  windowMs: 10 * 60 * 1000,
+};
+
+const syncClientLimit = {
+  limit: 1_500,
+  windowMs: 10 * 60 * 1000,
+};
+
+const syncTokenLimit = {
+  limit: 1_000,
+  windowMs: 10 * 60 * 1000,
+};
 
 export async function POST(request: NextRequest) {
   const token = readBearerToken(request);
-  if (!token) return unauthorized();
+  if (!token) {
+    const rateLimit = checkRateLimit({
+      key: buildClientRateLimitKey(request, "sync-missing-auth"),
+      ...missingAuthLimit,
+    });
+    if (!rateLimit.ok) return rateLimitResponse(rateLimit);
+
+    return unauthorized();
+  }
+
+  const clientRateLimit = checkRateLimit({
+    key: buildClientRateLimitKey(request, "sync-client"),
+    ...syncClientLimit,
+  });
+  if (!clientRateLimit.ok) return rateLimitResponse(clientRateLimit);
+
+  const rateLimit = checkRateLimit({
+    key: `sync-token:${hashSecret(token)}`,
+    ...syncTokenLimit,
+  });
+  if (!rateLimit.ok) return rateLimitResponse(rateLimit);
 
   const cliToken = await prisma.cliToken.findFirst({
     where: {

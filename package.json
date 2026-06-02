@@ -3,7 +3,7 @@
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "scripts": {
-    "build": "pnpm -r build",
+    "build": "pnpm --filter @token-burn/shared build && ADMIN_GITHUB_LOGIN=${ADMIN_GITHUB_LOGIN:-build-admin} AUTH_GITHUB_ID=${AUTH_GITHUB_ID:-build-github-id} AUTH_GITHUB_SECRET=${AUTH_GITHUB_SECRET:-build-github-secret} AUTH_SECRET=${AUTH_SECRET:-build-auth-secret} AUTH_URL=${AUTH_URL:-https://tokenburn.example.com} DATABASE_URL=${DATABASE_URL:-postgresql://tokenburn:tokenburn@postgres:5432/tokenburn} TOKEN_BURN_PUBLIC_URL=${TOKEN_BURN_PUBLIC_URL:-https://tokenburn.example.com} pnpm --filter @token-burn/web db:generate && ADMIN_GITHUB_LOGIN=${ADMIN_GITHUB_LOGIN:-build-admin} AUTH_GITHUB_ID=${AUTH_GITHUB_ID:-build-github-id} AUTH_GITHUB_SECRET=${AUTH_GITHUB_SECRET:-build-github-secret} AUTH_SECRET=${AUTH_SECRET:-build-auth-secret} AUTH_URL=${AUTH_URL:-https://tokenburn.example.com} DATABASE_URL=${DATABASE_URL:-postgresql://tokenburn:tokenburn@postgres:5432/tokenburn} TOKEN_BURN_PUBLIC_URL=${TOKEN_BURN_PUBLIC_URL:-https://tokenburn.example.com} pnpm -r build",
     "dev": "pnpm --filter @token-burn/web dev",
     "dev:public": "docker compose --env-file .env.dev -f docker-compose.dev.yml up web",
     "dev:public:down": "docker compose --env-file .env.dev -f docker-compose.dev.yml down",
@@ -13,9 +13,9 @@
     "prod:up": "docker compose --env-file .env.prod up -d",
     "prod:down": "docker compose --env-file .env.prod down",
     "prod:migrate": "docker compose --env-file .env.prod --profile tools run --rm migrate",
-    "lint": "pnpm --filter @token-burn/shared build && pnpm -r lint",
-    "test": "pnpm -r test",
-    "typecheck": "pnpm --filter @token-burn/shared build && pnpm -r typecheck",
+    "lint": "pnpm --filter @token-burn/shared build && DATABASE_URL=${DATABASE_URL:-postgresql://tokenburn:change-this-password@localhost:5432/tokenburn} pnpm --filter @token-burn/web db:generate && pnpm -r lint",
+    "test": "DATABASE_URL=${DATABASE_URL:-postgresql://tokenburn:change-this-password@localhost:5432/tokenburn} pnpm --filter @token-burn/web db:generate && pnpm -r test",
+    "typecheck": "pnpm --filter @token-burn/shared build && DATABASE_URL=${DATABASE_URL:-postgresql://tokenburn:change-this-password@localhost:5432/tokenburn} pnpm --filter @token-burn/web db:generate && pnpm -r typecheck",
     "format": "prettier --write ."
   },
   "devDependencies": {
@@ -23,5 +23,11 @@
     "prettier": "^3.8.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
+  },
+  "pnpm": {
+    "overrides": {
+      "@hono/node-server": "1.19.13",
+      "postcss": "8.5.15"
+    }
   }
 }

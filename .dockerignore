@@ -1,5 +1,8 @@
 .git
 .worktrees
+.agents
+.pnpm-store
+.superpowers
 node_modules
 **/node_modules
 .next

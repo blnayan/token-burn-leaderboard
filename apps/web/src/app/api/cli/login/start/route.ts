@@ -1,10 +1,22 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { createCliLoginCode, createCliLoginExpiration, createCliToken, hashSecret } from "@/server/cli-auth";
+import { buildClientRateLimitKey, checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 
-export async function POST() {
+const loginStartLimit = {
+  limit: 20,
+  windowMs: 10 * 60 * 1000,
+};
+
+export async function POST(request: NextRequest) {
+  const rateLimit = checkRateLimit({
+    key: buildClientRateLimitKey(request, "cli-login-start"),
+    ...loginStartLimit,
+  });
+  if (!rateLimit.ok) return rateLimitResponse(rateLimit);
+
   const code = createCliLoginCode();
   const pollToken = createCliToken();
   const expiresAt = createCliLoginExpiration();
