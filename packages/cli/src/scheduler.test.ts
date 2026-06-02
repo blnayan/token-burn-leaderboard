@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from "vitest";
 
 import { runDoctor } from "./commands/doctor.js";
 import { getDefaultSyncCommandArgv, runInstallScheduler, runUninstallScheduler } from "./commands/scheduler.js";
-import { buildCronLine, buildLaunchdPlist, buildWindowsTaskCommand } from "./scheduler.js";
+import {
+  buildCronBlock,
+  buildCronLine,
+  buildLaunchdPlist,
+  buildSystemdService,
+  buildSystemdTimer,
+  buildWindowsTaskCommand,
+  mergeCronBlock,
+} from "./scheduler.js";
 
 describe("scheduler builders", () => {
   it("builds a cron line that syncs every 15 minutes and logs to tmp", () => {
@@ -20,6 +28,49 @@ describe("scheduler builders", () => {
   it("shell-quotes cron command arguments with shell metacharacters", () => {
     expect(buildCronLine(["/tmp/a&b/node", "/tmp/project;rm/index.js", "sync"])).toBe(
       "*/15 * * * * '/tmp/a&b/node' '/tmp/project;rm/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+    );
+  });
+
+  it("builds a systemd user service and timer for 15 minute sync", () => {
+    const service = buildSystemdService(["/usr/bin/node", "/repo/dist/index.js", "sync"]);
+    const timer = buildSystemdTimer();
+
+    expect(service).toContain("[Service]");
+    expect(service).toContain("Type=oneshot");
+    expect(service).toContain("ExecStart=/usr/bin/node /repo/dist/index.js sync");
+    expect(timer).toContain("OnBootSec=5min");
+    expect(timer).toContain("OnUnitActiveSec=15min");
+    expect(timer).toContain("Unit=token-burn-sync.service");
+  });
+
+  it("wraps the cron line in stable marker comments", () => {
+    expect(buildCronBlock(["/usr/local/bin/token-burn", "sync"])).toBe(
+      [
+        "# BEGIN Token Burn scheduler",
+        "*/15 * * * * '/usr/local/bin/token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+        "# END Token Burn scheduler",
+      ].join("\n"),
+    );
+  });
+
+  it("replaces an existing marked cron block without duplicating it", () => {
+    const existing = [
+      "MAILTO=me@example.com",
+      "# BEGIN Token Burn scheduler",
+      "*/15 * * * * old command",
+      "# END Token Burn scheduler",
+      "0 0 * * * echo midnight",
+    ].join("\n");
+
+    expect(mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"]))).toBe(
+      [
+        "MAILTO=me@example.com",
+        "# BEGIN Token Burn scheduler",
+        "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+        "# END Token Burn scheduler",
+        "0 0 * * * echo midnight",
+        "",
+      ].join("\n"),
     );
   });
 

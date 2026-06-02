@@ -2,11 +2,58 @@ export type SchedulerPlatform = NodeJS.Platform;
 export type SchedulerCommandArgv = readonly [string, ...string[]];
 
 const cronLogPath = "/tmp/token-burn-sync.log";
+const cronStartMarker = "# BEGIN Token Burn scheduler";
+const cronEndMarker = "# END Token Burn scheduler";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
 
 export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
   return `*/15 * * * * ${commandArgv.map(shellQuote).join(" ")} >> ${cronLogPath} 2>&1`;
+}
+
+export function buildSystemdService(commandArgv: SchedulerCommandArgv): string {
+  return [
+    "[Unit]",
+    "Description=Token Burn sync",
+    "",
+    "[Service]",
+    "Type=oneshot",
+    `ExecStart=${commandArgv.map(systemdEscapeArg).join(" ")}`,
+    "",
+  ].join("\n");
+}
+
+export function buildSystemdTimer(): string {
+  return [
+    "[Unit]",
+    "Description=Run Token Burn sync every 15 minutes",
+    "",
+    "[Timer]",
+    "OnBootSec=5min",
+    "OnUnitActiveSec=15min",
+    "Unit=token-burn-sync.service",
+    "",
+    "[Install]",
+    "WantedBy=timers.target",
+    "",
+  ].join("\n");
+}
+
+export function buildCronBlock(commandArgv: SchedulerCommandArgv): string {
+  return [cronStartMarker, buildCronLine(commandArgv), cronEndMarker].join("\n");
+}
+
+export function mergeCronBlock(existingCrontab: string, block: string): string {
+  const markerPattern = new RegExp(
+    `${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`,
+    "m",
+  );
+  if (markerPattern.test(existingCrontab)) {
+    return ensureTrailingNewline(existingCrontab.replace(markerPattern, `${block}\n`));
+  }
+
+  const trimmed = existingCrontab.trimEnd();
+  return `${trimmed ? `${trimmed}\n` : ""}${block}\n`;
 }
 
 export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
@@ -72,9 +119,22 @@ function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 
+function systemdEscapeArg(value: string): string {
+  if (!/[\s"\\]/.test(value)) return value;
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+
 function windowsQuoteIfNeeded(value: string): string {
   if (!/[\s"]/.test(value)) return value;
   return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function ensureTrailingNewline(value: string): string {
+  return value.endsWith("\n") ? value : `${value}\n`;
 }
 
 function escapeXml(value: string): string {
