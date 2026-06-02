@@ -35,6 +35,11 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      default:
+      proxy:
+        aliases:
+          - token-burn-web
     ports:
       - "127.0.0.1:3000:3000"
 
@@ -54,3 +59,8 @@ services:
 
 volumes:
   postgres-data:
+
+networks:
+  proxy:
+    external: true
+    name: proxy

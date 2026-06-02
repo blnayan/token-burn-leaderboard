@@ -18,7 +18,7 @@ RUN ADMIN_GITHUB_LOGIN=build-admin AUTH_GITHUB_ID=build-github-id AUTH_GITHUB_SE
 FROM deps AS migrator
 COPY . .
 RUN pnpm --filter @token-burn/shared build
-RUN pnpm --filter @token-burn/web db:generate
+RUN DATABASE_URL=postgresql://tokenburn:tokenburn@postgres:5432/tokenburn pnpm --filter @token-burn/web db:generate
 CMD ["pnpm", "--filter", "@token-burn/web", "db:deploy"]
 
 FROM node:22-alpine AS runner
