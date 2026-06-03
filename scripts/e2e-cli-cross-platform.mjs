@@ -253,27 +253,49 @@ function assertSyncPayloads(requests) {
   assert(codex, "expected codex sync payload");
 
   assertCommonPayload(claude, "claude_code");
-  assertTokenCategories(
+  assertPayloadKeys(
+    claude,
+    [
+      "ccusageVersion",
+      "cliVersion",
+      "costSource",
+      "costUsd",
+      "date",
+      "deviceId",
+      "deviceName",
+      "models",
+      "os",
+      "provider",
+      "sourceSnapshot",
+      "syncedAt",
+      "tokenCategories",
+      "totalTokens",
+    ],
+    "claude payload keys",
+  );
+  assertExactRecord(
     claude.tokenCategories,
     { input: 1000, output: 200, cacheCreate: 30, cacheRead: 70 },
     "claude token categories",
   );
-  assertEqual(claude.tokenDetails, undefined, "claude token details should be omitted");
   assertEqual(claude.totalTokens, 1300, "claude total tokens");
   assertEqual(claude.costUsd, 0.12, "claude cost");
   assertEqual(claude.costSource, "ccusage", "claude cost source");
   assertEqual(claude.models.length, 1, "claude model row count");
+  assertPayloadKeys(
+    claude.models[0],
+    ["costUsd", "modelName", "tokenCategories", "totalTokens"],
+    "claude model keys",
+  );
   assertEqual(claude.models[0].modelName, "claude-sonnet-4", "claude model name");
-  assertTokenCategories(
+  assertExactRecord(
     claude.models[0].tokenCategories,
     { input: 1000, output: 200, cacheCreate: 30, cacheRead: 70 },
     "claude model token categories",
   );
-  assertEqual(claude.models[0].tokenDetails, undefined, "claude model token details should be omitted");
   assertEqual(claude.models[0].totalTokens, 1300, "claude model total tokens");
   assertEqual(claude.models[0].costUsd, 0.12, "claude model cost");
-  assertEqual(claude.models[0].metadata, undefined, "claude model metadata should be omitted");
-  assertDeepEqual(
+  assertExactRecord(
     claude.sourceSnapshot,
     {
       cacheCreationTokens: 30,
@@ -287,27 +309,53 @@ function assertSyncPayloads(requests) {
   );
 
   assertCommonPayload(codex, "codex");
-  assertTokenCategories(
+  assertPayloadKeys(
+    codex,
+    [
+      "ccusageVersion",
+      "cliVersion",
+      "costSource",
+      "costUsd",
+      "date",
+      "deviceId",
+      "deviceName",
+      "models",
+      "os",
+      "provider",
+      "sourceSnapshot",
+      "syncedAt",
+      "tokenCategories",
+      "tokenDetails",
+      "totalTokens",
+    ],
+    "codex payload keys",
+  );
+  assertExactRecord(
     codex.tokenCategories,
     { input: 500, output: 300, cacheCreate: 0, cacheRead: 200 },
     "codex token categories",
   );
-  assertDeepEqual(codex.tokenDetails, { reasoningOutput: 50 }, "codex token details");
+  assertExactRecord(codex.tokenDetails, { reasoningOutput: 50 }, "codex token details");
   assertEqual(codex.totalTokens, 1000, "codex total tokens");
   assertEqual(codex.costUsd, 0.34, "codex cost");
   assertEqual(codex.costSource, "ccusage", "codex cost source");
   assertEqual(codex.models.length, 1, "codex model row count");
+  assertPayloadKeys(
+    codex.models[0],
+    ["costUsd", "metadata", "modelName", "tokenCategories", "tokenDetails", "totalTokens"],
+    "codex model keys",
+  );
   assertEqual(codex.models[0].modelName, "gpt-5.1", "codex model name");
-  assertTokenCategories(
+  assertExactRecord(
     codex.models[0].tokenCategories,
     { input: 500, output: 300, cacheCreate: 0, cacheRead: 200 },
     "codex model token categories",
   );
-  assertDeepEqual(codex.models[0].tokenDetails, { reasoningOutput: 50 }, "codex model token details");
+  assertExactRecord(codex.models[0].tokenDetails, { reasoningOutput: 50 }, "codex model token details");
   assertEqual(codex.models[0].totalTokens, 1000, "codex model total tokens");
   assertEqual(codex.models[0].costUsd, 0.34, "codex model cost");
-  assertEqual(codex.models[0].metadata.isFallback, false, "codex model fallback metadata");
-  assertDeepEqual(
+  assertExactRecord(codex.models[0].metadata, { isFallback: false }, "codex model metadata");
+  assertExactRecord(
     codex.sourceSnapshot,
     {
       cachedInputTokens: 200,
@@ -336,8 +384,19 @@ function assertCommonPayload(payload, provider) {
   assertMatches(payload.syncedAt, /^\d{4}-\d{2}-\d{2}T/, `${provider} syncedAt should be ISO-like datetime`);
 }
 
-function assertTokenCategories(actual, expected, message) {
-  assertDeepEqual(actual, expected, message);
+function assertPayloadKeys(actual, expectedKeys, message) {
+  assert(actual && typeof actual === "object" && !Array.isArray(actual), `${message}: expected an object`);
+  const actualKeys = Object.keys(actual).sort();
+  const sortedExpectedKeys = [...expectedKeys].sort();
+  assertDeepEqual(actualKeys, sortedExpectedKeys, message);
+}
+
+function assertExactRecord(actual, expected, message) {
+  assertPayloadKeys(actual, Object.keys(expected), `${message} keys`);
+
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    assertDeepEqual(actual[key], expectedValue, `${message}.${key}`);
+  }
 }
 
 function assertSchedulerOutput(output) {
