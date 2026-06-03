@@ -6,10 +6,14 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   sync-e2e:
     name: Packaged CLI syncs into Postgres
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     services:
       postgres:
@@ -71,6 +75,10 @@ jobs:
           mkdir -p "$RUNNER_TEMP/token-burn-pack"
           npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
           tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "No CLI tarball found after npm pack" >&2
+            exit 1
+          fi
           echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
 
       - name: Install packed CLI globally
@@ -80,7 +88,11 @@ jobs:
       - name: Start web server
         shell: bash
         run: |
-          pnpm --filter @token-burn/web start -- -H 127.0.0.1 -p 3100 > "$RUNNER_TEMP/token-burn-web.log" 2>&1 &
+          HOSTNAME=127.0.0.1 PORT=3100 node apps/web/.next/standalone/apps/web/server.js > "$RUNNER_TEMP/token-burn-web.log" 2>&1 &
+          kill -0 "$!" || {
+            cat "$RUNNER_TEMP/token-burn-web.log"
+            exit 1
+          }
           echo "WEB_PID=$!" >> "$GITHUB_ENV"
 
       - name: Run sync E2E
