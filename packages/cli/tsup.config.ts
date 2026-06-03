@@ -4,7 +4,7 @@ export default defineConfig({
   entry: ["src/index.ts", "src/postinstall.ts"],
   format: ["esm"],
   platform: "node",
-  target: "node20",
+  target: "node24",
   clean: true,
   bundle: true,
   splitting: false,

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 tarball="${1:?Usage: $0 <token-burn-tarball.tgz>}"
-image="${TOKEN_BURN_DOCKER_NODE_IMAGE:-node:22-bookworm}"
+image="${TOKEN_BURN_DOCKER_NODE_IMAGE:-node:24-bookworm}"
 
 tarball_path="$(cd "$(dirname "$tarball")" && pwd -P)/$(basename "$tarball")"
 

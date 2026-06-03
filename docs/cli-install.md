@@ -2,7 +2,7 @@
 
 ## User Install
 
-Token Burn CLI requires Node.js 22.12.0 or newer.
+Token Burn CLI requires Node.js 24 LTS or newer.
 
 ```bash
 npm install -g @blnayan/token-burn
