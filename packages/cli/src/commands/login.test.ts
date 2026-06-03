@@ -36,10 +36,15 @@ describe("runLogin", () => {
 });
 
 describe("createLoginCommand", () => {
-  it("exposes --server as the server URL option", () => {
+  it("exposes --server-url as the server URL option", () => {
+    const help = createLoginCommand().helpInformation();
+
+    expect(help).toContain("--server-url <url>");
+  });
+
+  it("keeps --server as a server URL alias", () => {
     const help = createLoginCommand().helpInformation();
 
     expect(help).toContain("--server <url>");
-    expect(help).not.toContain("--server-url");
   });
 });

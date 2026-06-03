@@ -11,7 +11,7 @@ import { createStatusCommand } from "./commands/status.js";
 const program = new Command()
   .name("token-burn")
   .description("Token Burn command line tools")
-  .version("0.1.0");
+  .version("0.1.3");
 
 program.addCommand(createLoginCommand());
 program.addCommand(createLogoutCommand());

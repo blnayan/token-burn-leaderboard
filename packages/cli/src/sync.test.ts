@@ -10,7 +10,15 @@ describe("syncUsage", () => {
       syncUsage({
         readConfig: async () => ({ serverUrl: "https://token-burn.test" }),
       }),
-    ).rejects.toThrow("Run token-burn login --server https://token-burn.test to authenticate.");
+    ).rejects.toThrow("Run token-burn login --server-url https://token-burn.test to authenticate.");
+  });
+
+  it("uses the production server in the login message when no config exists", async () => {
+    await expect(
+      syncUsage({
+        readConfig: async () => null,
+      }),
+    ).rejects.toThrow("Run token-burn login --server-url https://tokenburn.nayanbhut.dev to authenticate.");
   });
 
   it("posts payloads and writes successful lastSync after a successful sync", async () => {
@@ -325,6 +333,38 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       },
     ]);
     expect(logs).toEqual(["Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed."]);
+  });
+
+  it("explains ccusage native binary chmod failures without suggesting sudo sync", async () => {
+    const writes: CliConfig[] = [];
+    const nativeBinaryError = new Error(
+      "ccusage native binary is not executable: EPERM: operation not permitted, chmod '/usr/lib/node_modules/@blnayan/token-burn/node_modules/@ccusage/ccusage-linux-x64/bin/ccusage'",
+    );
+
+    await expect(
+      syncUsage({
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+        writeConfig: async (config) => {
+          writes.push(config);
+        },
+        readProviderUsage: async () => {
+          throw nativeBinaryError;
+        },
+        readCcusageVersion: async () => "20.0.6",
+        now: () => new Date("2026-06-01T00:00:00.000Z"),
+        platform: "linux",
+        cliVersion: "0.1.0",
+        createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        readDeviceName: () => "nayan-vps",
+        log: () => {},
+      }),
+    ).rejects.toThrow(
+      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
+    );
+
+    expect(writes[0]?.lastSync?.message).toContain(
+      "ccusage native binary is not executable because the global npm install is not user-writable",
+    );
   });
 
   it("writes failed lastSync before throwing when supported providers fail and unsupported providers are skipped", async () => {

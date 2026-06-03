@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import type { CliConfig } from "../config.js";
 import { writeConfig as writeConfigFile } from "../config.js";
+import { defaultServerUrl } from "../defaults.js";
 import { postJson as postJsonRequest } from "../http.js";
 
 const loginStartResponseSchema = z.object({
@@ -70,12 +71,12 @@ export function createLoginCommand(): Command {
   return new Command("login")
     .description("Authenticate the Token Burn CLI")
     .option(
-      "-s, --server <url>",
+      "-s, --server-url <url>",
       "Token Burn server URL",
-      process.env.TOKEN_BURN_SERVER_URL ?? "http://localhost:3000",
     )
-    .action(async (options: { server: string }) => {
-      await runLogin({ serverUrl: options.server });
+    .option("--server <url>", "Alias for --server-url")
+    .action(async (options: { serverUrl?: string; server?: string }) => {
+      await runLogin({ serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl() });
     });
 }
 

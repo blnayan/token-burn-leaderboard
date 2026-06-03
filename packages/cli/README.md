@@ -13,7 +13,7 @@ This installs the `token-burn` command.
 ## Login And Sync
 
 ```bash
-token-burn login --server https://tokenburn.example.com
+token-burn login
 token-burn sync
 token-burn install-scheduler
 ```
@@ -22,9 +22,12 @@ token-burn install-scheduler
 
 ## Commands
 
-- `token-burn login --server <url>` authenticates the CLI with a Token Burn server.
+- `token-burn login` authenticates the CLI with `https://tokenburn.nayanbhut.dev`.
+- `token-burn login --server-url <url>` authenticates with another Token Burn server.
 - `token-burn sync` sends aggregate usage totals.
 - `token-burn status` shows auth and last sync state.
 - `token-burn install-scheduler` installs automatic sync.
 - `token-burn install-scheduler --dry-run` previews scheduler changes.
 - `token-burn uninstall-scheduler` removes automatic sync.
+
+If `sync` reports that the `ccusage` native binary is not executable after a global npm install, do not run `token-burn sync` with `sudo`; root has a separate Token Burn config. Reinstall Node/npm in a user-writable environment such as `nvm`, or fix the native binary execute bit once.

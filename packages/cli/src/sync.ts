@@ -13,6 +13,7 @@ import {
 } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
+import { defaultServerUrl } from "./defaults.js";
 import { postJson as postJsonRequest } from "./http.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
@@ -49,8 +50,8 @@ export async function syncUsage({
   const config = await readConfig();
 
   if (!config?.token) {
-    const serverUrl = config?.serverUrl ?? process.env.TOKEN_BURN_SERVER_URL ?? "http://localhost:3000";
-    throw new Error(`Run token-burn login --server ${serverUrl} to authenticate.`);
+    const serverUrl = config?.serverUrl ?? defaultServerUrl();
+    throw new Error(`Run token-burn login --server-url ${serverUrl} to authenticate.`);
   }
 
   const syncedAt = now().toISOString();
@@ -193,6 +194,12 @@ function normalizeProviderError(error: unknown): Error {
     return new Error("No valid Claude data directories found");
   }
 
+  if (isCcusageNativeBinaryPermissionError(normalizedError)) {
+    return new Error(
+      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
+    );
+  }
+
   return normalizedError;
 }
 
@@ -204,6 +211,14 @@ function isSkippableProviderError(error: unknown): boolean {
 
 function isMissingClaudeDataError(error: Error): boolean {
   return error.message.includes("No valid Claude data directories found");
+}
+
+function isCcusageNativeBinaryPermissionError(error: Error): boolean {
+  return (
+    error.message.includes("ccusage native binary is not executable") &&
+    error.message.includes("EPERM") &&
+    error.message.includes("chmod")
+  );
 }
 
 function trimTrailingPeriod(message: string): string {

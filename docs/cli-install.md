@@ -4,14 +4,16 @@
 
 ```bash
 npm install -g @blnayan/token-burn
-token-burn login --server https://tokenburn.example.com
+token-burn login
 token-burn sync
 token-burn install-scheduler
 ```
 
 The npm package is `@blnayan/token-burn`. The installed command is `token-burn`.
 
-Use a real production server URL instead of `https://tokenburn.example.com`.
+The default server is `https://tokenburn.nayanbhut.dev`. Use `token-burn login --server-url <url>` only for a different deployment.
+
+If a global npm install reports that the `ccusage` native binary is not executable, do not run `token-burn sync` with `sudo`. Reinstall Node/npm in a user-writable environment such as `nvm`, or fix the native binary execute bit once.
 
 ## Local Smoke Test
 
