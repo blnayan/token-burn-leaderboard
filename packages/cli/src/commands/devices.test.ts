@@ -76,6 +76,72 @@ describe("runListDevices", () => {
     expect(log).toHaveBeenCalledWith("Nayans-MacBook-Air.local / darwin: 21 duplicate rows, 0 conflicts");
     expect(log).toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
   });
+
+  it("prints conflict messaging without merge suggestions for conflicted duplicate groups", async () => {
+    const log = vi.fn();
+    const getJson = vi.fn().mockResolvedValue({
+      devices: [
+        {
+          id: "old-device",
+          name: "Nayans-MacBook-Air.local",
+          os: "darwin",
+          firstSeenAt: "2026-06-03T15:23:14.634Z",
+          lastSeenAt: "2026-06-03T15:23:13.475Z",
+          dailyRows: 21,
+          totalTokens: "471033315",
+        },
+        {
+          id: "new-device",
+          name: "Nayans-MacBook-Air.local",
+          os: "darwin",
+          firstSeenAt: "2026-06-03T15:47:05.928Z",
+          lastSeenAt: "2026-06-03T15:47:05.239Z",
+          dailyRows: 32,
+          totalTokens: "2162169624",
+        },
+      ],
+      duplicateGroups: [
+        {
+          name: "Nayans-MacBook-Air.local",
+          os: "darwin",
+          duplicateRows: 0,
+          conflictRows: 1,
+          devices: [
+            {
+              id: "old-device",
+              name: "Nayans-MacBook-Air.local",
+              os: "darwin",
+              firstSeenAt: "2026-06-03T15:23:14.634Z",
+              lastSeenAt: "2026-06-03T15:23:13.475Z",
+              dailyRows: 21,
+              totalTokens: "471033315",
+            },
+            {
+              id: "new-device",
+              name: "Nayans-MacBook-Air.local",
+              os: "darwin",
+              firstSeenAt: "2026-06-03T15:47:05.928Z",
+              lastSeenAt: "2026-06-03T15:47:05.239Z",
+              dailyRows: 32,
+              totalTokens: "2162169624",
+            },
+          ],
+        },
+      ],
+    });
+
+    await runListDevices({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
+      getJson,
+      log,
+    });
+
+    expect(log).toHaveBeenCalledWith("Nayans-MacBook-Air.local / darwin: 0 duplicate rows, 1 conflicts");
+    expect(log).toHaveBeenCalledWith(
+      "Merge blocked: same provider/date rows have different totals. Ask an admin to inspect before merging.",
+    );
+    expect(log).not.toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
+  });
 });
 
 describe("runMergeDevices", () => {
@@ -105,6 +171,20 @@ describe("runMergeDevices", () => {
     expect(log).toHaveBeenCalledWith("Deleted duplicate rows: 21");
     expect(log).toHaveBeenCalledWith("Moved rows: 0");
     expect(log).toHaveBeenCalledWith("Deleted source device: yes");
+  });
+
+  it("surfaces merge failures from the server", async () => {
+    await expect(
+      runMergeDevices({
+        sourceDeviceId: "old-device",
+        targetDeviceId: "new-device",
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
+        postJson: async () => {
+          throw new Error("Cannot merge devices with conflicting usage rows.");
+        },
+        log: vi.fn(),
+      }),
+    ).rejects.toThrow("Cannot merge devices with conflicting usage rows.");
   });
 });
 
