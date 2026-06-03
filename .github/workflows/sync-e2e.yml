@@ -89,11 +89,12 @@ jobs:
         shell: bash
         run: |
           HOSTNAME=127.0.0.1 PORT=3100 node apps/web/.next/standalone/apps/web/server.js > "$RUNNER_TEMP/token-burn-web.log" 2>&1 &
-          kill -0 "$!" || {
+          web_pid=$!
+          kill -0 "$web_pid" || {
             cat "$RUNNER_TEMP/token-burn-web.log"
             exit 1
           }
-          echo "WEB_PID=$!" >> "$GITHUB_ENV"
+          echo "WEB_PID=$web_pid" >> "$GITHUB_ENV"
 
       - name: Run sync E2E
         run: pnpm --filter @token-burn/web test:sync-e2e
