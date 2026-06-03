@@ -15,6 +15,22 @@ The default server is `https://tokenburn.nayanbhut.dev`. Use `token-burn login -
 
 If a global npm install reports that the `ccusage` native binary is not executable, do not run `token-burn sync` with `sudo`. Reinstall Node/npm in a user-writable environment such as `nvm`, or fix the native binary execute bit once.
 
+## Device Identity And Recovery
+
+Token Burn stores a random per-install device ID in `~/.config/token-burn/config.json`.
+Normal npm uninstall/reinstall keeps this config file, so the same device identity is reused.
+
+If the config file is deleted, the next sync creates a new device. To recover duplicated history:
+
+```bash
+token-burn login
+token-burn sync
+token-burn devices
+token-burn devices merge <old-device-id> <new-device-id>
+```
+
+Do not edit the database manually unless you are repairing a server-side incident.
+
 ## Local Smoke Test
 
 ```bash

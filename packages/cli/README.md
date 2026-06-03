@@ -30,4 +30,30 @@ token-burn install-scheduler
 - `token-burn install-scheduler --dry-run` previews scheduler changes.
 - `token-burn uninstall-scheduler` removes automatic sync.
 
+## Privacy
+
+Token Burn syncs aggregate daily usage only.
+
+Stored by Token Burn:
+
+- Daily aggregate token totals
+- Provider name
+- model names when `ccusage` reports them
+- Token categories such as input, output, cache creation, and cache read
+- Reasoning output token details when reported
+- Cost estimates when `ccusage` reports them
+- Device name, OS, CLI version, `ccusage` version, and sync timestamp
+
+Not stored by Token Burn:
+
+- Prompts
+- Raw conversation text
+- Project paths or file paths
+- Session IDs
+- Raw `ccusage` rows
+- GitHub OAuth tokens
+- Raw CLI tokens
+
+Leaderboard periods use UTC boundaries. "Today" means the current UTC date.
+
 If `sync` reports that the `ccusage` native binary is not executable after a global npm install, do not run `token-burn sync` with `sudo`; root has a separate Token Burn config. Reinstall Node/npm in a user-writable environment such as `nvm`, or fix the native binary execute bit once.
