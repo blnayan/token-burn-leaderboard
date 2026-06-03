@@ -11,6 +11,6 @@ export default defineConfig({
   },
   test: {
     globals: false,
-    include: ["src/**/*.test.ts", "packages/**/*.test.ts", "apps/**/*.test.ts"],
+    include: ["src/**/*.test.{ts,tsx}", "packages/**/*.test.{ts,tsx}", "apps/**/*.test.{ts,tsx}"],
   },
 });
