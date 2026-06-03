@@ -343,6 +343,12 @@ describe("doctor", () => {
     await runDoctor({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       platform: "linux",
+      readHealth: async () => ({
+        recommendedCliVersion: "0.1.5",
+        minimumCliVersion: "0.1.5",
+        serverTime: "2026-06-03T00:00:00.000Z",
+      }),
+      readDevices: async () => ({ duplicateGroups: [] }),
       log,
     });
 
