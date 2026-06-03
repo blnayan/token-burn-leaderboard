@@ -2,11 +2,11 @@ import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { createInviteCode, createInviteExpiration, hashInviteCode } from "@/server/invites";
+
+import { InviteUrlCopy } from "./invite-url-copy";
 
 async function signInWithGitHub() {
   "use server";
@@ -103,12 +103,7 @@ export default async function AdminInvitesPage({
         <Button type="submit">Create invite</Button>
       </form>
 
-      {inviteUrl ? (
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="inviteUrl">Invite URL</Label>
-          <Input id="inviteUrl" value={inviteUrl} readOnly />
-        </div>
-      ) : null}
+      {inviteUrl ? <InviteUrlCopy inviteUrl={inviteUrl} /> : null}
       {ignoredCode ? <p className="text-sm text-muted-foreground">That invite link is no longer available.</p> : null}
     </main>
   );
