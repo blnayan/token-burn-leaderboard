@@ -8,7 +8,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "postinstall.mjs"
   ],
   "license": "UNLICENSED",
   "engines": {
@@ -22,7 +23,7 @@
     "dev": "tsx src/index.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
     "pack:dry-run": "pnpm build && npm pack --dry-run",
-    "postinstall": "node ./dist/postinstall.js",
+    "postinstall": "node ./postinstall.mjs",
     "prepublishOnly": "pnpm test && pnpm typecheck && pnpm build && npm pack --dry-run",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
