@@ -10,6 +10,7 @@ const invalidToken = "token-burn-e2e-invalid-token";
 const deviceId = "11111111-1111-4111-8111-111111111111";
 const fixtureDate = "2026-06-03";
 const timeoutMs = 30_000;
+const timeoutGraceMs = 2_000;
 
 const state = {
   acceptedRequests: [],
@@ -174,6 +175,21 @@ async function runInvalidTokenScenario(serverUrl) {
     2,
     "invalid token sync should send two rejected provider requests",
   );
+
+  const rejectedRequests = state.rejectedRequests.slice(beforeRejected);
+  assertDeepEqual(
+    rejectedRequests.map((request) => request.body.provider).sort(),
+    ["claude_code", "codex"],
+    "invalid token rejected request providers",
+  );
+
+  for (const request of rejectedRequests) {
+    assertEqual(
+      request.authorization,
+      `Bearer ${invalidToken}`,
+      `${request.body.provider} rejected request should use invalid bearer token`,
+    );
+  }
 }
 
 async function writeFixtures(fixtureDir) {
@@ -428,10 +444,10 @@ function assertSchedulerOutput(output) {
 }
 
 function runCli(args, { env = {}, expectFailure = false } = {}) {
-  const command = process.platform === "win32" ? "token-burn.cmd" : "token-burn";
+  const invocation = createTokenBurnInvocation(args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
+    const child = spawn(invocation.command, invocation.args, {
       env: {
         ...process.env,
         ...env,
@@ -440,10 +456,35 @@ function runCli(args, { env = {}, expectFailure = false } = {}) {
     });
     let stdout = "";
     let stderr = "";
+    let timedOut = false;
+    let settled = false;
+    let forceKillTimer;
     const timer = setTimeout(() => {
+      timedOut = true;
       child.kill("SIGTERM");
-      reject(new Error(`token-burn ${args.join(" ")} timed out after ${timeoutMs}ms`));
+      forceKillTimer = setTimeout(() => {
+        if (!settled) {
+          child.kill("SIGKILL");
+          settle(() => {
+            reject(
+              new Error(
+                `token-burn ${args.join(" ")} timed out after ${timeoutMs}ms and did not exit within ${timeoutGraceMs}ms after SIGTERM. Output:\n${redact(
+                  combinedOutput({ stdout, stderr }),
+                )}`,
+              ),
+            );
+          });
+        }
+      }, timeoutGraceMs);
     }, timeoutMs);
+
+    const settle = (callback) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(forceKillTimer);
+      callback();
+    };
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -454,29 +495,63 @@ function runCli(args, { env = {}, expectFailure = false } = {}) {
       stderr += chunk;
     });
     child.on("error", (error) => {
-      clearTimeout(timer);
-      reject(error);
+      settle(() => reject(error));
     });
-    child.on("close", (code) => {
-      clearTimeout(timer);
+    child.on("close", (code, signal) => {
       const result = { code, stdout, stderr };
-      if (expectFailure) {
-        if (code === 0) {
-          reject(new Error(`Expected token-burn ${args.join(" ")} to fail. Output:\n${redact(combinedOutput(result))}`));
+
+      settle(() => {
+        if (timedOut) {
+          reject(
+            new Error(
+              `token-burn ${args.join(" ")} timed out after ${timeoutMs}ms and exited with ${
+                signal ? `signal ${signal}` : `code ${code ?? "unknown"}`
+              }. Output:\n${redact(combinedOutput(result))}`,
+            ),
+          );
           return;
         }
+
+        if (expectFailure) {
+          if (code === 0) {
+            reject(
+              new Error(`Expected token-burn ${args.join(" ")} to fail. Output:\n${redact(combinedOutput(result))}`),
+            );
+            return;
+          }
+          resolve(result);
+          return;
+        }
+
+        if (code !== 0) {
+          reject(
+            new Error(`token-burn ${args.join(" ")} exited with ${code}. Output:\n${redact(combinedOutput(result))}`),
+          );
+          return;
+        }
+
         resolve(result);
-        return;
-      }
-
-      if (code !== 0) {
-        reject(new Error(`token-burn ${args.join(" ")} exited with ${code}. Output:\n${redact(combinedOutput(result))}`));
-        return;
-      }
-
-      resolve(result);
+      });
     });
   });
+}
+
+function createTokenBurnInvocation(args) {
+  if (process.platform !== "win32") {
+    return { command: "token-burn", args };
+  }
+
+  return {
+    command: process.env.ComSpec || "cmd.exe",
+    args: ["/d", "/s", "/c", ["token-burn.cmd", ...args].map(quoteCmdArg).join(" ")],
+  };
+}
+
+function quoteCmdArg(value) {
+  if (value === "") return '""';
+  if (!/[\s"&|<>()^]/.test(value)) return value;
+
+  return `"${value.replaceAll('"', '""')}"`;
 }
 
 async function listen(httpServer) {
