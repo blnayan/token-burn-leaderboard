@@ -464,7 +464,7 @@ function runCli(args, { env = {}, expectFailure = false } = {}) {
       child.kill("SIGTERM");
       forceKillTimer = setTimeout(() => {
         if (!settled) {
-          child.kill("SIGKILL");
+          forceKillChild(child);
           settle(() => {
             reject(
               new Error(
@@ -534,6 +534,24 @@ function runCli(args, { env = {}, expectFailure = false } = {}) {
       });
     });
   });
+}
+
+function forceKillChild(child) {
+  if (process.platform !== "win32") {
+    child.kill("SIGKILL");
+    return;
+  }
+
+  if (child.pid === undefined) {
+    child.kill();
+    return;
+  }
+
+  const taskkill = spawn("taskkill", ["/PID", String(child.pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  taskkill.on("error", () => {});
 }
 
 function createTokenBurnInvocation(args) {
