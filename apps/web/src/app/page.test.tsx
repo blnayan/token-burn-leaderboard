@@ -49,7 +49,17 @@ import { auth } from "@/auth";
 
 import HomePage from "./page";
 
-const authMock = vi.mocked(auth);
+type AuthMockSession = {
+  user?: {
+    githubLogin?: string;
+  };
+  expires: string;
+} | null;
+
+const authMock = auth as unknown as {
+  mockReset: () => void;
+  mockResolvedValue: (value: AuthMockSession) => void;
+};
 
 async function renderHomePage() {
   render(await HomePage({ searchParams: Promise.resolve({}) }));
