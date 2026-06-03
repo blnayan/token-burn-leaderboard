@@ -39,14 +39,14 @@ describe("runDoctor", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
-    expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
-    expect(log).toHaveBeenCalledWith("Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).");
-    expect(log).toHaveBeenCalledWith("Platform: linux.");
-    expect(log).toHaveBeenCalledWith(
+    expect(log.mock.calls.map(([message]) => message)).toEqual([
+      "CLI version: 0.1.5.",
+      "Authenticated with https://token-burn.test.",
+      "Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).",
+      "Platform: linux.",
       "Last sync: Failed - Failed providers: claude_code at 2026-06-01T00:00:00.000Z.",
-    );
-    expect(log).toHaveBeenCalledWith("Likely duplicate devices found. Run token-burn devices to inspect and merge.");
-    expect(log).toHaveBeenCalledWith("Run token-burn sync to submit usage now.");
+      "Likely duplicate devices found. Run token-burn devices to inspect and merge.",
+      "Run token-burn sync to submit usage now.",
+    ]);
   });
 });

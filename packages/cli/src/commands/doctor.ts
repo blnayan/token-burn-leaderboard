@@ -54,6 +54,8 @@ export async function runDoctor({
     }
   }
 
+  log(`Platform: ${platform}.`);
+
   if (config?.lastSync) {
     log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
   }
@@ -76,7 +78,6 @@ export async function runDoctor({
     }
   }
 
-  log(`Platform: ${platform}.`);
   log("Run token-burn sync to submit usage now.");
 }
 
