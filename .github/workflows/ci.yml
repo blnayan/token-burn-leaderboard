@@ -1,0 +1,234 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  ADMIN_GITHUB_LOGIN: ci-admin
+  AUTH_GITHUB_ID: ci-github-id
+  AUTH_GITHUB_SECRET: ci-github-secret
+  AUTH_SECRET: ci-auth-secret
+  AUTH_URL: http://127.0.0.1:3100
+  DATABASE_URL: postgresql://tokenburn:tokenburn@127.0.0.1:5432/tokenburn
+  TOKEN_BURN_PUBLIC_URL: http://127.0.0.1:3100
+
+jobs:
+  unit:
+    name: Unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @token-burn/shared build
+
+      - run: pnpm --filter @token-burn/web db:generate
+
+      - run: pnpm -r test
+
+      - run: pnpm -r typecheck
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - run: pnpm --filter @token-burn/web build
+
+  cli-e2e:
+    name: CLI E2E (${{ matrix.os }})
+    needs: unit
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @token-burn/shared build
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "No CLI tarball found after npm pack" >&2
+            exit 1
+          fi
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Install packed CLI globally
+        shell: bash
+        run: npm install -g "$TOKEN_BURN_TARBALL"
+
+      - name: Run packaged CLI E2E
+        run: node scripts/e2e-cli-cross-platform.mjs
+
+  sync-e2e:
+    name: Sync E2E
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tokenburn
+          POSTGRES_PASSWORD: tokenburn
+          POSTGRES_DB: tokenburn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tokenburn -d tokenburn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      TOKEN_BURN_E2E_SERVER_URL: http://127.0.0.1:3100
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @token-burn/shared build
+
+      - run: pnpm --filter @token-burn/web db:generate
+
+      - run: pnpm --filter @token-burn/web db:deploy
+
+      - run: pnpm --filter @token-burn/web build
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "No CLI tarball found after npm pack" >&2
+            exit 1
+          fi
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Install packed CLI globally
+        shell: bash
+        run: npm install -g "$TOKEN_BURN_TARBALL"
+
+      - name: Start web server
+        shell: bash
+        run: |
+          HOSTNAME=127.0.0.1 PORT=3100 node apps/web/.next/standalone/apps/web/server.js > "$RUNNER_TEMP/token-burn-web.log" 2>&1 &
+          web_pid=$!
+          kill -0 "$web_pid" || {
+            cat "$RUNNER_TEMP/token-burn-web.log"
+            exit 1
+          }
+          echo "WEB_PID=$web_pid" >> "$GITHUB_ENV"
+
+      - name: Run sync E2E
+        run: pnpm --filter @token-burn/web test:sync-e2e
+
+      - name: Show web server logs on failure
+        if: failure()
+        shell: bash
+        run: cat "$RUNNER_TEMP/token-burn-web.log"
+
+      - name: Stop web server
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${WEB_PID:-}" ]; then
+            kill "$WEB_PID" || true
+          fi
+
+  linux-root-global-install:
+    name: Linux Root Global Install
+    needs: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @token-burn/shared build
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "No CLI tarball found after npm pack" >&2
+            exit 1
+          fi
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Smoke root global install then non-root CLI usage
+        run: bash scripts/smoke-cli-linux-root-global-install.sh "$TOKEN_BURN_TARBALL"
