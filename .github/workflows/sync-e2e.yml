@@ -1,0 +1,100 @@
+name: Sync E2E
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-e2e:
+    name: Packaged CLI syncs into Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tokenburn
+          POSTGRES_PASSWORD: tokenburn
+          POSTGRES_DB: tokenburn
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tokenburn -d tokenburn"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      ADMIN_GITHUB_LOGIN: sync-e2e-admin
+      AUTH_GITHUB_ID: sync-e2e-github-id
+      AUTH_GITHUB_SECRET: sync-e2e-github-secret
+      AUTH_SECRET: sync-e2e-auth-secret
+      AUTH_URL: http://127.0.0.1:3100
+      DATABASE_URL: postgresql://tokenburn:tokenburn@127.0.0.1:5432/tokenburn
+      TOKEN_BURN_PUBLIC_URL: http://127.0.0.1:3100
+      TOKEN_BURN_E2E_SERVER_URL: http://127.0.0.1:3100
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @token-burn/shared build
+
+      - run: pnpm --filter @token-burn/web db:generate
+
+      - run: pnpm --filter @token-burn/web db:deploy
+
+      - run: pnpm --filter @token-burn/web build
+
+      - run: pnpm --filter @blnayan/token-burn test
+
+      - run: pnpm --filter @blnayan/token-burn typecheck
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Install packed CLI globally
+        shell: bash
+        run: npm install -g "$TOKEN_BURN_TARBALL"
+
+      - name: Start web server
+        shell: bash
+        run: |
+          pnpm --filter @token-burn/web start -- -H 127.0.0.1 -p 3100 > "$RUNNER_TEMP/token-burn-web.log" 2>&1 &
+          echo "WEB_PID=$!" >> "$GITHUB_ENV"
+
+      - name: Run sync E2E
+        run: pnpm --filter @token-burn/web test:sync-e2e
+
+      - name: Show web server logs on failure
+        if: failure()
+        shell: bash
+        run: cat "$RUNNER_TEMP/token-burn-web.log"
+
+      - name: Stop web server
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "${WEB_PID:-}" ]; then
+            kill "$WEB_PID" || true
+          fi
