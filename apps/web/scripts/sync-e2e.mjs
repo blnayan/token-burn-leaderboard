@@ -11,6 +11,9 @@ import { PrismaClient } from "@prisma/client";
 const databaseUrl = requiredEnv("DATABASE_URL");
 const serverUrl = process.env.TOKEN_BURN_E2E_SERVER_URL ?? "http://127.0.0.1:3100";
 const cliBin = process.env.TOKEN_BURN_CLI_BIN ?? "token-burn";
+
+assertLocalE2eTargets({ databaseUrl, serverUrl });
+
 const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
@@ -69,6 +72,7 @@ try {
 
   const member = await seedMember();
   const token = await mintCliToken(member.id);
+  await assertCliTokenStartsUnused({ memberId: member.id, token });
   const fixtureDir = await writeFixtures();
   const configDir = await writeConfig(token);
 
@@ -82,9 +86,11 @@ try {
   assertJsonEqual(countsAfterSecondSync, countsAfterFirstSync, "second sync row counts");
 
   const countsBeforeBadToken = await readCounts(member.id);
+  const globalCountsBeforeBadToken = await readGlobalCounts();
   const badConfigDir = await writeConfig("tb_bad_token_for_e2e");
   await runSync({ configDir: badConfigDir, fixtureDir, expectSuccess: false });
   await assertCountsUnchanged(member.id, countsBeforeBadToken);
+  await assertGlobalCountsUnchanged(globalCountsBeforeBadToken);
 
   console.log("Sync E2E passed.");
 } finally {
@@ -176,6 +182,16 @@ async function mintCliToken(memberId) {
   }
 
   return requireString(pollResponse.token, "token");
+}
+
+async function assertCliTokenStartsUnused({ memberId, token }) {
+  const cliToken = await prisma.cliToken.findFirst({
+    where: { memberId, tokenHash: hashSecret(token) },
+    select: { lastUsedAt: true },
+  });
+
+  assert(cliToken, "Expected minted CLI token row.");
+  assert(cliToken.lastUsedAt === null, "Expected minted CLI token lastUsedAt to start as null.");
 }
 
 async function writeFixtures() {
@@ -368,12 +384,28 @@ async function assertCountsUnchanged(memberId, expected) {
   assertJsonEqual(actual, expected, "bad-token row counts");
 }
 
+async function assertGlobalCountsUnchanged(expected) {
+  const actual = await readGlobalCounts();
+  assertJsonEqual(actual, expected, "bad-token global row counts");
+}
+
 async function readCounts(memberId) {
   const [devices, providerRows, modelRows, cliTokens] = await Promise.all([
     prisma.device.count({ where: { memberId } }),
     prisma.dailyProviderUsage.count({ where: { memberId } }),
     prisma.dailyModelUsage.count({ where: { memberId } }),
     prisma.cliToken.count({ where: { memberId } }),
+  ]);
+
+  return { devices, providerRows, modelRows, cliTokens };
+}
+
+async function readGlobalCounts() {
+  const [devices, providerRows, modelRows, cliTokens] = await Promise.all([
+    prisma.device.count(),
+    prisma.dailyProviderUsage.count(),
+    prisma.dailyModelUsage.count(),
+    prisma.cliToken.count(),
   ]);
 
   return { devices, providerRows, modelRows, cliTokens };
@@ -462,6 +494,29 @@ function requiredEnv(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
   return value;
+}
+
+function assertLocalE2eTargets({ databaseUrl, serverUrl }) {
+  const databaseHost = readUrlHost(databaseUrl, "DATABASE_URL");
+  const serverHost = readUrlHost(serverUrl, "TOKEN_BURN_E2E_SERVER_URL");
+
+  if (!isLocalHost(databaseHost) || !isLocalHost(serverHost)) {
+    throw new Error(
+      `Refusing to run destructive sync E2E cleanup outside local targets. DATABASE_URL host: ${databaseHost}; server host: ${serverHost}.`,
+    );
+  }
+}
+
+function readUrlHost(value, label) {
+  try {
+    return new URL(value).hostname;
+  } catch (error) {
+    throw new Error(`${label} must be a valid URL: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function isLocalHost(host) {
+  return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
 function requireString(value, name) {
