@@ -100,8 +100,11 @@ function isVersionLessThan(left: string, right: string): boolean {
   const rightParts = parseVersionParts(right);
 
   for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] < rightParts[index]) return true;
-    if (leftParts[index] > rightParts[index]) return false;
+    const leftPart = leftParts[index] ?? 0;
+    const rightPart = rightParts[index] ?? 0;
+
+    if (leftPart < rightPart) return true;
+    if (leftPart > rightPart) return false;
   }
 
   return false;
