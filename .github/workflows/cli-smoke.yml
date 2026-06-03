@@ -1,0 +1,90 @@
+name: CLI Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  cli-cross-platform:
+    name: CLI (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @blnayan/token-burn test
+
+      - run: pnpm --filter @blnayan/token-burn typecheck
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Install packed CLI globally
+        shell: bash
+        run: npm install -g "$TOKEN_BURN_TARBALL"
+
+      - name: Run packed CLI
+        shell: bash
+        run: |
+          token-burn --version
+          token-burn status
+
+  linux-root-global-install:
+    name: Linux root global install smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.12.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @blnayan/token-burn build
+
+      - name: Pack CLI
+        shell: bash
+        working-directory: packages/cli
+        run: |
+          mkdir -p "$RUNNER_TEMP/token-burn-pack"
+          npm pack --pack-destination "$RUNNER_TEMP/token-burn-pack"
+          tarball="$(find "$RUNNER_TEMP/token-burn-pack" -name '*.tgz' -print -quit)"
+          echo "TOKEN_BURN_TARBALL=$tarball" >> "$GITHUB_ENV"
+
+      - name: Smoke root global install then non-root CLI usage
+        run: bash scripts/smoke-cli-linux-root-global-install.sh "$TOKEN_BURN_TARBALL"

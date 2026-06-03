@@ -4,6 +4,8 @@ Sync local Claude Code and Codex usage totals to a Token Burn leaderboard.
 
 ## Install
 
+Requires Node.js 22.12.0 or newer.
+
 ```bash
 npm install -g @blnayan/token-burn
 ```
