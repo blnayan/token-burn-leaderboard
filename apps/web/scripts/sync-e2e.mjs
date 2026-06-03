@@ -17,6 +17,8 @@ const prisma = new PrismaClient({ adapter });
 const expectedDeviceId = "4f43b27d-7d86-4ff8-8c98-f74158819e59";
 const expectedDeviceName = "token-burn-e2e-device";
 const expectedDate = "2026-06-03";
+const expectedOs = process.platform;
+const syncTimeoutMs = 60_000;
 
 const expectedProviders = {
   claude_code: {
@@ -125,21 +127,36 @@ async function seedMember() {
 }
 
 async function cleanupPriorE2eData({ githubId, githubLogin, displayName }) {
-  const members = await prisma.member.findMany({
-    where: {
-      OR: [{ displayName }, { user: { OR: [{ githubId }, { githubLogin }] } }],
-    },
-    select: { id: true },
+  const displayNameMember = await prisma.member.findUnique({
+    where: { displayName },
+    include: { user: true },
   });
 
-  const memberIds = members.map((member) => member.id);
+  if (
+    displayNameMember &&
+    displayNameMember.user.githubId !== githubId &&
+    displayNameMember.user.githubLogin !== githubLogin
+  ) {
+    throw new Error(
+      `Cannot seed sync E2E member because displayName ${JSON.stringify(displayName)} is already owned by a non-E2E user.`,
+    );
+  }
+
+  const e2eUsers = await prisma.user.findMany({
+    where: { OR: [{ githubId }, { githubLogin }] },
+    select: {
+      id: true,
+      member: { select: { id: true } },
+    },
+  });
+
+  const memberIds = e2eUsers.flatMap((user) => (user.member ? [user.member.id] : []));
   if (memberIds.length > 0) {
     await prisma.cliLoginSession.deleteMany({ where: { memberId: { in: memberIds } } });
-    await prisma.member.deleteMany({ where: { id: { in: memberIds } } });
   }
 
   await prisma.user.deleteMany({
-    where: { OR: [{ githubId }, { githubLogin }] },
+    where: { id: { in: e2eUsers.map((user) => user.id) } },
   });
 }
 
@@ -262,6 +279,16 @@ async function runSync({ configDir, fixtureDir, expectSuccess }) {
     TOKEN_BURN_E2E_FIXTURE_DIR: fixtureDir,
   });
 
+  if (result.error) {
+    throw new Error(`Failed to start token-burn sync: ${result.error}`);
+  }
+
+  if (result.timedOut) {
+    throw new Error(
+      `token-burn sync timed out after ${result.timeoutMs}ms.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+  }
+
   if (expectSuccess && result.code !== 0) {
     throw new Error(`Expected token-burn sync to pass.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
   }
@@ -287,7 +314,7 @@ async function assertDatabaseState({ memberId, expectedLastSyncCount }) {
 
   assert(device, "Expected synced device row.");
   assertEqual(device.name, expectedDeviceName, "device name");
-  assertEqual(device.os, "linux", "device os");
+  assertEqual(device.os, expectedOs, "device os");
   assert(device.lastSeenAt instanceof Date, "Expected device lastSeenAt.");
 
   const usageRows = await prisma.dailyProviderUsage.findMany({
@@ -311,7 +338,7 @@ async function assertDatabaseState({ memberId, expectedLastSyncCount }) {
     assertJsonEqual(dbNullToNull(usage.sourceSnapshot), expected.sourceSnapshot, `${usage.provider} sourceSnapshot`);
     assert(usage.cliVersion.length > 0, `${usage.provider} cliVersion should be populated.`);
     assert(usage.ccusageVersion.length > 0, `${usage.provider} ccusageVersion should be populated.`);
-    assertEqual(usage.os, "linux", `${usage.provider} os`);
+    assertEqual(usage.os, expectedOs, `${usage.provider} os`);
     assert(usage.syncedAt instanceof Date, `${usage.provider} syncedAt should be populated.`);
     assertEqual(usage.models.length, expected.models.length, `${usage.provider} model row count`);
 
@@ -367,7 +394,7 @@ async function postJson(path, body) {
   return json;
 }
 
-function run(command, args, env) {
+function run(command, args, env, timeoutMs = syncTimeoutMs) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
       env: { ...process.env, ...env },
@@ -375,6 +402,30 @@ function run(command, args, env) {
     });
     let stdout = "";
     let stderr = "";
+    let settled = false;
+    let timedOut = false;
+    let timeout;
+    let forceKillTimeout;
+
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      clearTimeout(forceKillTimeout);
+      resolve({
+        ...result,
+        stdout: redactSecrets(stdout),
+        stderr: redactSecrets(stderr),
+      });
+    };
+
+    timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+      forceKillTimeout = setTimeout(() => {
+        child.kill("SIGKILL");
+      }, 1000);
+    }, timeoutMs);
 
     child.stdout.setEncoding("utf8");
     child.stderr.setEncoding("utf8");
@@ -384,10 +435,17 @@ function run(command, args, env) {
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
+    child.on("error", (error) => {
+      finish({ code: null, error: redactSecrets(error.message), timedOut: false, timeoutMs });
+    });
     child.on("close", (code) => {
-      resolve({ code, stdout, stderr });
+      finish({ code, timedOut, timeoutMs });
     });
   });
+}
+
+function redactSecrets(value) {
+  return value.replace(/\btb_[A-Za-z0-9._-]+/g, "tb_[redacted]");
 }
 
 async function makeTempDir(prefix) {
