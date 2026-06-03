@@ -38,7 +38,7 @@ Stored by Token Burn:
 
 - Daily aggregate token totals
 - Provider name
-- model names when `ccusage` reports them
+- Model names when `ccusage` reports them
 - Token categories such as input, output, cache creation, and cache read
 - Reasoning output token details when reported
 - Cost estimates when `ccusage` reports them
