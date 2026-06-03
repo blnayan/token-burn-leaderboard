@@ -360,42 +360,63 @@ function normalizeModelUsage(models: unknown): NormalizedModelUsage[] {
     return [];
   }
 
+  if (Array.isArray(models)) {
+    return models
+      .map((value) => {
+        const modelRecord = toRecord(value);
+        const modelName = readModelName(modelRecord);
+        return normalizeModelRecord(modelName, modelRecord);
+      })
+      .sort((left, right) => left.modelName.localeCompare(right.modelName));
+  }
+
   const record = toRecord(models);
 
   return Object.entries(record)
-    .map(([modelName, value]) => {
-      const modelRecord = toRecord(value);
-      const tokenCategories = {
-        input: readTokenField(modelRecord, tokenFieldAliases.input),
-        output: readTokenField(modelRecord, tokenFieldAliases.output),
-        cacheCreate: readTokenField(modelRecord, tokenFieldAliases.cacheCreate),
-        cacheRead: readTokenField(modelRecord, tokenFieldAliases.cacheRead),
-      };
-      const normalized: NormalizedModelUsage = {
-        modelName,
-        tokenCategories,
-        totalTokens: readTotalTokens(modelRecord, tokenCategories),
-      };
-      const tokenDetails = readOptionalTokenDetails(modelRecord);
-      const costUsd = readOptionalCostUsd(modelRecord);
-
-      if (tokenDetails) {
-        normalized.tokenDetails = tokenDetails;
-      }
-
-      if (costUsd !== undefined) {
-        normalized.costUsd = costUsd;
-      }
-
-      if (typeof modelRecord.isFallback === "boolean") {
-        normalized.metadata = {
-          isFallback: modelRecord.isFallback,
-        };
-      }
-
-      return normalized;
-    })
+    .map(([modelName, value]) => normalizeModelRecord(modelName, toRecord(value)))
     .sort((left, right) => left.modelName.localeCompare(right.modelName));
+}
+
+function normalizeModelRecord(modelName: string, modelRecord: Record<string, unknown>): NormalizedModelUsage {
+  const tokenCategories = {
+    input: readTokenField(modelRecord, tokenFieldAliases.input),
+    output: readTokenField(modelRecord, tokenFieldAliases.output),
+    cacheCreate: readTokenField(modelRecord, tokenFieldAliases.cacheCreate),
+    cacheRead: readTokenField(modelRecord, tokenFieldAliases.cacheRead),
+  };
+  const normalized: NormalizedModelUsage = {
+    modelName,
+    tokenCategories,
+    totalTokens: readTotalTokens(modelRecord, tokenCategories),
+  };
+  const tokenDetails = readOptionalTokenDetails(modelRecord);
+  const costUsd = readOptionalCostUsd(modelRecord);
+
+  if (tokenDetails) {
+    normalized.tokenDetails = tokenDetails;
+  }
+
+  if (costUsd !== undefined) {
+    normalized.costUsd = costUsd;
+  }
+
+  if (typeof modelRecord.isFallback === "boolean") {
+    normalized.metadata = {
+      isFallback: modelRecord.isFallback,
+    };
+  }
+
+  return normalized;
+}
+
+function readModelName(record: Record<string, unknown>): string {
+  const value = record.modelName ?? record.model ?? record.model_name ?? record.name;
+
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error("ccusage model breakdown row is missing a model name.");
+  }
+
+  return value.trim();
 }
 
 function toRecord(value: unknown): Record<string, unknown> {

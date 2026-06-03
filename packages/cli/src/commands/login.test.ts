@@ -22,6 +22,7 @@ describe("runLogin", () => {
     await runLogin({
       serverUrl: "https://token-burn.test",
       postJson,
+      readConfig: async () => null,
       writeConfig,
       log,
       sleep: async () => undefined,
@@ -32,6 +33,45 @@ describe("runLogin", () => {
     expect(log).toHaveBeenCalledWith("Waiting for approval. Press Ctrl+C to cancel.");
     expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
     expect(log).toHaveBeenCalledWith("Authenticated as Ada.");
+  });
+
+  it("preserves the existing device identity when re-authenticating", async () => {
+    const postJson = vi
+      .fn()
+      .mockResolvedValueOnce({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2026-06-01T00:01:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        status: "approved",
+        token: "tb_new_secret",
+        member: { displayName: "Ada" },
+      });
+    const readConfig = vi.fn().mockResolvedValue({
+      serverUrl: "https://old-token-burn.test",
+      token: "tb_old_secret",
+      deviceId: "d5365b9a-0000-4000-8000-000000000000",
+      deviceName: "Nayans-MacBook-Air.local",
+    });
+    const writeConfig = vi.fn().mockResolvedValue(undefined);
+
+    await runLogin({
+      serverUrl: "https://token-burn.test",
+      postJson,
+      readConfig,
+      writeConfig,
+      log: vi.fn(),
+      sleep: async () => undefined,
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    expect(writeConfig).toHaveBeenCalledWith({
+      serverUrl: "https://token-burn.test",
+      token: "tb_new_secret",
+      deviceId: "d5365b9a-0000-4000-8000-000000000000",
+      deviceName: "Nayans-MacBook-Air.local",
+    });
   });
 });
 

@@ -2,7 +2,7 @@ import { Command } from "commander";
 import { z } from "zod";
 
 import type { CliConfig } from "../config.js";
-import { writeConfig as writeConfigFile } from "../config.js";
+import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
 import { postJson as postJsonRequest } from "../http.js";
 
@@ -23,6 +23,7 @@ const loginPollResponseSchema = z.discriminatedUnion("status", [
 
 export type LoginDependencies = {
   postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
+  readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
   log?: (message: string) => void;
   sleep?: (milliseconds: number) => Promise<void>;
@@ -36,12 +37,14 @@ export type LoginOptions = LoginDependencies & {
 export async function runLogin({
   serverUrl,
   postJson = postJsonRequest,
+  readConfig = readConfigFile,
   writeConfig = writeConfigFile,
   log = console.log,
   sleep = defaultSleep,
   now = () => new Date(),
 }: LoginOptions): Promise<void> {
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
+  const existingConfig = await readConfig();
   const startResponse = loginStartResponseSchema.parse(
     await postJson(`${normalizedServerUrl}/api/cli/login/start`, {}),
   );
@@ -56,7 +59,12 @@ export async function runLogin({
     );
 
     if (pollResponse.status === "approved") {
-      await writeConfig({ serverUrl: normalizedServerUrl, token: pollResponse.token });
+      await writeConfig({
+        serverUrl: normalizedServerUrl,
+        token: pollResponse.token,
+        ...(existingConfig?.deviceId ? { deviceId: existingConfig.deviceId } : {}),
+        ...(existingConfig?.deviceName ? { deviceName: existingConfig.deviceName } : {}),
+      });
       log(`Authenticated as ${pollResponse.member.displayName}.`);
       return;
     }

@@ -205,6 +205,49 @@ describe("normalizeCcusageDailyRows", () => {
     ]);
   });
 
+  it("normalizes array-shaped Codex model usage rows", () => {
+    const rows = normalizeCcusageDailyRows("codex", [
+      {
+        cachedInputTokens: 850,
+        costUSD: 1.234567,
+        date: "2026-06-01",
+        inputTokens: 100,
+        models: [
+          {
+            model: "gpt-5.5",
+            cachedInputTokens: 850,
+            costUSD: 0.42,
+            inputTokens: 100,
+            isFallback: false,
+            outputTokens: 50,
+            reasoningOutputTokens: 20,
+            totalTokens: 1000,
+          },
+        ],
+        outputTokens: 50,
+        reasoningOutputTokens: 20,
+        totalTokens: 1000,
+      },
+    ]);
+
+    expect(rows).toMatchObject([
+      {
+        provider: "codex",
+        date: "2026-06-01",
+        totalTokens: 1000,
+        models: [
+          {
+            modelName: "gpt-5.5",
+            totalTokens: 1000,
+            metadata: {
+              isFallback: false,
+            },
+          },
+        ],
+      },
+    ]);
+  });
+
   it("excludes unexpected fields from source snapshots", () => {
     const rows = normalizeCcusageDailyRows("codex", [
       {
@@ -282,6 +325,45 @@ describe("normalizeCcusageDailyRows", () => {
             },
             totalTokens: 180,
             costUsd: 0.42,
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("normalizes array-shaped ccusage modelBreakdowns into model usage rows", () => {
+    const rows = normalizeCcusageDailyRows("claude_code", [
+      {
+        date: "2026-06-01",
+        inputTokens: 100,
+        outputTokens: 50,
+        cacheCreationTokens: 10,
+        cacheReadTokens: 20,
+        totalTokens: 180,
+        totalCost: 0.42,
+        modelBreakdowns: [
+          {
+            modelName: "claude-sonnet-4",
+            inputTokens: 100,
+            outputTokens: 50,
+            cacheCreationTokens: 10,
+            cacheReadTokens: 20,
+            totalTokens: 180,
+            totalCost: 0.42,
+          },
+        ],
+      },
+    ]);
+
+    expect(rows).toMatchObject([
+      {
+        provider: "claude_code",
+        date: "2026-06-01",
+        totalTokens: 180,
+        models: [
+          {
+            modelName: "claude-sonnet-4",
+            totalTokens: 180,
           },
         ],
       },
