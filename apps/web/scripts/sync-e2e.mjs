@@ -25,6 +25,14 @@ const expectedProviders = {
     tokenDetails: null,
     costUsd: "1.234567",
     costMetadata: { currency: "USD", pricingVersion: "e2e-claude" },
+    sourceSnapshot: {
+      cacheCreationTokens: 300,
+      cacheReadTokens: 400,
+      costUSD: 1.234567,
+      inputTokens: 100,
+      outputTokens: 200,
+      totalTokens: 1000,
+    },
     models: [
       { modelName: "claude-haiku-3.5", totalTokens: 400, costUsd: "0.345678" },
       { modelName: "claude-sonnet-4", totalTokens: 600, costUsd: "0.888889" },
@@ -36,6 +44,14 @@ const expectedProviders = {
     tokenDetails: { reasoningOutput: 50 },
     costUsd: "0.654321",
     costMetadata: { currency: "USD", pricingVersion: "e2e-codex" },
+    sourceSnapshot: {
+      cachedInputTokens: 300,
+      costUSD: 0.654321,
+      inputTokens: 100,
+      outputTokens: 200,
+      reasoningOutputTokens: 50,
+      totalTokens: 600,
+    },
     models: [
       { modelName: "gpt-5.5", totalTokens: 450, costUsd: "0.444444" },
       { modelName: "gpt-5.5-mini", totalTokens: 150, costUsd: "0.111111" },
@@ -56,9 +72,12 @@ try {
 
   await runSync({ configDir, fixtureDir, expectSuccess: true });
   await assertDatabaseState({ memberId: member.id, expectedLastSyncCount: 1 });
+  const countsAfterFirstSync = await readCounts(member.id);
 
   await runSync({ configDir, fixtureDir, expectSuccess: true });
   await assertDatabaseState({ memberId: member.id, expectedLastSyncCount: 2 });
+  const countsAfterSecondSync = await readCounts(member.id);
+  assertJsonEqual(countsAfterSecondSync, countsAfterFirstSync, "second sync row counts");
 
   const countsBeforeBadToken = await readCounts(member.id);
   const badConfigDir = await writeConfig("tb_bad_token_for_e2e");
@@ -92,17 +111,35 @@ async function waitForHealth() {
 async function seedMember() {
   const githubId = "sync-e2e-github-id";
   const githubLogin = "sync-e2e-user";
+  const displayName = "Sync E2E User";
 
-  const user = await prisma.user.upsert({
-    where: { githubId },
-    create: { githubId, githubLogin },
-    update: { githubLogin },
+  await cleanupPriorE2eData({ githubId, githubLogin, displayName });
+
+  const user = await prisma.user.create({
+    data: { githubId, githubLogin },
   });
 
-  return prisma.member.upsert({
-    where: { userId: user.id },
-    create: { userId: user.id, displayName: "Sync E2E User" },
-    update: { displayName: "Sync E2E User" },
+  return prisma.member.create({
+    data: { userId: user.id, displayName },
+  });
+}
+
+async function cleanupPriorE2eData({ githubId, githubLogin, displayName }) {
+  const members = await prisma.member.findMany({
+    where: {
+      OR: [{ displayName }, { user: { OR: [{ githubId }, { githubLogin }] } }],
+    },
+    select: { id: true },
+  });
+
+  const memberIds = members.map((member) => member.id);
+  if (memberIds.length > 0) {
+    await prisma.cliLoginSession.deleteMany({ where: { memberId: { in: memberIds } } });
+    await prisma.member.deleteMany({ where: { id: { in: memberIds } } });
+  }
+
+  await prisma.user.deleteMany({
+    where: { OR: [{ githubId }, { githubLogin }] },
   });
 }
 
@@ -271,7 +308,7 @@ async function assertDatabaseState({ memberId, expectedLastSyncCount }) {
     assertEqual(usage.costUsd?.toFixed(6), expected.costUsd, `${usage.provider} costUsd`);
     assertEqual(usage.costSource, "ccusage", `${usage.provider} costSource`);
     assertJsonEqual(usage.costMetadata, expected.costMetadata, `${usage.provider} costMetadata`);
-    assert(usage.sourceSnapshot !== null, `${usage.provider} sourceSnapshot should exist.`);
+    assertJsonEqual(dbNullToNull(usage.sourceSnapshot), expected.sourceSnapshot, `${usage.provider} sourceSnapshot`);
     assert(usage.cliVersion.length > 0, `${usage.provider} cliVersion should be populated.`);
     assert(usage.ccusageVersion.length > 0, `${usage.provider} ccusageVersion should be populated.`);
     assertEqual(usage.os, "linux", `${usage.provider} os`);
@@ -395,9 +432,29 @@ function assertEqual(actual, expected, label) {
 }
 
 function assertJsonEqual(actual, expected, label) {
-  const actualJson = JSON.stringify(actual);
-  const expectedJson = JSON.stringify(expected);
+  const actualJson = stableJsonStringify(actual);
+  const expectedJson = stableJsonStringify(expected);
   if (actualJson !== expectedJson) {
     throw new Error(`${label}: expected ${expectedJson}, got ${actualJson}.`);
   }
+}
+
+function stableJsonStringify(value) {
+  return JSON.stringify(sortJsonValue(value));
+}
+
+function sortJsonValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => sortJsonValue(item));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, item]) => [key, sortJsonValue(item)]),
+    );
+  }
+
+  return value;
 }
