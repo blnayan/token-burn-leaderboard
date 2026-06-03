@@ -62,7 +62,7 @@ token-burn status
 
 ## Future Releases
 
-1. Update `packages/cli/package.json` version.
+1. Update `packages/cli/package.json`, `packages/cli/src/version.ts`, and `apps/web/src/app/api/cli/health/route.ts` versions.
 2. Run `pnpm test`, `pnpm typecheck`, `pnpm lint`, and `pnpm build`.
 3. Run `pnpm --filter @blnayan/token-burn pack:dry-run`.
 4. Publish from `packages/cli` with `npm publish --access public`.
