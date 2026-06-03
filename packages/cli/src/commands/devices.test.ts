@@ -77,7 +77,7 @@ describe("runListDevices", () => {
     expect(log).toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
   });
 
-  it("prints conflict messaging without merge suggestions for conflicted duplicate groups", async () => {
+  it("prints automatic conflict resolution messaging and merge suggestions for conflicted duplicate groups", async () => {
     const log = vi.fn();
     const getJson = vi.fn().mockResolvedValue({
       devices: [
@@ -138,9 +138,9 @@ describe("runListDevices", () => {
 
     expect(log).toHaveBeenCalledWith("Nayans-MacBook-Air.local / darwin: 0 duplicate rows, 1 conflicts");
     expect(log).toHaveBeenCalledWith(
-      "Merge blocked: same provider/date rows have different totals. Ask an admin to inspect before merging.",
+      "Conflicts will be resolved automatically by keeping the higher provider/date total.",
     );
-    expect(log).not.toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
+    expect(log).toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
   });
 });
 
@@ -151,6 +151,7 @@ describe("runMergeDevices", () => {
       targetDeviceId: "new-device",
       deletedDuplicateRows: 21,
       movedRows: 0,
+      resolvedConflictRows: 2,
       deletedSourceDevice: true,
     });
     const log = vi.fn();
@@ -170,6 +171,7 @@ describe("runMergeDevices", () => {
     );
     expect(log).toHaveBeenCalledWith("Deleted duplicate rows: 21");
     expect(log).toHaveBeenCalledWith("Moved rows: 0");
+    expect(log).toHaveBeenCalledWith("Resolved conflict rows: 2");
     expect(log).toHaveBeenCalledWith("Deleted source device: yes");
   });
 

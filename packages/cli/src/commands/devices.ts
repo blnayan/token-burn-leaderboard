@@ -34,6 +34,7 @@ const deviceMergeResponseSchema = z.object({
   targetDeviceId: z.string().min(1),
   deletedDuplicateRows: z.number().int().nonnegative(),
   movedRows: z.number().int().nonnegative(),
+  resolvedConflictRows: z.number().int().nonnegative(),
   deletedSourceDevice: z.boolean(),
 });
 
@@ -76,10 +77,10 @@ export async function runListDevices({
     log(`${group.name} / ${group.os}: ${group.duplicateRows} duplicate rows, ${group.conflictRows} conflicts`);
 
     if (group.conflictRows > 0) {
-      log("Merge blocked: same provider/date rows have different totals. Ask an admin to inspect before merging.");
+      log("Conflicts will be resolved automatically by keeping the higher provider/date total.");
     }
 
-    if (group.conflictRows === 0 && group.devices.length >= 2) {
+    if (group.devices.length >= 2) {
       const sortedDevices = [...group.devices].sort((left, right) => left.firstSeenAt.localeCompare(right.firstSeenAt));
       const source = sortedDevices[0];
       const target = sortedDevices[sortedDevices.length - 1];
@@ -113,6 +114,7 @@ export async function runMergeDevices({
   log(`Merged ${response.sourceDeviceId} into ${response.targetDeviceId}.`);
   log(`Deleted duplicate rows: ${response.deletedDuplicateRows}`);
   log(`Moved rows: ${response.movedRows}`);
+  log(`Resolved conflict rows: ${response.resolvedConflictRows}`);
   log(`Deleted source device: ${response.deletedSourceDevice ? "yes" : "no"}`);
 }
 

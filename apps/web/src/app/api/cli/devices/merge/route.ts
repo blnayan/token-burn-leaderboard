@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { hashSecret } from "@/server/cli-auth";
-import { DeviceMergeConflictError, DeviceMergeError, mergeMemberDevices } from "@/server/devices";
+import { DeviceMergeError, mergeMemberDevices } from "@/server/devices";
 
 const mergeRequestSchema = z.object({
   sourceDeviceId: z.string().min(1),
@@ -41,10 +41,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     if (error instanceof ZodError) {
       return NextResponse.json({ error: "Invalid merge payload" }, { status: 400 });
-    }
-
-    if (error instanceof DeviceMergeConflictError) {
-      return NextResponse.json({ error: error.message, conflicts: error.conflicts }, { status: 409 });
     }
 
     if (error instanceof DeviceMergeError) {

@@ -34,11 +34,12 @@ export type DeviceListResult = {
   duplicateGroups: DuplicateDeviceGroup[];
 };
 
-export type MergeConflict = {
+export type ResolvedMergeConflict = {
   provider: string;
   date: string;
-  sourceTotalTokens: string;
-  targetTotalTokens: string;
+  keptDevice: "source" | "target";
+  keptTotalTokens: string;
+  discardedTotalTokens: string;
 };
 
 export type DeviceMergeResult = {
@@ -46,6 +47,7 @@ export type DeviceMergeResult = {
   targetDeviceId: string;
   deletedDuplicateRows: number;
   movedRows: number;
+  resolvedConflictRows: number;
   deletedSourceDevice: boolean;
 };
 
@@ -138,7 +140,7 @@ export function buildDeviceDuplicateGroups(devices: DeviceWithUsage[]): Duplicat
           targetRows: group[rightIndex]?.usageRows ?? [],
         });
         duplicateRows += plan.duplicateSourceRowIds.length;
-        conflictRows += plan.conflicts.length;
+        conflictRows += plan.resolvedConflictRows.length;
       }
     }
 
@@ -168,12 +170,16 @@ export function planDeviceUsageMerge({
 }): {
   duplicateSourceRowIds: string[];
   movableSourceRowIds: string[];
-  conflicts: MergeConflict[];
+  lowerConflictSourceRowIds: string[];
+  replacedTargetRowIds: string[];
+  resolvedConflictRows: ResolvedMergeConflict[];
 } {
   const targetRowsByDate = new Map(targetRows.map((row) => [usageDateKey(row), row]));
   const duplicateSourceRowIds: string[] = [];
   const movableSourceRowIds: string[] = [];
-  const conflicts: MergeConflict[] = [];
+  const lowerConflictSourceRowIds: string[] = [];
+  const replacedTargetRowIds: string[] = [];
+  const resolvedConflictRows: ResolvedMergeConflict[] = [];
 
   for (const sourceRow of sourceRows) {
     const targetRow = targetRowsByDate.get(usageDateKey(sourceRow));
@@ -188,15 +194,36 @@ export function planDeviceUsageMerge({
       continue;
     }
 
-    conflicts.push({
+    if (targetRow.totalTokens >= sourceRow.totalTokens) {
+      lowerConflictSourceRowIds.push(sourceRow.id);
+      resolvedConflictRows.push({
+        provider: sourceRow.provider,
+        date: dateKey(sourceRow.date),
+        keptDevice: "target",
+        keptTotalTokens: targetRow.totalTokens.toString(),
+        discardedTotalTokens: sourceRow.totalTokens.toString(),
+      });
+      continue;
+    }
+
+    replacedTargetRowIds.push(targetRow.id);
+    movableSourceRowIds.push(sourceRow.id);
+    resolvedConflictRows.push({
       provider: sourceRow.provider,
       date: dateKey(sourceRow.date),
-      sourceTotalTokens: sourceRow.totalTokens.toString(),
-      targetTotalTokens: targetRow.totalTokens.toString(),
+      keptDevice: "source",
+      keptTotalTokens: sourceRow.totalTokens.toString(),
+      discardedTotalTokens: targetRow.totalTokens.toString(),
     });
   }
 
-  return { duplicateSourceRowIds, movableSourceRowIds, conflicts };
+  return {
+    duplicateSourceRowIds,
+    movableSourceRowIds,
+    lowerConflictSourceRowIds,
+    replacedTargetRowIds,
+    resolvedConflictRows,
+  };
 }
 
 export async function mergeMemberDevices({
@@ -233,10 +260,6 @@ export async function mergeMemberDevices({
   });
   const plan = planDeviceUsageMerge({ sourceRows, targetRows });
 
-  if (plan.conflicts.length > 0) {
-    throw new DeviceMergeConflictError(plan.conflicts);
-  }
-
   const runMerge = async (tx: DeviceMergeTransaction): Promise<DeviceMergeResult> => {
     let deletedDuplicateRows = 0;
     let movedRows = 0;
@@ -246,6 +269,18 @@ export async function mergeMemberDevices({
         where: { id: { in: plan.duplicateSourceRowIds } },
       });
       deletedDuplicateRows = result?.count ?? plan.duplicateSourceRowIds.length;
+    }
+
+    if (plan.lowerConflictSourceRowIds.length > 0) {
+      await tx.dailyProviderUsage.deleteMany?.({
+        where: { id: { in: plan.lowerConflictSourceRowIds } },
+      });
+    }
+
+    if (plan.replacedTargetRowIds.length > 0) {
+      await tx.dailyProviderUsage.deleteMany?.({
+        where: { id: { in: plan.replacedTargetRowIds } },
+      });
     }
 
     if (plan.movableSourceRowIds.length > 0) {
@@ -267,6 +302,7 @@ export async function mergeMemberDevices({
       targetDeviceId,
       deletedDuplicateRows,
       movedRows,
+      resolvedConflictRows: plan.resolvedConflictRows.length,
       deletedSourceDevice: true,
     };
   };
@@ -278,13 +314,6 @@ export class DeviceMergeError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "DeviceMergeError";
-  }
-}
-
-export class DeviceMergeConflictError extends Error {
-  constructor(readonly conflicts: MergeConflict[]) {
-    super("Cannot merge devices with conflicting usage rows.");
-    this.name = "DeviceMergeConflictError";
   }
 }
 
