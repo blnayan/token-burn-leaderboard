@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 
 import { prisma } from "@/lib/prisma";
 import { hashSecret } from "@/server/cli-auth";
+import { formatRequiredCliVersionError, requiredCliVersion } from "@/server/cli-version";
 import { buildClientRateLimitKey, checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 import { persistSyncPayload } from "@/server/sync-ingest";
 
@@ -64,6 +65,16 @@ export async function POST(request: NextRequest) {
 
   try {
     const payload = syncPayloadSchema.parse(body);
+
+    if (payload.cliVersion !== requiredCliVersion) {
+      return NextResponse.json(
+        {
+          error: formatRequiredCliVersionError(payload.cliVersion),
+          requiredCliVersion,
+        },
+        { status: 426 },
+      );
+    }
 
     await persistSyncPayload({
       cliTokenId: cliToken.id,

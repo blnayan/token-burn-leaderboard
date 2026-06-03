@@ -176,14 +176,14 @@ pnpm --filter @blnayan/token-burn build
 (cd packages/cli && npm pack --pack-destination /tmp/token-burn-ci-pack)
 ```
 
-Expected: tarball `blnayan-token-burn-0.1.5.tgz` is created.
+Expected: tarball `blnayan-token-burn-<package-version>.tgz` is created.
 
 - [ ] **Step 2: Run existing Linux root/global install smoke**
 
 Run:
 
 ```bash
-scripts/smoke-cli-linux-root-global-install.sh /tmp/token-burn-ci-pack/blnayan-token-burn-0.1.5.tgz
+scripts/smoke-cli-linux-root-global-install.sh /tmp/token-burn-ci-pack/blnayan-token-burn-<package-version>.tgz
 ```
 
 Expected: exit 0 and output includes `token-burn` version, unauthenticated status, and a `ccusage` binary mode of `755`.

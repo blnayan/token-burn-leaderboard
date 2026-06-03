@@ -141,7 +141,20 @@ Expected: PASS with all ccusage tests green.
 Create `packages/cli/src/version.ts`:
 
 ```ts
-export const cliVersion = "0.1.5";
+import { readFileSync } from "node:fs";
+
+export const cliVersion = readCliVersion();
+
+function readCliVersion(): string {
+  const raw = readFileSync(new URL("../package.json", import.meta.url), "utf8");
+  const parsed = JSON.parse(raw) as { version?: unknown };
+
+  if (typeof parsed.version !== "string" || !parsed.version) {
+    throw new Error("Unable to determine CLI version.");
+  }
+
+  return parsed.version;
+}
 ```
 
 - [ ] **Step 2: Use the CLI version module in the entrypoint**
@@ -155,7 +168,7 @@ import { cliVersion } from "./version.js";
 Change:
 
 ```ts
-.version("0.1.5");
+.version("<manual-version>");
 ```
 
 to:
@@ -171,13 +184,11 @@ Create `apps/web/src/app/api/cli/health/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
 
-const recommendedCliVersion = "0.1.5";
-const minimumCliVersion = "0.1.5";
+import { requiredCliVersion } from "@/server/cli-version";
 
 export async function GET() {
   return NextResponse.json({
-    recommendedCliVersion,
-    minimumCliVersion,
+    requiredCliVersion,
     serverTime: new Date().toISOString(),
   });
 }
@@ -218,19 +229,18 @@ In `packages/cli/src/commands/status.test.ts`, update the logged-in test to inje
         },
       }),
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.6",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: "<next-package-version>",
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
+    expect(log).toHaveBeenCalledWith(`CLI version: ${cliVersion}.`);
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).");
     expect(log).toHaveBeenCalledWith("Last sync: OK - Synced 42 tokens at 2026-06-01T00:00:00.000Z.");
     expect(log).toHaveBeenCalledWith(
-      "Update available: token-burn 0.1.5 -> 0.1.6. Run npm install -g @blnayan/token-burn@latest.",
+      `Token Burn requires token-burn <next-package-version>. You have ${cliVersion}. Run npm install -g @blnayan/token-burn@latest.`,
     );
 ```
 
@@ -248,7 +258,7 @@ Add a test for health-check failures:
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
+    expect(log).toHaveBeenCalledWith(`CLI version: ${cliVersion}.`);
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Server health check failed: network down.");
   });
@@ -270,8 +280,7 @@ In `packages/cli/src/commands/status.ts`, import `cliVersion` and add:
 
 ```ts
 type CliHealth = {
-  recommendedCliVersion: string;
-  minimumCliVersion: string;
+  requiredCliVersion: string;
   serverTime: string;
 };
 
@@ -287,16 +296,14 @@ async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
 
   const record = data as Partial<CliHealth>;
   if (
-    typeof record.recommendedCliVersion !== "string" ||
-    typeof record.minimumCliVersion !== "string" ||
+    typeof record.requiredCliVersion !== "string" ||
     typeof record.serverTime !== "string"
   ) {
     throw new Error("Invalid health response");
   }
 
   return {
-    recommendedCliVersion: record.recommendedCliVersion,
-    minimumCliVersion: record.minimumCliVersion,
+    requiredCliVersion: record.requiredCliVersion,
     serverTime: record.serverTime,
   };
 }
@@ -334,7 +341,7 @@ When authenticated and `deviceId`/`deviceName` exist, log:
 log(`Device: ${config.deviceName} (${config.deviceId}).`);
 ```
 
-After local state, call `readHealth(config.serverUrl)` in a `try/catch`; print the update hint if `isVersionLessThan(cliVersion, health.recommendedCliVersion)` is true. On failure, print `Server health check failed: ${message}.`
+After local state, call `readHealth(config.serverUrl)` in a `try/catch`; print the required-version hint if `cliVersion !== health.requiredCliVersion`. On failure, print `Server health check failed: ${message}.`
 
 - [ ] **Step 4: Run status tests and verify green**
 
@@ -379,8 +386,7 @@ describe("runDoctor", () => {
       }),
       platform: "linux",
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.5",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: cliVersion,
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       readDevices: async () => ({
@@ -398,7 +404,7 @@ describe("runDoctor", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
+    expect(log).toHaveBeenCalledWith(`CLI version: ${cliVersion}.`);
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).");
     expect(log).toHaveBeenCalledWith("Platform: linux.");
@@ -426,7 +432,7 @@ Expected: FAIL because `readHealth`, `readDevices`, and richer output are missin
 In `packages/cli/src/commands/doctor.ts`, mirror the local output rules from `status.ts`. Add dependency types:
 
 ```ts
-readHealth?: (serverUrl: string) => Promise<{ recommendedCliVersion: string; minimumCliVersion: string; serverTime: string }>;
+readHealth?: (serverUrl: string) => Promise<{ requiredCliVersion: string; serverTime: string }>;
 readDevices?: (serverUrl: string, token: string) => Promise<{ duplicateGroups: Array<{ name: string; os: string; duplicateRows: number; conflictRows: number }> }>;
 ```
 

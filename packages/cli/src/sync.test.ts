@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import { syncUsage } from "./sync.js";
+import { cliVersion as currentCliVersion } from "./version.js";
 
 describe("syncUsage", () => {
   it("throws a helpful login message when no token is configured", async () => {
@@ -35,6 +36,7 @@ describe("syncUsage", () => {
         posts.push({ url, body, token });
         return { ok: true };
       },
+      readHealth: matchingHealth,
       readProviderUsage: async (provider) => [
         {
           provider,
@@ -134,6 +136,38 @@ describe("syncUsage", () => {
     expect(logs).toEqual(["Submitted 2 usage rows."]);
   });
 
+  it("refuses to sync when the server requires a different CLI version", async () => {
+    let readProviderUsageCalled = false;
+    let postJsonCalled = false;
+    const serverRequiredCliVersion = createDifferentVersion(currentCliVersion);
+
+    await expect(
+      syncUsage({
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+        readHealth: async () => ({
+          requiredCliVersion: serverRequiredCliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+        postJson: async () => {
+          postJsonCalled = true;
+          return { ok: true };
+        },
+        readProviderUsage: async () => {
+          readProviderUsageCalled = true;
+          return [];
+        },
+        readCcusageVersion: async () => "20.0.6",
+        cliVersion: currentCliVersion,
+        log: () => {},
+      }),
+    ).rejects.toThrow(
+      `Token Burn requires token-burn ${serverRequiredCliVersion}. You have ${currentCliVersion}. Run npm install -g @blnayan/token-burn@latest.`,
+    );
+
+    expect(readProviderUsageCalled).toBe(false);
+    expect(postJsonCalled).toBe(false);
+  });
+
   it("reuses remembered device identity instead of creating a new one", async () => {
     const posts: Array<{ body: unknown }> = [];
 
@@ -149,6 +183,7 @@ describe("syncUsage", () => {
         posts.push({ body });
         return { ok: true };
       },
+      readHealth: matchingHealth,
       readProviderUsage: async (provider) => [
         {
           provider,
@@ -190,6 +225,7 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "codex") {
           throw new UnsupportedCcusageProviderError(provider);
@@ -244,6 +280,7 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
           throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
@@ -294,6 +331,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
           throw new Error("ccusage daily failed");
@@ -347,6 +385,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writeConfig: async (config) => {
           writes.push(config);
         },
+        readHealth: matchingHealth,
         readProviderUsage: async () => {
           throw nativeBinaryError;
         },
@@ -377,6 +416,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
           writes.push(config);
         },
         postJson: async () => ({ ok: true }),
+        readHealth: matchingHealth,
         readProviderUsage: async (provider) => {
           if (provider === "codex") {
             throw new UnsupportedCcusageProviderError(provider);
@@ -410,3 +450,16 @@ Error: No valid Claude data directories found. Please ensure at least one of the
     ]);
   });
 });
+
+async function matchingHealth() {
+  return {
+    requiredCliVersion: "0.1.0",
+    serverTime: "2026-06-03T00:00:00.000Z",
+  };
+}
+
+function createDifferentVersion(version: string): string {
+  const major = Number(version.split(".")[0] ?? 0);
+
+  return `${major + 1}.0.0`;
+}

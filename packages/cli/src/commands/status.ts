@@ -5,8 +5,7 @@ import { readConfig as readConfigFile } from "../config.js";
 import { cliVersion } from "../version.js";
 
 type CliHealth = {
-  recommendedCliVersion: string;
-  minimumCliVersion: string;
+  requiredCliVersion: string;
   serverTime: string;
 };
 
@@ -51,10 +50,8 @@ export async function runStatus({
     try {
       const health = await readHealth(config.serverUrl);
 
-      if (isVersionLessThan(cliVersion, health.recommendedCliVersion)) {
-        log(
-          `Update available: token-burn ${cliVersion} -> ${health.recommendedCliVersion}. Run npm install -g @blnayan/token-burn@latest.`,
-        );
+      if (cliVersion !== health.requiredCliVersion) {
+        log(formatRequiredCliVersionError(cliVersion, health.requiredCliVersion));
       }
     } catch (error) {
       log(`Server health check failed: ${error instanceof Error ? error.message : String(error)}.`);
@@ -82,38 +79,20 @@ async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
     throw new Error("Invalid health response");
   }
 
-  const { recommendedCliVersion, minimumCliVersion, serverTime } = body;
+  const { requiredCliVersion, serverTime } = body;
 
   if (
-    typeof recommendedCliVersion !== "string" ||
-    typeof minimumCliVersion !== "string" ||
+    typeof requiredCliVersion !== "string" ||
     typeof serverTime !== "string"
   ) {
     throw new Error("Invalid health response");
   }
 
-  return { recommendedCliVersion, minimumCliVersion, serverTime };
+  return { requiredCliVersion, serverTime };
 }
 
-function isVersionLessThan(left: string, right: string): boolean {
-  const leftParts = parseVersionParts(left);
-  const rightParts = parseVersionParts(right);
-
-  for (let index = 0; index < 3; index += 1) {
-    const leftPart = leftParts[index] ?? 0;
-    const rightPart = rightParts[index] ?? 0;
-
-    if (leftPart < rightPart) return true;
-    if (leftPart > rightPart) return false;
-  }
-
-  return false;
-}
-
-function parseVersionParts(version: string): [number, number, number] {
-  const parts = version.split(".").slice(0, 3).map(Number);
-
-  return [parts[0] || 0, parts[1] || 0, parts[2] || 0];
+function formatRequiredCliVersionError(actualVersion: string, requiredVersion: string): string {
+  return `Token Burn requires token-burn ${requiredVersion}. You have ${actualVersion}. Run npm install -g @blnayan/token-burn@latest.`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -1614,10 +1614,11 @@ import { Command } from "commander";
 import { login } from "./commands/login";
 import { logout } from "./commands/logout";
 import { status } from "./commands/status";
+import { cliVersion } from "./version";
 
 const program = new Command();
 
-program.name("token-burn").description("Sync AI token usage to Token Burn.").version("0.1.0");
+program.name("token-burn").description("Sync AI token usage to Token Burn.").version(cliVersion);
 
 program
   .command("login")

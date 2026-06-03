@@ -81,18 +81,17 @@ Response:
 
 ```json
 {
-  "recommendedCliVersion": "0.1.5",
-  "minimumCliVersion": "0.1.5",
+  "requiredCliVersion": "<package-version>",
   "serverTime": "2026-06-03T00:00:00.000Z"
 }
 ```
 
 The endpoint is public because it exposes no member data or secrets. It exists only to help installed CLIs show upgrade guidance and verify server reachability.
 
-The CLI should compare semantic versions using the local package version and the server's `recommendedCliVersion`. If the local version is lower, it should print:
+The CLI should compare its local package version to the server's `requiredCliVersion`. If they differ, it should print:
 
 ```text
-Update available: token-burn <local> -> <recommended>. Run npm install -g @blnayan/token-burn@latest.
+Token Burn requires token-burn <required>. You have <local>. Run npm install -g @blnayan/token-burn@latest.
 ```
 
 ### 4. Device Recovery UX Polish

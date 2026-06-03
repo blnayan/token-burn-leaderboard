@@ -13,6 +13,7 @@ import {
   mergeCronBlock,
   uninstallScheduler,
 } from "./scheduler.js";
+import { cliVersion } from "./version.js";
 
 describe("scheduler builders", () => {
   it("builds a cron line that syncs every 15 minutes and logs to tmp", () => {
@@ -344,8 +345,7 @@ describe("doctor", () => {
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       platform: "linux",
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.6",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: cliVersion,
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       readDevices: async () => ({ duplicateGroups: [] }),

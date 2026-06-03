@@ -6,8 +6,7 @@ import type { SchedulerPlatform } from "../scheduler.js";
 import { cliVersion } from "../version.js";
 
 type CliHealth = {
-  recommendedCliVersion: string;
-  minimumCliVersion: string;
+  requiredCliVersion: string;
   serverTime: string;
 };
 
@@ -94,17 +93,16 @@ async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
     throw new Error("Invalid health response");
   }
 
-  const { recommendedCliVersion, minimumCliVersion, serverTime } = body;
+  const { requiredCliVersion, serverTime } = body;
 
   if (
-    typeof recommendedCliVersion !== "string" ||
-    typeof minimumCliVersion !== "string" ||
+    typeof requiredCliVersion !== "string" ||
     typeof serverTime !== "string"
   ) {
     throw new Error("Invalid health response");
   }
 
-  return { recommendedCliVersion, minimumCliVersion, serverTime };
+  return { requiredCliVersion, serverTime };
 }
 
 async function readDevicesFromServer(serverUrl: string, token: string): Promise<DeviceList> {

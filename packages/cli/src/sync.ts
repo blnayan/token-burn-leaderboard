@@ -1,5 +1,4 @@
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
 import { hostname, platform as readPlatform } from "node:os";
 
 import type { Provider, SyncPayload } from "@token-burn/shared";
@@ -15,13 +14,20 @@ import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
 import { defaultServerUrl } from "./defaults.js";
 import { postJson as postJsonRequest } from "./http.js";
+import { cliVersion as packageCliVersion } from "./version.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
+
+type CliHealth = {
+  requiredCliVersion: string;
+  serverTime: string;
+};
 
 export type SyncDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
   postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
+  readHealth?: (serverUrl: string) => Promise<CliHealth>;
   readProviderUsage?: (provider: Provider) => Promise<NormalizedUsageRow[]>;
   readCcusageVersion?: () => Promise<string>;
   now?: () => Date;
@@ -38,6 +44,7 @@ export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
   postJson = postJsonRequest,
+  readHealth = readHealthFromServer,
   readProviderUsage = readProviderUsageFromCcusage,
   readCcusageVersion = readCcusageVersionFromPackage,
   now = () => new Date(),
@@ -55,7 +62,10 @@ export async function syncUsage({
   }
 
   const syncedAt = now().toISOString();
-  const version = cliVersion ?? (await readCliVersion());
+  const version = cliVersion ?? packageCliVersion;
+  const health = await readHealth(config.serverUrl);
+  ensureRequiredCliVersion(version, health.requiredCliVersion);
+
   const ccusageVersion = await readCcusageVersion();
   const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const deviceId = config.deviceId ?? createDeviceId();
@@ -137,20 +147,59 @@ function normalizeDeviceName(value: string): string {
   return trimmed || "Unknown device";
 }
 
-async function readCliVersion(): Promise<string> {
-  const raw = await readFile(new URL("../package.json", import.meta.url), "utf8");
-  const parsed = JSON.parse(raw) as unknown;
+async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
+  const normalizedServerUrl = serverUrl.replace(/\/+$/, "");
+  const response = await fetch(`${normalizedServerUrl}/api/cli/health`);
+  const text = await response.text();
+  const data = parseJsonOrNull(text);
 
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-    throw new Error("Unable to determine CLI version.");
+  if (!response.ok) {
+    throw new Error(formatHttpError(response, text));
   }
 
-  const version = (parsed as { version?: unknown }).version;
-  if (typeof version !== "string" || !version) {
-    throw new Error("Unable to determine CLI version.");
+  if (!isRecord(data)) {
+    throw new Error("Invalid health response");
   }
 
-  return version;
+  const { requiredCliVersion, serverTime } = data;
+
+  if (
+    typeof requiredCliVersion !== "string" ||
+    typeof serverTime !== "string"
+  ) {
+    throw new Error("Invalid health response");
+  }
+
+  return { requiredCliVersion, serverTime };
+}
+
+function ensureRequiredCliVersion(actualVersion: string, requiredVersion: string): void {
+  if (actualVersion === requiredVersion) return;
+
+  throw new Error(
+    `Token Burn requires token-burn ${requiredVersion}. You have ${actualVersion}. Run npm install -g @blnayan/token-burn@latest.`,
+  );
+}
+
+function parseJsonOrNull(text: string): unknown {
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function formatHttpError(response: Response, text: string): string {
+  const status = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
+  const body = text.trim();
+
+  return body ? `${status}: ${body}` : status;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizePlatform(value: NodeJS.Platform): SyncPlatform {

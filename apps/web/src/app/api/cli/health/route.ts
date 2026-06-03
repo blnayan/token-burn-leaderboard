@@ -1,12 +1,10 @@
 import { NextResponse } from "next/server";
 
-const recommendedCliVersion = "0.1.6";
-const minimumCliVersion = "0.1.5";
+import { requiredCliVersion } from "@/server/cli-version";
 
 export async function GET() {
   return NextResponse.json({
-    recommendedCliVersion,
-    minimumCliVersion,
+    requiredCliVersion,
     serverTime: new Date().toISOString(),
   });
 }

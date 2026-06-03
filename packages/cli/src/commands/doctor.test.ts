@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { cliVersion } from "../version.js";
 import { runDoctor } from "./doctor.js";
 
 describe("runDoctor", () => {
@@ -32,8 +33,7 @@ describe("runDoctor", () => {
       }),
       platform: "linux",
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.6",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: cliVersion,
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       readDevices,
@@ -41,7 +41,7 @@ describe("runDoctor", () => {
     });
 
     expect(log.mock.calls.map(([message]) => message)).toEqual([
-      "CLI version: 0.1.6.",
+      `CLI version: ${cliVersion}.`,
       "Authenticated with https://token-burn.test.",
       "Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).",
       "Platform: linux.",
@@ -96,7 +96,7 @@ describe("runDoctor", () => {
     });
 
     expect(log.mock.calls.map(([message]) => message)).toEqual([
-      "CLI version: 0.1.6.",
+      `CLI version: ${cliVersion}.`,
       "Authenticated with https://token-burn.test.",
       "Platform: linux.",
       "Server health check failed: offline.",
@@ -111,8 +111,7 @@ describe("runDoctor", () => {
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
       platform: "linux",
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.6",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: cliVersion,
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       readDevices: async () => {
@@ -122,7 +121,7 @@ describe("runDoctor", () => {
     });
 
     expect(log.mock.calls.map(([message]) => message)).toEqual([
-      "CLI version: 0.1.6.",
+      `CLI version: ${cliVersion}.`,
       "Authenticated with https://token-burn.test.",
       "Platform: linux.",
       "Device check failed: bad response.",

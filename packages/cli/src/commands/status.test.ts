@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { cliVersion } from "../version.js";
 import { runStatus } from "./status.js";
 
 describe("runStatus", () => {
   it("prints logged-in server and last sync when present", async () => {
     const log = vi.fn();
+    const serverRequiredCliVersion = createDifferentVersion(cliVersion);
 
     await runStatus({
       readConfig: async () => ({
@@ -19,19 +21,18 @@ describe("runStatus", () => {
         },
       }),
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.7",
-        minimumCliVersion: "0.1.5",
+        requiredCliVersion: serverRequiredCliVersion,
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.6.");
+    expect(log).toHaveBeenCalledWith(`CLI version: ${cliVersion}.`);
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).");
     expect(log).toHaveBeenCalledWith("Last sync: OK - Synced 42 tokens at 2026-06-01T00:00:00.000Z.");
     expect(log).toHaveBeenCalledWith(
-      "Update available: token-burn 0.1.6 -> 0.1.7. Run npm install -g @blnayan/token-burn@latest.",
+      `Token Burn requires token-burn ${serverRequiredCliVersion}. You have ${cliVersion}. Run npm install -g @blnayan/token-burn@latest.`,
     );
   });
 
@@ -46,7 +47,7 @@ describe("runStatus", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.6.");
+    expect(log).toHaveBeenCalledWith(`CLI version: ${cliVersion}.`);
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Server health check failed: network down.");
   });
@@ -63,3 +64,9 @@ describe("runStatus", () => {
     expect(log).toHaveBeenCalledWith("Remembered server: https://token-burn.test.");
   });
 });
+
+function createDifferentVersion(version: string): string {
+  const major = Number(version.split(".")[0] ?? 0);
+
+  return `${major + 1}.0.0`;
+}
