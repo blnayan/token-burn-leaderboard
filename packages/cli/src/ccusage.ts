@@ -110,7 +110,7 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
     const tokenDetails = readOptionalTokenDetails(record);
     const costUsd = readOptionalCostUsd(record);
     const sourceSnapshot = sanitizeSourceSnapshot(record);
-    const models = normalizeModelUsage(record.models ?? record.modelBreakdowns);
+    const models = normalizeOptionalModelUsage(record.models ?? record.modelBreakdowns);
 
     const normalized: NormalizedUsageRow = {
       provider,
@@ -375,6 +375,14 @@ function normalizeModelUsage(models: unknown): NormalizedModelUsage[] {
   return Object.entries(record)
     .map(([modelName, value]) => normalizeModelRecord(modelName, toRecord(value)))
     .sort((left, right) => left.modelName.localeCompare(right.modelName));
+}
+
+function normalizeOptionalModelUsage(models: unknown): NormalizedModelUsage[] {
+  try {
+    return normalizeModelUsage(models);
+  } catch {
+    return [];
+  }
 }
 
 function normalizeModelRecord(modelName: string, modelRecord: Record<string, unknown>): NormalizedModelUsage {
