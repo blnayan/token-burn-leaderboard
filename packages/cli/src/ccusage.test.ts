@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -7,8 +10,18 @@ import {
   readProviderUsage,
 } from "./ccusage.js";
 
-afterEach(() => {
+const tempDirs: string[] = [];
+
+async function createFixtureDir(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "token-burn-ccusage-fixture-"));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(async () => {
   vi.unstubAllEnvs();
+
+  await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
 describe("normalizeCcusageDailyRows", () => {
@@ -558,5 +571,151 @@ describe("readProviderUsage", () => {
         totalTokens: 150,
       },
     ]);
+  });
+
+  it("reads object-shaped daily rows from TOKEN_BURN_E2E_FIXTURE_DIR without invoking ccusage", async () => {
+    const fixtureDir = await createFixtureDir();
+    const runCommand = vi.fn().mockRejectedValue(new Error("ccusage should not be invoked in fixture mode"));
+
+    await writeFile(
+      join(fixtureDir, "claude_code.json"),
+      JSON.stringify({
+        daily: [
+          {
+            cacheCreationTokens: 30,
+            cacheReadTokens: 40,
+            costMetadata: { currency: "USD", pricingVersion: "e2e-claude" },
+            costUSD: 0.123456,
+            date: "2026-06-03",
+            inputTokens: 10,
+            models: {
+              "claude-sonnet-4": {
+                cacheCreationTokens: 30,
+                cacheReadTokens: 40,
+                costUSD: 0.1,
+                inputTokens: 10,
+                outputTokens: 20,
+                totalTokens: 100,
+              },
+            },
+            outputTokens: 20,
+            totalTokens: 100,
+          },
+        ],
+      }),
+      "utf8",
+    );
+    vi.stubEnv("TOKEN_BURN_E2E_FIXTURE_DIR", fixtureDir);
+
+    await expect(readProviderUsage("claude_code", { runCommand })).resolves.toEqual([
+      {
+        provider: "claude_code",
+        date: "2026-06-03",
+        tokenCategories: {
+          input: 10,
+          output: 20,
+          cacheCreate: 30,
+          cacheRead: 40,
+        },
+        totalTokens: 100,
+        costUsd: 0.123456,
+        costSource: "ccusage",
+        costMetadata: {
+          currency: "USD",
+          pricingVersion: "e2e-claude",
+        },
+        sourceSnapshot: {
+          cacheCreationTokens: 30,
+          cacheReadTokens: 40,
+          costUSD: 0.123456,
+          inputTokens: 10,
+          outputTokens: 20,
+          totalTokens: 100,
+        },
+        models: [
+          {
+            modelName: "claude-sonnet-4",
+            tokenCategories: {
+              input: 10,
+              output: 20,
+              cacheCreate: 30,
+              cacheRead: 40,
+            },
+            totalTokens: 100,
+            costUsd: 0.1,
+          },
+        ],
+      },
+    ]);
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("reads array-shaped fixture rows for Codex", async () => {
+    const fixtureDir = await createFixtureDir();
+    const runCommand = vi.fn().mockRejectedValue(new Error("ccusage should not be invoked in fixture mode"));
+
+    await writeFile(
+      join(fixtureDir, "codex.json"),
+      JSON.stringify([
+        {
+          cachedInputTokens: 300,
+          costMetadata: { currency: "USD", pricingVersion: "e2e-codex" },
+          costUSD: 0.654321,
+          date: "2026-06-03",
+          inputTokens: 100,
+          models: [
+            {
+              cachedInputTokens: 300,
+              costUSD: 0.4,
+              inputTokens: 100,
+              isFallback: false,
+              model: "gpt-5.5",
+              outputTokens: 200,
+              reasoningOutputTokens: 50,
+              totalTokens: 600,
+            },
+          ],
+          outputTokens: 200,
+          reasoningOutputTokens: 50,
+          totalTokens: 600,
+        },
+      ]),
+      "utf8",
+    );
+    vi.stubEnv("TOKEN_BURN_E2E_FIXTURE_DIR", fixtureDir);
+
+    await expect(readProviderUsage("codex", { runCommand })).resolves.toMatchObject([
+      {
+        provider: "codex",
+        date: "2026-06-03",
+        tokenCategories: {
+          input: 100,
+          output: 200,
+          cacheCreate: 0,
+          cacheRead: 300,
+        },
+        tokenDetails: {
+          reasoningOutput: 50,
+        },
+        totalTokens: 600,
+        costUsd: 0.654321,
+        costSource: "ccusage",
+        costMetadata: {
+          currency: "USD",
+          pricingVersion: "e2e-codex",
+        },
+        models: [
+          {
+            modelName: "gpt-5.5",
+            totalTokens: 600,
+            costUsd: 0.4,
+            metadata: {
+              isFallback: false,
+            },
+          },
+        ],
+      },
+    ]);
+    expect(runCommand).not.toHaveBeenCalled();
   });
 });

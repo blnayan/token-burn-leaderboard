@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { platform } from "node:os";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import type { Provider } from "@token-burn/shared";
 import { sumTokenCategories } from "@token-burn/shared";
@@ -109,6 +109,7 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
     };
     const tokenDetails = readOptionalTokenDetails(record);
     const costUsd = readOptionalCostUsd(record);
+    const costMetadata = readOptionalCostMetadata(record);
     const sourceSnapshot = sanitizeSourceSnapshot(record);
     const models = normalizeOptionalModelUsage(record.models ?? record.modelBreakdowns);
 
@@ -128,6 +129,10 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
       normalized.costSource = "ccusage";
     }
 
+    if (costMetadata) {
+      normalized.costMetadata = costMetadata;
+    }
+
     if ((costUsd !== undefined || tokenDetails || models.length > 0) && Object.keys(sourceSnapshot).length > 0) {
       normalized.sourceSnapshot = sourceSnapshot;
     }
@@ -144,6 +149,12 @@ export async function readProviderUsage(
   provider: CcusageProvider,
   { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
 ): Promise<NormalizedUsageRow[]> {
+  const fixtureDir = process.env.TOKEN_BURN_E2E_FIXTURE_DIR;
+
+  if (fixtureDir) {
+    return readProviderUsageFixture(provider, fixtureDir);
+  }
+
   let result: CommandResult;
 
   try {
@@ -195,6 +206,15 @@ export async function readCcusageVersion(): Promise<string> {
   }
 
   return version;
+}
+
+async function readProviderUsageFixture(provider: CcusageProvider, fixtureDir: string): Promise<NormalizedUsageRow[]> {
+  const fixturePath = join(fixtureDir, `${provider}.json`);
+  const raw = await readFile(fixturePath, "utf8");
+  const parsed = JSON.parse(raw) as unknown;
+  const rows = Array.isArray(parsed) ? parsed : readDailyArray(parsed);
+
+  return normalizeCcusageDailyRows(provider, rows);
 }
 
 function spawnCommand(command: string, args: string[]): Promise<CommandResult> {
@@ -312,6 +332,20 @@ function readOptionalCostUsd(record: Record<string, unknown>): number | undefine
   }
 
   return value;
+}
+
+function readOptionalCostMetadata(record: Record<string, unknown>): CostMetadata | undefined {
+  const value = record.costMetadata;
+
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("ccusage daily row has an invalid costMetadata value.");
+  }
+
+  return value as CostMetadata;
 }
 
 function readTotalTokens(record: Record<string, unknown>, tokenCategories: NormalizedTokenCategories): number {
