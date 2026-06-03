@@ -32,6 +32,8 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - run: pnpm --filter @token-burn/shared build
+
       - run: pnpm --filter @blnayan/token-burn test
 
       - run: pnpm --filter @blnayan/token-burn typecheck

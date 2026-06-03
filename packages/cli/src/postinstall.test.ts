@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 import { fixCcusageNativeBinaryPermissions } from "./postinstall.js";
 
 describe("fixCcusageNativeBinaryPermissions", () => {
-  it("marks installed ccusage native binaries executable", async () => {
+  const posixIt = process.platform === "win32" ? it.skip : it;
+
+  posixIt("marks installed ccusage native binaries executable", async () => {
     const rootDir = await mkdtemp(join(tmpdir(), "token-burn-postinstall-"));
     const binaryPath = join(
       rootDir,
