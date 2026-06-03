@@ -19,19 +19,19 @@ describe("runStatus", () => {
         },
       }),
       readHealth: async () => ({
-        recommendedCliVersion: "0.1.6",
+        recommendedCliVersion: "0.1.7",
         minimumCliVersion: "0.1.5",
         serverTime: "2026-06-03T00:00:00.000Z",
       }),
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
+    expect(log).toHaveBeenCalledWith("CLI version: 0.1.6.");
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Device: nayan-vps (4f43b27d-7d86-4ff8-8c98-f74158819e59).");
     expect(log).toHaveBeenCalledWith("Last sync: OK - Synced 42 tokens at 2026-06-01T00:00:00.000Z.");
     expect(log).toHaveBeenCalledWith(
-      "Update available: token-burn 0.1.5 -> 0.1.6. Run npm install -g @blnayan/token-burn@latest.",
+      "Update available: token-burn 0.1.6 -> 0.1.7. Run npm install -g @blnayan/token-burn@latest.",
     );
   });
 
@@ -46,7 +46,7 @@ describe("runStatus", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("CLI version: 0.1.5.");
+    expect(log).toHaveBeenCalledWith("CLI version: 0.1.6.");
     expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
     expect(log).toHaveBeenCalledWith("Server health check failed: network down.");
   });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const recommendedCliVersion = "0.1.5";
+const recommendedCliVersion = "0.1.6";
 const minimumCliVersion = "0.1.5";
 
 export async function GET() {
