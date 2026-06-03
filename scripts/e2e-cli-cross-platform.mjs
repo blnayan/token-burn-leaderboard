@@ -11,6 +11,7 @@ const deviceId = "11111111-1111-4111-8111-111111111111";
 const fixtureDate = "2026-06-03";
 const timeoutMs = 30_000;
 const timeoutGraceMs = 2_000;
+let installedCliVersion = null;
 
 const state = {
   acceptedRequests: [],
@@ -18,6 +19,17 @@ const state = {
 };
 
 const server = createServer(async (request, response) => {
+  if (request.method === "GET" && request.url === "/api/cli/health") {
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        requiredCliVersion: installedCliVersion ?? "0.0.0",
+        serverTime: new Date().toISOString(),
+      }),
+    );
+    return;
+  }
+
   if (request.method !== "POST" || request.url !== "/api/sync") {
     response.writeHead(404, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "Not found" }));
@@ -73,6 +85,7 @@ async function runPreflightChecks() {
 
   const version = await runCli(["--version"], { env: baseEnv });
   assertMatches(version.stdout.trim(), /^[0-9]+\.[0-9]+\.[0-9]+/, "token-burn --version should print semver");
+  installedCliVersion = version.stdout.trim();
 
   const status = await runCli(["status"], { env: baseEnv });
   assertIncludes(status.stdout, "CLI version:", "status should include CLI version");
