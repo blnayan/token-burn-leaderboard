@@ -8,11 +8,12 @@ import { createLogoutCommand } from "./commands/logout.js";
 import { createInstallSchedulerCommand, createUninstallSchedulerCommand } from "./commands/scheduler.js";
 import { createSyncCommand } from "./commands/sync.js";
 import { createStatusCommand } from "./commands/status.js";
+import { cliVersion } from "./version.js";
 
 const program = new Command()
   .name("token-burn")
   .description("Token Burn command line tools")
-  .version("0.1.5");
+  .version(cliVersion);
 
 program.addCommand(createLoginCommand());
 program.addCommand(createLogoutCommand());
