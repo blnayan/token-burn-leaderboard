@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
@@ -15,7 +15,7 @@ const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
 const expectedDeviceId = "4f43b27d-7d86-4ff8-8c98-f74158819e59";
-const expectedDeviceName = "token-burn-e2e-device";
+const expectedDeviceName = hostname();
 const expectedDate = "2026-06-03";
 const expectedOs = process.platform;
 const syncTimeoutMs = 60_000;
