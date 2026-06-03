@@ -53,11 +53,9 @@ jobs:
         shell: bash
         run: npm install -g "$TOKEN_BURN_TARBALL"
 
-      - name: Run packed CLI
+      - name: Run packed CLI smoke
         shell: bash
-        run: |
-          token-burn --version
-          token-burn status
+        run: bash scripts/smoke-cli-cross-platform.sh
 
   linux-root-global-install:
     name: Linux root global install smoke
