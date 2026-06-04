@@ -14,7 +14,7 @@ describe("runLogin", () => {
       .mockResolvedValueOnce({
         status: "approved",
         token: "tb_secret",
-        member: { displayName: "Ada" },
+        member: { displayName: "Ada", username: "blnayan" },
       });
     const writeConfig = vi.fn().mockResolvedValue(undefined);
     const log = vi.fn();
@@ -32,7 +32,7 @@ describe("runLogin", () => {
     expect(log).toHaveBeenCalledWith("https://token-burn.test/cli/approve/ABCD-2345");
     expect(log).toHaveBeenCalledWith("Waiting for approval. Press Ctrl+C to cancel.");
     expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
-    expect(log).toHaveBeenCalledWith("Authenticated as Ada.");
+    expect(log).toHaveBeenCalledWith("Authenticated as blnayan.");
   });
 
   it("preserves the existing device identity when re-authenticating", async () => {
@@ -46,7 +46,7 @@ describe("runLogin", () => {
       .mockResolvedValueOnce({
         status: "approved",
         token: "tb_new_secret",
-        member: { displayName: "Ada" },
+        member: { displayName: "Ada", username: "blnayan" },
       });
     const readConfig = vi.fn().mockResolvedValue({
       serverUrl: "https://old-token-burn.test",

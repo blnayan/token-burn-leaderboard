@@ -26,7 +26,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       const githubProfile = profile as GitHubProfile | undefined;
       if (!githubProfile?.id || !githubProfile.login) return false;
 
-      await prisma.user.upsert({
+      const user = await prisma.user.upsert({
         where: { githubId: String(githubProfile.id) },
         create: {
           githubId: String(githubProfile.id),
@@ -34,6 +34,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         },
         update: {
           githubLogin: githubProfile.login,
+        },
+      });
+
+      await prisma.member.updateMany({
+        where: {
+          userId: user.id,
+          username: { not: githubProfile.login },
+        },
+        data: {
+          username: githubProfile.login,
         },
       });
 

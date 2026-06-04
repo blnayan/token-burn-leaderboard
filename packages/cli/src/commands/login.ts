@@ -17,7 +17,10 @@ const loginPollResponseSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("approved"),
     token: z.string().min(1),
-    member: z.object({ displayName: z.string().min(1) }),
+    member: z.object({
+      displayName: z.string().min(1),
+      username: z.string().min(1).optional(),
+    }),
   }),
 ]);
 
@@ -65,7 +68,7 @@ export async function runLogin({
         ...(existingConfig?.deviceId ? { deviceId: existingConfig.deviceId } : {}),
         ...(existingConfig?.deviceName ? { deviceName: existingConfig.deviceName } : {}),
       });
-      log(`Authenticated as ${pollResponse.member.displayName}.`);
+      log(`Authenticated as ${pollResponse.member.username ?? pollResponse.member.displayName}.`);
       return;
     }
 

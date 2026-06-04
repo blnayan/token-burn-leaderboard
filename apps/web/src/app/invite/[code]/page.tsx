@@ -4,7 +4,6 @@ import { signIn, auth } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
-import { createDefaultDisplayName } from "@/server/display-name";
 import { hashInviteCode, isInviteExpired } from "@/server/invites";
 
 export async function acceptInvite(formData: FormData) {
@@ -21,7 +20,7 @@ export async function acceptInvite(formData: FormData) {
 
   const user = await prisma.user.findUnique({
     where: { githubId },
-    select: { id: true },
+    select: { id: true, githubLogin: true },
   });
 
   if (!user) throw new Error("Authenticated GitHub user was not found");
@@ -41,7 +40,8 @@ export async function acceptInvite(formData: FormData) {
       where: { userId: user.id },
       create: {
         userId: user.id,
-        displayName: createDefaultDisplayName(user.id),
+        username: user.githubLogin,
+        displayName: user.githubLogin,
       },
       update: {},
     });

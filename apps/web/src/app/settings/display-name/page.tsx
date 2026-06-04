@@ -1,4 +1,3 @@
-import { Prisma } from "@prisma/client";
 import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/auth";
@@ -19,7 +18,7 @@ async function signInWithGitHub() {
   await signIn("github", { redirectTo: "/settings/display-name" });
 }
 
-async function updateDisplayName(
+export async function updateDisplayName(
   _state: DisplayNameFormState,
   formData: FormData,
 ): Promise<DisplayNameFormState> {
@@ -46,18 +45,10 @@ async function updateDisplayName(
     throw error;
   }
 
-  try {
-    await prisma.member.update({
-      where: { id: user.member.id },
-      data: { displayName },
-    });
-  } catch (error) {
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-      return { message: "Display name is already taken", value };
-    }
-
-    throw error;
-  }
+  await prisma.member.update({
+    where: { id: user.member.id },
+    data: { displayName },
+  });
 
   redirect("/");
 }

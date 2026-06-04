@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
       approvedAt: true,
       expiresAt: true,
       memberId: true,
-      member: { select: { displayName: true } },
+      member: { select: { displayName: true, username: true } },
     },
   });
 
@@ -32,6 +32,7 @@ export async function POST(request: NextRequest) {
 
   const memberId = session.memberId;
   const displayName = session.member.displayName;
+  const username = session.member.username;
   const token = createCliToken();
   const consumed = await prisma.$transaction(async (tx) => {
     const deleted = await tx.cliLoginSession.deleteMany({
@@ -64,6 +65,6 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     status: "approved",
     token,
-    member: { displayName },
+    member: { displayName, username },
   });
 }
