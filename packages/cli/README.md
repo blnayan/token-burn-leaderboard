@@ -2,28 +2,26 @@
 
 Sync local Claude Code and Codex usage totals to a Token Burn leaderboard.
 
-## Install
+## Quick Start
 
 Requires Node.js 24 LTS or newer.
 
 ```bash
-npm install -g @blnayan/token-burn
+npx @blnayan/token-burn@latest setup
 ```
 
-This installs the `token-burn` command.
+`setup` prints a login approval URL, waits for approval, runs the first sync, and installs automatic sync.
 
-## Login And Sync
+You can still install the CLI globally if you prefer:
 
 ```bash
-token-burn login
-token-burn sync
-token-burn install-scheduler
+npm install -g @blnayan/token-burn
+token-burn setup
 ```
-
-`install-scheduler` installs a user-level scheduler that runs `token-burn sync` every 15 minutes.
 
 ## Commands
 
+- `token-burn setup` authenticates, syncs once, and installs automatic sync.
 - `token-burn login` authenticates the CLI with `https://tokenburn.nayanbhut.dev`.
 - `token-burn login --server-url <url>` authenticates with another Token Burn server.
 - `token-burn sync` sends aggregate usage totals.

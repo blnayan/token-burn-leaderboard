@@ -1,17 +1,29 @@
 # CLI Install And Release
 
-## User Install
+## User Setup
 
 Token Burn CLI requires Node.js 24 LTS or newer.
 
 ```bash
-npm install -g @blnayan/token-burn
-token-burn login
-token-burn sync
-token-burn install-scheduler
+npx @blnayan/token-burn@latest setup
 ```
 
-The npm package is `@blnayan/token-burn`. The installed command is `token-burn`.
+This no-install setup command downloads the latest published CLI, prints a browser approval URL, waits for login approval, runs the first sync, and installs automatic sync.
+
+The scheduler installed by `setup` runs the latest published CLI each time:
+
+```bash
+npm exec --yes --package @blnayan/token-burn@latest -- token-burn sync
+```
+
+The npm package is `@blnayan/token-burn`. You do not need a global `token-burn` install for normal usage.
+
+You can still install the CLI globally if you prefer:
+
+```bash
+npm install -g @blnayan/token-burn
+token-burn setup
+```
 
 The default server is `https://tokenburn.nayanbhut.dev`. Use `token-burn login --server-url <url>` only for a different deployment.
 
@@ -25,10 +37,9 @@ Normal npm uninstall/reinstall keeps this config file, so the same device identi
 If the config file is deleted, the next sync creates a new device. To recover duplicated history:
 
 ```bash
-token-burn login
-token-burn sync
-token-burn devices
-token-burn devices merge <old-device-id> <new-device-id>
+npx @blnayan/token-burn@latest setup
+npx @blnayan/token-burn@latest devices
+npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
 ```
 
 Do not edit the database manually unless you are repairing a server-side incident.

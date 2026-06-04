@@ -13,17 +13,20 @@ https://tokenburn.nayanbhut.dev
 You need Node.js 24 LTS or newer.
 
 ```bash
-npm install -g @blnayan/token-burn
-token-burn login
-token-burn sync
-token-burn install-scheduler
+npx @blnayan/token-burn@latest setup
 ```
 
-`token-burn login` opens a browser approval flow. You must have accepted a Token Burn invite before the CLI can connect.
+`setup` prints a browser approval URL, waits for login approval, runs the first sync, and installs automatic sync. You must have accepted a Token Burn invite before the CLI can connect.
 
-`token-burn sync` sends your current aggregate usage totals. `token-burn install-scheduler` installs a user-level scheduler that runs sync automatically every 15 minutes.
+The scheduler installed by `setup` runs the latest published CLI each time:
 
-Useful CLI commands:
+```bash
+npm exec --yes --package @blnayan/token-burn@latest -- token-burn sync
+```
+
+You do not need a global `token-burn` install for normal usage.
+
+Optional troubleshooting commands:
 
 ```bash
 token-burn status
@@ -136,4 +139,3 @@ GitHub Actions runs:
 - Packaged CLI E2E on Linux, macOS, and Windows
 - Linux root global-install smoke test
 - Sync E2E against the web app and Postgres
-
