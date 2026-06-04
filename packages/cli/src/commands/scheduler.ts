@@ -75,7 +75,7 @@ export function getDefaultSyncCommandArgv({
   npmExecPath?: string;
 } = {}): SchedulerCommandArgv {
   const npmCommand = platform === "win32" ? "npm.cmd" : "npm";
-  const npmArgv = npmExecPath ? [execPath, npmExecPath] : [npmCommand];
+  const npmArgv = npmExecPath && isNpmCliPath(npmExecPath) ? [execPath, npmExecPath] : [npmCommand];
 
   return [
     ...npmArgv,
@@ -87,4 +87,8 @@ export function getDefaultSyncCommandArgv({
     "token-burn",
     "sync",
   ];
+}
+
+function isNpmCliPath(value: string): boolean {
+  return /(^|[\\/])npm-cli\.js$/i.test(value);
 }

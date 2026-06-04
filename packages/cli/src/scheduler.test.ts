@@ -331,6 +331,61 @@ describe("scheduler commands", () => {
     ]);
   });
 
+  it("falls back to bare npm when npm_execpath points to pnpm or another non-npm CLI", () => {
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "linux",
+        execPath: "/usr/local/bin/node",
+        npmExecPath: "/home/me/.cache/node/corepack/v1/pnpm/9.15.0/bin/pnpm.cjs",
+      }),
+    ).toEqual([
+      "npm",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "darwin",
+        execPath: "/opt/homebrew/bin/node",
+        npmExecPath: "/opt/homebrew/bin/yarn.js",
+      }),
+    ).toEqual([
+      "npm",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+  });
+
+  it("falls back to bare npm.cmd on Windows when npm_execpath points to pnpm", () => {
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "win32",
+        execPath: "C:\\Program Files\\nodejs\\node.exe",
+        npmExecPath: "C:\\Users\\Me\\AppData\\Local\\pnpm\\pnpm.cjs",
+      }),
+    ).toEqual([
+      "npm.cmd",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+  });
+
   it("prints generated scheduler content on dry run", async () => {
     const log = vi.fn();
 
