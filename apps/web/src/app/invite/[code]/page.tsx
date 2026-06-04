@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { signIn, auth } from "@/auth";
+import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -77,11 +78,7 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
   });
   const unavailable = !invite || invite.redeemedAt || isInviteExpired(invite.expiresAt);
 
-  async function signInWithGitHub() {
-    "use server";
-
-    await signIn("github", { redirectTo: `/invite/${encodeURIComponent(code)}` });
-  }
+  const invitePath = `/invite/${encodeURIComponent(code)}`;
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-5 py-8">
@@ -95,14 +92,15 @@ export default async function InvitePage({ params }: { params: Promise<{ code: s
       {unavailable ? (
         <p className="rounded-md border px-4 py-3 text-sm text-muted-foreground">This invite is invalid or expired.</p>
       ) : session?.user ? (
-        <form action={acceptInvite} className="flex flex-col gap-4">
-          <input type="hidden" name="code" value={code} />
-          <Button type="submit">Accept invite</Button>
-        </form>
+        <div className="flex flex-col gap-4">
+          <form action={acceptInvite} className="flex flex-col gap-4">
+            <input type="hidden" name="code" value={code} />
+            <Button type="submit">Accept invite</Button>
+          </form>
+          <SessionControls session={session} redirectTo={invitePath} />
+        </div>
       ) : (
-        <form action={signInWithGitHub} className="flex flex-col gap-4">
-          <Button type="submit">Sign in with GitHub</Button>
-        </form>
+        <SignInWithGitHubButton redirectTo={invitePath} />
       )}
 
       <a className="text-sm text-muted-foreground underline-offset-4 hover:underline" href={env.TOKEN_BURN_PUBLIC_URL}>

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
-import { auth, signIn } from "@/auth";
-import { Button } from "@/components/ui/button";
+import { auth } from "@/auth";
+import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
 import { prisma } from "@/lib/prisma";
 import { normalizeDisplayName } from "@/server/display-name";
 
@@ -11,12 +11,6 @@ export type DisplayNameFormState = {
   message: string | null;
   value?: string;
 };
-
-async function signInWithGitHub() {
-  "use server";
-
-  await signIn("github", { redirectTo: "/settings/display-name" });
-}
 
 export async function updateDisplayName(
   _state: DisplayNameFormState,
@@ -63,9 +57,7 @@ export default async function DisplayNamePage() {
           <h1 className="text-3xl font-semibold">Set Display Name</h1>
           <p className="text-sm text-muted-foreground">Sign in with GitHub to continue member setup.</p>
         </div>
-        <form action={signInWithGitHub}>
-          <Button type="submit">Sign in with GitHub</Button>
-        </form>
+        <SignInWithGitHubButton redirectTo="/settings/display-name" />
       </main>
     );
   }
@@ -83,6 +75,7 @@ export default async function DisplayNamePage() {
       <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-4 px-5 py-8">
         <h1 className="text-3xl font-semibold">Invite Required</h1>
         <p className="text-sm text-muted-foreground">Accept an invite before choosing a leaderboard display name.</p>
+        <SessionControls session={session} redirectTo="/settings/display-name" />
       </main>
     );
   }
@@ -94,6 +87,7 @@ export default async function DisplayNamePage() {
         <p className="text-sm text-muted-foreground">Choose the public name shown on the Token Burn leaderboard.</p>
       </div>
       <DisplayNameForm action={updateDisplayName} defaultValue={user.member.displayName} />
+      <SessionControls session={session} redirectTo="/settings/display-name" />
     </main>
   );
 }

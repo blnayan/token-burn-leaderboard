@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { auth, signIn } from "@/auth";
+import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -43,12 +44,6 @@ async function approveCliLogin(formData: FormData) {
   redirect(`/cli/approve/${encodeURIComponent(code)}?approved=1`);
 }
 
-async function signInWithGitHub({ code }: { code: string }) {
-  "use server";
-
-  await signIn("github", { redirectTo: `/cli/approve/${encodeURIComponent(code)}` });
-}
-
 export default async function CliApprovePage({
   params,
   searchParams,
@@ -59,6 +54,7 @@ export default async function CliApprovePage({
   const { code } = await params;
   const { approved } = await searchParams;
   const session = await auth();
+  const approvePath = `/cli/approve/${encodeURIComponent(code)}`;
 
   const loginSession = await prisma.cliLoginSession.findUnique({
     where: { codeHash: hashSecret(code) },
@@ -82,9 +78,7 @@ export default async function CliApprovePage({
             This CLI login session is invalid or expired.
           </p>
         ) : (
-          <form action={signInWithGitHub.bind(null, { code })}>
-            <Button type="submit">Sign in with GitHub</Button>
-          </form>
+          <SignInWithGitHubButton redirectTo={approvePath} />
         )}
       </main>
     );
@@ -106,6 +100,7 @@ export default async function CliApprovePage({
         <a className="text-sm text-muted-foreground underline-offset-4 hover:underline" href={env.TOKEN_BURN_PUBLIC_URL}>
           Back to leaderboard
         </a>
+        <SessionControls session={session} redirectTo={approvePath} />
       </main>
     );
   }
@@ -135,6 +130,7 @@ export default async function CliApprovePage({
           <Button type="submit">Approve CLI login</Button>
         </form>
       )}
+      <SessionControls session={session} redirectTo={approvePath} />
     </main>
   );
 }

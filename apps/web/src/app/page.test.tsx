@@ -15,6 +15,8 @@ vi.mock("next/link", () => ({
 
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 vi.mock("@/lib/env", () => ({
@@ -38,7 +40,21 @@ vi.mock("@/components/period-tabs", () => ({
 }));
 
 vi.mock("@/components/ui/button", () => ({
-  Button: ({ children }: { children: ReactNode }) => <>{children}</>,
+  Button: ({
+    asChild,
+    children,
+    ...props
+  }: {
+    asChild?: boolean;
+    children: ReactNode;
+    [key: string]: unknown;
+  }) => {
+    if (asChild && React.isValidElement(children)) {
+      return React.cloneElement(children as React.ReactElement<Record<string, unknown>>, props);
+    }
+
+    return <button {...props}>{children}</button>;
+  },
 }));
 
 vi.mock("@/server/leaderboard", () => ({
@@ -51,6 +67,7 @@ import HomePage from "./page";
 
 type AuthMockSession = {
   user?: {
+    name?: string;
     githubLogin?: string;
   };
   expires: string;
@@ -86,9 +103,11 @@ describe("HomePage admin invite button", () => {
 
     const inviteLink = screen.getByRole("link", { name: "Invite" });
     expect(inviteLink.getAttribute("href")).toBe("/admin/invites");
+    expect(screen.getByText("Signed in as @admin-user")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
-  it("does not render an invite link for a non-admin user", async () => {
+  it("renders account controls without an invite link for a non-admin user", async () => {
     authMock.mockResolvedValue({
       user: {
         githubLogin: "member-user",
@@ -99,13 +118,16 @@ describe("HomePage admin invite button", () => {
     await renderHomePage();
 
     expect(screen.queryByRole("link", { name: "Invite" })).toBeNull();
+    expect(screen.getByText("Signed in as @member-user")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
-  it("does not render an invite link for signed-out users", async () => {
+  it("renders sign-in controls without an invite link for signed-out users", async () => {
     authMock.mockResolvedValue(null);
 
     await renderHomePage();
 
     expect(screen.queryByRole("link", { name: "Invite" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
   });
 });

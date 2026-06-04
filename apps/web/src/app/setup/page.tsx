@@ -1,17 +1,12 @@
 /** @jsxRuntime automatic */
 import Link from "next/link";
 
-import { auth, signIn } from "@/auth";
+import { auth } from "@/auth";
+import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 
 import { SetupCommandCopy } from "./setup-command-copy";
-
-async function signInWithGitHub() {
-  "use server";
-
-  await signIn("github", { redirectTo: "/setup" });
-}
 
 export default async function SetupPage() {
   const session = await auth();
@@ -23,9 +18,7 @@ export default async function SetupPage() {
           <h1 className="text-3xl font-semibold">Finish Token Burn Setup</h1>
           <p className="text-sm text-muted-foreground">Sign in with GitHub to continue setup.</p>
         </div>
-        <form action={signInWithGitHub}>
-          <Button type="submit">Sign in with GitHub</Button>
-        </form>
+        <SignInWithGitHubButton redirectTo="/setup" />
       </main>
     );
   }
@@ -46,6 +39,7 @@ export default async function SetupPage() {
         <Button asChild className="w-fit">
           <Link href="/">Go to leaderboard</Link>
         </Button>
+        <SessionControls session={session} redirectTo="/setup" />
       </main>
     );
   }
@@ -99,6 +93,7 @@ export default async function SetupPage() {
       <Button asChild className="w-fit">
         <Link href="/">Go to leaderboard</Link>
       </Button>
+      <SessionControls session={session} redirectTo="/setup" />
     </main>
   );
 }

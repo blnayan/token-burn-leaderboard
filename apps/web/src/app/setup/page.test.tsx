@@ -16,6 +16,7 @@ vi.mock("next/link", () => ({
 vi.mock("@/auth", () => ({
   auth: vi.fn(),
   signIn: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -56,7 +57,9 @@ import SetupPage from "./page";
 
 type AuthMockSession = {
   user?: {
+    name?: string;
     githubId?: string;
+    githubLogin?: string;
   };
   expires: string;
 } | null;
@@ -93,6 +96,7 @@ describe("SetupPage", () => {
     authMock.mockResolvedValue({
       user: {
         githubId: "github-1",
+        githubLogin: "member-user",
       },
       expires: "2026-06-04T00:00:00.000Z",
     });
@@ -110,6 +114,8 @@ describe("SetupPage", () => {
       "/settings/display-name",
     );
     expect(screen.getByRole("link", { name: "Go to leaderboard" }).getAttribute("href")).toBe("/");
+    expect(screen.getByText("Signed in as @member-user")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 
   it("shows sign-in guidance for signed-out visitors", async () => {
@@ -126,6 +132,7 @@ describe("SetupPage", () => {
     authMock.mockResolvedValue({
       user: {
         githubId: "github-1",
+        githubLogin: "wrong-user",
       },
       expires: "2026-06-04T00:00:00.000Z",
     });
@@ -138,5 +145,7 @@ describe("SetupPage", () => {
     expect(screen.getByRole("heading", { name: "Invite Required" })).toBeTruthy();
     expect(screen.getByText("Accept an invite before setting up Token Burn sync.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Go to leaderboard" }).getAttribute("href")).toBe("/");
+    expect(screen.getByText("Signed in as @wrong-user")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
   });
 });

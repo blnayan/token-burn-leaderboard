@@ -3,6 +3,7 @@ import Link from "next/link";
 import React from "react";
 
 import { auth } from "@/auth";
+import { SessionControls } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { LeaderboardTable } from "@/components/leaderboard-table";
 import { PeriodTabs } from "@/components/period-tabs";
@@ -28,11 +29,14 @@ export default async function HomePage({
             <h1 className="text-3xl font-semibold">Token Burn</h1>
             <p className="text-sm text-muted-foreground">Public leaderboard. Private submissions.</p>
           </div>
-          {showInviteButton ? (
-            <Button asChild variant="outline" className="w-fit">
-              <Link href="/admin/invites">Invite</Link>
-            </Button>
-          ) : null}
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            {showInviteButton ? (
+              <Button asChild variant="outline" className="w-fit">
+                <Link href="/admin/invites">Invite</Link>
+              </Button>
+            ) : null}
+            <SessionControls session={session} />
+          </div>
         </div>
         <PeriodTabs value={period} />
       </header>

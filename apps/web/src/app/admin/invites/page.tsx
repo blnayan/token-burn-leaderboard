@@ -1,18 +1,14 @@
+/** @jsxRuntime automatic */
 import { redirect } from "next/navigation";
 
-import { auth, signIn } from "@/auth";
+import { auth } from "@/auth";
+import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
 import { createInviteCode, createInviteExpiration, hashInviteCode } from "@/server/invites";
 
 import { InviteUrlCopy } from "./invite-url-copy";
-
-async function signInWithGitHub() {
-  "use server";
-
-  await signIn("github", { redirectTo: "/admin/invites" });
-}
 
 async function createInvite() {
   "use server";
@@ -54,9 +50,7 @@ export default async function AdminInvitesPage({
           <h1 className="text-3xl font-semibold">Invites</h1>
           <p className="text-sm text-muted-foreground">Sign in with GitHub to manage member invites.</p>
         </div>
-        <form action={signInWithGitHub}>
-          <Button type="submit">Sign in with GitHub</Button>
-        </form>
+        <SignInWithGitHubButton redirectTo="/admin/invites" />
       </main>
     );
   }
@@ -74,6 +68,7 @@ export default async function AdminInvitesPage({
       <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-4 px-5 py-8">
         <h1 className="text-3xl font-semibold">Admin Required</h1>
         <p className="text-sm text-muted-foreground">Only the configured admin can create invites.</p>
+        <SessionControls session={session} redirectTo="/admin/invites" />
       </main>
     );
   }
@@ -105,6 +100,7 @@ export default async function AdminInvitesPage({
 
       {inviteUrl ? <InviteUrlCopy inviteUrl={inviteUrl} /> : null}
       {ignoredCode ? <p className="text-sm text-muted-foreground">That invite link is no longer available.</p> : null}
+      <SessionControls session={session} redirectTo="/admin/invites" />
     </main>
   );
 }
