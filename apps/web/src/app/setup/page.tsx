@@ -1,5 +1,5 @@
+/** @jsxRuntime automatic */
 import Link from "next/link";
-import React from "react";
 
 import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
@@ -61,7 +61,7 @@ export default async function SetupPage() {
         <li className="rounded-md border px-4 py-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-col gap-1">
-              <h2 className="text-base font-medium">1. Set your display name</h2>
+              <h2 className="text-base font-medium">Set your display name</h2>
               <p className="text-sm text-muted-foreground">
                 You are currently shown as {user.member.displayName}.
               </p>
@@ -75,7 +75,7 @@ export default async function SetupPage() {
         <li className="rounded-md border px-4 py-3">
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1">
-              <h2 className="text-base font-medium">2. Run CLI setup</h2>
+              <h2 className="text-base font-medium">Run CLI setup</h2>
               <p className="text-sm text-muted-foreground">
                 Open a terminal on the device you want to track and run this command.
               </p>
@@ -88,7 +88,7 @@ export default async function SetupPage() {
 
         <li className="rounded-md border px-4 py-3">
           <div className="flex flex-col gap-1">
-            <h2 className="text-base font-medium">3. Finish the terminal prompts</h2>
+            <h2 className="text-base font-medium">Finish the terminal prompts</h2>
             <p className="text-sm text-muted-foreground">
               Setup signs in, runs the first sync, and installs automatic sync every 15 minutes.
             </p>
