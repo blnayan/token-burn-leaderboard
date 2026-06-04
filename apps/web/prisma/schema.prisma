@@ -10,6 +10,7 @@ model User {
   id              String   @id @default(cuid())
   githubId        String   @unique
   githubLogin     String   @unique
+  githubName      String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   member          Member?

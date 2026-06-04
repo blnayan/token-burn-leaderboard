@@ -113,7 +113,11 @@ describe("acceptInvite", () => {
       },
       expires: "2026-06-04T00:00:00.000Z",
     });
-    prismaMock.user.findUnique.mockResolvedValue({ id: "user-1", githubLogin: "blnayan" });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      githubLogin: "blnayan",
+      githubName: "Nayan Bhut",
+    });
     prismaMock.invite.findUnique.mockResolvedValue({
       id: "invite-1",
       redeemedAt: null,
@@ -150,7 +154,7 @@ describe("acceptInvite", () => {
         create: expect.objectContaining({
           userId: "user-1",
           username: "blnayan",
-          displayName: "blnayan",
+          displayName: "Nayan Bhut",
         }),
         where: {
           userId: "user-1",

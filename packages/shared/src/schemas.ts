@@ -60,7 +60,7 @@ export type SyncPayload = z.infer<typeof syncPayloadSchema>;
 
 export const leaderboardRowSchema = z.object({
   rank: z.number().int().positive(),
-  displayName: z.string().min(1).max(32),
+  displayName: z.string().min(1).max(80),
   totalTokens: z.number().int().nonnegative(),
 });
 

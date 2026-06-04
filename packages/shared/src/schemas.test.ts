@@ -273,12 +273,12 @@ describe("leaderboardRowSchema", () => {
     expect(
       leaderboardRowSchema.parse({
         rank: 1,
-        displayName: "Ada",
+        displayName: "A".repeat(80),
         totalTokens: 12345,
       }),
     ).toEqual({
       rank: 1,
-      displayName: "Ada",
+      displayName: "A".repeat(80),
       totalTokens: 12345,
     });
   });
@@ -286,6 +286,7 @@ describe("leaderboardRowSchema", () => {
   it("rejects invalid leaderboard rows", () => {
     expect(() => leaderboardRowSchema.parse({ rank: 0, displayName: "Ada", totalTokens: 1 })).toThrow();
     expect(() => leaderboardRowSchema.parse({ rank: 1, displayName: "", totalTokens: 1 })).toThrow();
+    expect(() => leaderboardRowSchema.parse({ rank: 1, displayName: "A".repeat(81), totalTokens: 1 })).toThrow();
     expect(() => leaderboardRowSchema.parse({ rank: 1, displayName: "Ada", totalTokens: -1 })).toThrow();
   });
 });
