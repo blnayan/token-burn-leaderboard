@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { createDefaultDisplayName } from "@/server/display-name";
 import { hashInviteCode, isInviteExpired } from "@/server/invites";
 
-async function acceptInvite(formData: FormData) {
+export async function acceptInvite(formData: FormData) {
   "use server";
 
   const code = String(formData.get("code") ?? "");

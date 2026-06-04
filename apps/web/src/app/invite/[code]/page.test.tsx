@@ -89,6 +89,9 @@ const prismaMock = prisma as unknown as {
   $transaction: TransactionMockFn;
 };
 
+const txMemberUpsertMock = vi.fn();
+const txInviteUpdateManyMock = vi.fn();
+
 describe("acceptInvite", () => {
   beforeEach(() => {
     authMock.mockReset();
@@ -101,6 +104,8 @@ describe("acceptInvite", () => {
     prismaMock.invite.updateMany.mockReset();
     prismaMock.member.upsert.mockReset();
     prismaMock.$transaction.mockReset();
+    txMemberUpsertMock.mockReset();
+    txInviteUpdateManyMock.mockReset();
 
     authMock.mockResolvedValue({
       user: {
@@ -114,12 +119,16 @@ describe("acceptInvite", () => {
       redeemedAt: null,
       expiresAt: new Date("2999-01-01T00:00:00.000Z"),
     });
-    prismaMock.member.upsert.mockResolvedValue({});
-    prismaMock.invite.updateMany.mockResolvedValue({ count: 1 });
+    txMemberUpsertMock.mockResolvedValue({});
+    txInviteUpdateManyMock.mockResolvedValue({ count: 1 });
     prismaMock.$transaction.mockImplementation(async (callback) => {
       await callback({
-        member: prismaMock.member,
-        invite: prismaMock.invite,
+        member: {
+          upsert: txMemberUpsertMock,
+        },
+        invite: {
+          updateMany: txInviteUpdateManyMock,
+        },
       });
     });
   });
@@ -128,10 +137,15 @@ describe("acceptInvite", () => {
     const formData = new FormData();
     formData.set("code", "abc123");
 
-    await expect(acceptInvite(formData)).rejects.toThrow("NEXT_REDIRECT:/setup");
+    let redirectError: unknown;
+    try {
+      await acceptInvite(formData);
+    } catch (error) {
+      redirectError = error;
+    }
 
     expect(prismaMock.$transaction).toHaveBeenCalled();
-    expect(prismaMock.member.upsert).toHaveBeenCalledWith(
+    expect(txMemberUpsertMock).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
           userId: "user-1",
@@ -141,7 +155,7 @@ describe("acceptInvite", () => {
         },
       }),
     );
-    expect(prismaMock.invite.updateMany).toHaveBeenCalledWith(
+    expect(txInviteUpdateManyMock).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           id: "invite-1",
@@ -149,6 +163,9 @@ describe("acceptInvite", () => {
         }),
       }),
     );
+    expect(() => {
+      throw redirectError;
+    }).toThrow("NEXT_REDIRECT:/setup");
     expect(redirectMock.mock.calls.at(-1)).toEqual(["/setup"]);
   });
 });
