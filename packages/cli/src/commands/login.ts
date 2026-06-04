@@ -63,7 +63,7 @@ export async function runLogin({
     log("Opening approval link in your browser...");
     log("Waiting for approval. Press Ctrl+C to cancel.");
   } catch {
-    log(`Could not open your browser automatically. Open this link in your browser: ${startResponse.loginUrl}`);
+    log(`Could not open your browser automatically.\nOpen this link in your browser:\n${startResponse.loginUrl}`);
   }
 
   while (now().getTime() < expiresAt.getTime()) {

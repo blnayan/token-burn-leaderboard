@@ -66,7 +66,11 @@ describe("runLogin", () => {
     });
 
     expect(log).toHaveBeenCalledWith(
-      "Could not open your browser automatically. Open this link in your browser: https://token-burn.test/cli/approve/ABCD-2345",
+      [
+        "Could not open your browser automatically.",
+        "Open this link in your browser:",
+        "https://token-burn.test/cli/approve/ABCD-2345",
+      ].join("\n"),
     );
     expect(log).not.toHaveBeenCalledWith("Waiting for approval. Press Ctrl+C to cancel.");
     expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
