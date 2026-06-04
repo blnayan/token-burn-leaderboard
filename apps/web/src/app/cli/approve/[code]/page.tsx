@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import React from "react";
 
 import { auth, signIn } from "@/auth";
 import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
@@ -121,9 +122,14 @@ export default async function CliApprovePage({
           This CLI login session is invalid or expired.
         </p>
       ) : alreadyApproved ? (
-        <p className="rounded-md border px-4 py-3 text-sm text-muted-foreground">
-          CLI login approved. You can return to your terminal.
-        </p>
+        <div className="flex flex-col gap-4">
+          <p className="rounded-md border px-4 py-3 text-sm text-muted-foreground">
+            CLI login approved. You can return to your terminal.
+          </p>
+          <Button asChild className="w-fit">
+            <a href={env.TOKEN_BURN_PUBLIC_URL}>Go to leaderboard</a>
+          </Button>
+        </div>
       ) : (
         <form action={approveCliLogin} className="flex flex-col gap-4">
           <input type="hidden" name="code" value={code} />
