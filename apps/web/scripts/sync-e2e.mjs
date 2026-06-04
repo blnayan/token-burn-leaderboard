@@ -119,35 +119,21 @@ async function waitForHealth() {
 async function seedMember() {
   const githubId = "sync-e2e-github-id";
   const githubLogin = "sync-e2e-user";
+  const githubName = "Sync E2E User";
   const displayName = "Sync E2E User";
 
-  await cleanupPriorE2eData({ githubId, githubLogin, displayName });
+  await cleanupPriorE2eData({ githubId, githubLogin });
 
   const user = await prisma.user.create({
-    data: { githubId, githubLogin },
+    data: { githubId, githubLogin, githubName },
   });
 
   return prisma.member.create({
-    data: { userId: user.id, displayName },
+    data: { userId: user.id, username: githubLogin, displayName },
   });
 }
 
-async function cleanupPriorE2eData({ githubId, githubLogin, displayName }) {
-  const displayNameMember = await prisma.member.findUnique({
-    where: { displayName },
-    include: { user: true },
-  });
-
-  if (
-    displayNameMember &&
-    displayNameMember.user.githubId !== githubId &&
-    displayNameMember.user.githubLogin !== githubLogin
-  ) {
-    throw new Error(
-      `Cannot seed sync E2E member because displayName ${JSON.stringify(displayName)} is already owned by a non-E2E user.`,
-    );
-  }
-
+async function cleanupPriorE2eData({ githubId, githubLogin }) {
   const e2eUsers = await prisma.user.findMany({
     where: { OR: [{ githubId }, { githubLogin }] },
     select: {
