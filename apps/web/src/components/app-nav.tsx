@@ -25,7 +25,6 @@ export async function AppNav({ session, currentPath = "/" }: AppNavProps) {
       })
     : null;
   const githubLogin = user?.githubLogin ?? session?.user?.githubLogin;
-  const isMember = Boolean(user?.member);
   const isAdmin = isAdminGithubLogin(githubLogin, env.ADMIN_GITHUB_LOGIN);
   const navSession =
     session?.user && githubLogin ? { ...session, user: { ...session.user, githubLogin } } : session;
@@ -42,11 +41,6 @@ export async function AppNav({ session, currentPath = "/" }: AppNavProps) {
               <AppNavLink currentPath={currentPath} href="/setup">
                 Setup
               </AppNavLink>
-              {isMember ? (
-                <AppNavLink currentPath={currentPath} href="/settings/display-name">
-                  Display name
-                </AppNavLink>
-              ) : null}
               {isAdmin ? (
                 <AppNavLink currentPath={currentPath} href="/admin/invites">
                   Invites

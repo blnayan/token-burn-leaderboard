@@ -128,9 +128,7 @@ describe("AppNav", () => {
       expires: "2026-06-04T00:00:00.000Z",
     });
 
-    expect(screen.getByRole("link", { name: "Display name" }).getAttribute("href")).toBe(
-      "/settings/display-name",
-    );
+    expect(screen.queryByRole("link", { name: "Display name" })).toBeNull();
     expect(screen.queryByRole("link", { name: "Invites" })).toBeNull();
     expect(screen.getByText("Signed in as @member-user")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();

@@ -1,12 +1,15 @@
 "use client";
 
-import { useActionState } from "react";
+import React, { useActionState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import type { DisplayNameFormState } from "./page";
+export type DisplayNameFormState = {
+  message: string | null;
+  value?: string;
+};
 
 type DisplayNameFormProps = {
   action: (state: DisplayNameFormState, formData: FormData) => Promise<DisplayNameFormState>;

@@ -1,13 +1,59 @@
 /** @jsxRuntime automatic */
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
 import { AppNav } from "@/components/app-nav";
+import { DisplayNameForm, type DisplayNameFormState } from "@/components/display-name-form";
 import { SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { prisma } from "@/lib/prisma";
+import { normalizeDisplayName } from "@/server/display-name";
 
 import { SetupCommandCopy } from "./setup-command-copy";
+
+export async function updateDisplayName(
+  _state: DisplayNameFormState,
+  formData: FormData,
+): Promise<DisplayNameFormState> {
+  "use server";
+
+  const session = await auth();
+  const githubId = session?.user?.githubId;
+  if (!githubId) return { message: "You must sign in with GitHub" };
+
+  const user = await prisma.user.findUnique({
+    where: { githubId },
+    select: { member: { select: { id: true } } },
+  });
+
+  if (!user?.member) return { message: "You must accept an invite before setting a display name" };
+
+  const value = String(formData.get("displayName") ?? "");
+  let displayName: string;
+
+  try {
+    displayName = normalizeDisplayName(value);
+  } catch (error) {
+    if (error instanceof Error) return { message: error.message, value };
+    throw error;
+  }
+
+  await prisma.member.update({
+    where: { id: user.member.id },
+    data: { displayName },
+  });
+
+  redirect("/setup");
+}
 
 export default async function SetupPage() {
   const session = await auth();
@@ -32,7 +78,7 @@ export default async function SetupPage() {
   const user = githubId
     ? await prisma.user.findUnique({
         where: { githubId },
-        select: { member: { select: { displayName: true } } },
+        select: { member: { select: { id: true, displayName: true } } },
       })
     : null;
 
@@ -71,9 +117,22 @@ export default async function SetupPage() {
                   You are currently shown as {user.member.displayName}.
                 </p>
               </div>
-              <Button asChild variant="outline" className="w-fit">
-                <Link href="/settings/display-name">Edit display name</Link>
-              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button type="button" variant="outline" className="w-fit">
+                    Edit display name
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Edit display name</DialogTitle>
+                    <DialogDescription>
+                      Choose the public name shown on the Token Burn leaderboard.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DisplayNameForm action={updateDisplayName} defaultValue={user.member.displayName} />
+                </DialogContent>
+              </Dialog>
             </div>
           </li>
 
