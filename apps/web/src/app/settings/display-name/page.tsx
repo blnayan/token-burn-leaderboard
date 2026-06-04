@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
+import { AppNav } from "@/components/app-nav";
+import { SignInWithGitHubButton } from "@/components/session-controls";
 import { prisma } from "@/lib/prisma";
 import { normalizeDisplayName } from "@/server/display-name";
 
@@ -49,16 +50,20 @@ export async function updateDisplayName(
 
 export default async function DisplayNamePage() {
   const session = await auth();
+  const appNav = await AppNav({ session, currentPath: "/settings/display-name" });
 
   if (!session?.user) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-5 py-8">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold">Set Display Name</h1>
-          <p className="text-sm text-muted-foreground">Sign in with GitHub to continue member setup.</p>
-        </div>
-        <SignInWithGitHubButton redirectTo="/settings/display-name" />
-      </main>
+      <>
+        {appNav}
+        <main className="mx-auto flex w-full max-w-md flex-col justify-center gap-6 px-5 py-16">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-semibold">Set Display Name</h1>
+            <p className="text-sm text-muted-foreground">Sign in with GitHub to continue member setup.</p>
+          </div>
+          <SignInWithGitHubButton redirectTo="/settings/display-name" />
+        </main>
+      </>
     );
   }
 
@@ -72,22 +77,26 @@ export default async function DisplayNamePage() {
 
   if (!user?.member) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-4 px-5 py-8">
-        <h1 className="text-3xl font-semibold">Invite Required</h1>
-        <p className="text-sm text-muted-foreground">Accept an invite before choosing a leaderboard display name.</p>
-        <SessionControls session={session} redirectTo="/settings/display-name" />
-      </main>
+      <>
+        {appNav}
+        <main className="mx-auto flex w-full max-w-md flex-col justify-center gap-4 px-5 py-16">
+          <h1 className="text-3xl font-semibold">Invite Required</h1>
+          <p className="text-sm text-muted-foreground">Accept an invite before choosing a leaderboard display name.</p>
+        </main>
+      </>
     );
   }
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center gap-6 px-5 py-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold">Set Display Name</h1>
-        <p className="text-sm text-muted-foreground">Choose the public name shown on the Token Burn leaderboard.</p>
-      </div>
-      <DisplayNameForm action={updateDisplayName} defaultValue={user.member.displayName} />
-      <SessionControls session={session} redirectTo="/settings/display-name" />
-    </main>
+    <>
+      {appNav}
+      <main className="mx-auto flex w-full max-w-md flex-col justify-center gap-6 px-5 py-16">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold">Set Display Name</h1>
+          <p className="text-sm text-muted-foreground">Choose the public name shown on the Token Burn leaderboard.</p>
+        </div>
+        <DisplayNameForm action={updateDisplayName} defaultValue={user.member.displayName} />
+      </main>
+    </>
   );
 }

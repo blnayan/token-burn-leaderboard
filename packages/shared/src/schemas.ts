@@ -62,6 +62,7 @@ export const leaderboardRowSchema = z.object({
   rank: z.number().int().positive(),
   displayName: z.string().min(1).max(80),
   totalTokens: z.number().int().nonnegative(),
+  totalCostUsd: costUsdSchema,
 });
 
 export type LeaderboardRow = z.infer<typeof leaderboardRowSchema>;

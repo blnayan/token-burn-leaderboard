@@ -45,14 +45,19 @@ export function SignOutButton({ redirectTo = "/" }: { redirectTo?: string }) {
 export function SessionControls({
   session,
   redirectTo = "/",
+  layout = "stack",
 }: {
   session: Session | null;
   redirectTo?: string;
+  layout?: "stack" | "inline";
 }) {
   if (!session?.user) return <SignInWithGitHubButton redirectTo={redirectTo} />;
 
+  const className =
+    layout === "inline" ? "flex flex-wrap items-center gap-3" : "flex flex-col items-start gap-2";
+
   return (
-    <div className="flex flex-col items-start gap-2 sm:items-end">
+    <div className={className} data-testid="session-controls">
       <p className="text-sm text-muted-foreground">Signed in as {getAccountLabel(session.user)}</p>
       <SignOutButton redirectTo={redirectTo} />
     </div>

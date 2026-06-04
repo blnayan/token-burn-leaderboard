@@ -25,6 +25,22 @@ export function formatTokens(value: number): string {
   return `${Math.trunc(value)}`;
 }
 
+export function formatUsd(value: number): string {
+  if (!Number.isFinite(value)) {
+    throw new Error("Cost totals must be finite numbers");
+  }
+  if (value < 0) {
+    throw new Error("Cost totals cannot be negative");
+  }
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value);
+}
+
 function trim(value: number): string {
   return (Math.trunc(value * 10) / 10).toFixed(1).replace(/\.0$/, "");
 }

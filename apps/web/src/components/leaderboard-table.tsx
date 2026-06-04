@@ -1,4 +1,5 @@
-import { formatTokens, type LeaderboardRow } from "@token-burn/shared";
+import { formatTokens, formatUsd, type LeaderboardRow } from "@token-burn/shared";
+import React from "react";
 
 import {
   Table,
@@ -26,6 +27,7 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
             <TableHead className="w-20">Rank</TableHead>
             <TableHead>Display Name</TableHead>
             <TableHead className="text-right">Tokens</TableHead>
+            <TableHead className="text-right">Cost</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -34,6 +36,7 @@ export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
               <TableCell className="font-mono text-muted-foreground">#{row.rank}</TableCell>
               <TableCell className="font-medium">{row.displayName}</TableCell>
               <TableCell className="text-right font-mono">{formatTokens(row.totalTokens)}</TableCell>
+              <TableCell className="text-right font-mono">{formatUsd(row.totalCostUsd)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

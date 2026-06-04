@@ -19,6 +19,10 @@ vi.mock("@/auth", () => ({
   signOut: vi.fn(),
 }));
 
+vi.mock("@/components/app-nav", () => ({
+  AppNav: vi.fn().mockResolvedValue(<nav data-testid="app-nav" />),
+}));
+
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     asChild,
@@ -114,8 +118,7 @@ describe("SetupPage", () => {
       "/settings/display-name",
     );
     expect(screen.getByRole("link", { name: "Go to leaderboard" }).getAttribute("href")).toBe("/");
-    expect(screen.getByText("Signed in as @member-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
   });
 
   it("shows sign-in guidance for signed-out visitors", async () => {
@@ -145,7 +148,6 @@ describe("SetupPage", () => {
     expect(screen.getByRole("heading", { name: "Invite Required" })).toBeTruthy();
     expect(screen.getByText("Accept an invite before setting up Token Burn sync.")).toBeTruthy();
     expect(screen.getByRole("link", { name: "Go to leaderboard" }).getAttribute("href")).toBe("/");
-    expect(screen.getByText("Signed in as @wrong-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
   });
 });

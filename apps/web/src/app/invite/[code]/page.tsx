@@ -13,19 +13,43 @@ export async function acceptInvite(formData: FormData) {
 
   const code = String(formData.get("code") ?? "");
   const session = await auth();
-  const githubId = session?.user?.githubId;
+  const sessionUser = session?.user;
 
-  if (!githubId) {
+  if (!sessionUser?.githubId) {
     await signIn("github", { redirectTo: `/invite/${encodeURIComponent(code)}` });
     return;
   }
 
-  const user = await prisma.user.findUnique({
+  const githubId = sessionUser.githubId;
+
+  let user = await prisma.user.findUnique({
     where: { githubId },
     select: { id: true, githubLogin: true, githubName: true },
   });
 
-  if (!user) throw new Error("Authenticated GitHub user was not found");
+  if (!user) {
+    const githubLogin = sessionUser.githubLogin;
+    const githubName = typeof sessionUser.name === "string" ? sessionUser.name : null;
+
+    if (!githubLogin) {
+      await signIn("github", { redirectTo: `/invite/${encodeURIComponent(code)}` });
+      return;
+    }
+
+    user = await prisma.user.upsert({
+      where: { githubId },
+      create: {
+        githubId,
+        githubLogin,
+        githubName,
+      },
+      update: {
+        githubLogin,
+        githubName,
+      },
+      select: { id: true, githubLogin: true, githubName: true },
+    });
+  }
 
   const codeHash = hashInviteCode(code);
   const invite = await prisma.invite.findUnique({

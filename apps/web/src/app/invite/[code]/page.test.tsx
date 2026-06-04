@@ -26,6 +26,7 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {
       findUnique: vi.fn(),
+      upsert: vi.fn(),
     },
     invite: {
       findUnique: vi.fn(),
@@ -47,7 +48,10 @@ import { acceptInvite } from "./page";
 
 const authMock = auth as unknown as {
   mockReset: () => void;
-  mockResolvedValue: (value: { user: { githubId: string }; expires: string }) => void;
+  mockResolvedValue: (value: {
+    user: { githubId: string; githubLogin?: string; name?: string | null };
+    expires: string;
+  }) => void;
 };
 
 const redirectMock = redirect as unknown as {
@@ -78,6 +82,7 @@ type TransactionMockFn = {
 const prismaMock = prisma as unknown as {
   user: {
     findUnique: MockFn;
+    upsert: MockFn;
   };
   invite: {
     findUnique: MockFn;
@@ -100,6 +105,7 @@ describe("acceptInvite", () => {
       throw new Error(`NEXT_REDIRECT:${url}`);
     });
     prismaMock.user.findUnique.mockReset();
+    prismaMock.user.upsert.mockReset();
     prismaMock.invite.findUnique.mockReset();
     prismaMock.invite.updateMany.mockReset();
     prismaMock.member.upsert.mockReset();
@@ -110,10 +116,17 @@ describe("acceptInvite", () => {
     authMock.mockResolvedValue({
       user: {
         githubId: "github-1",
+        githubLogin: "blnayan",
+        name: "Nayan Bhut",
       },
       expires: "2026-06-04T00:00:00.000Z",
     });
     prismaMock.user.findUnique.mockResolvedValue({
+      id: "user-1",
+      githubLogin: "blnayan",
+      githubName: "Nayan Bhut",
+    });
+    prismaMock.user.upsert.mockResolvedValue({
       id: "user-1",
       githubLogin: "blnayan",
       githubName: "Nayan Bhut",
@@ -173,5 +186,49 @@ describe("acceptInvite", () => {
       throw redirectError;
     }).toThrow("NEXT_REDIRECT:/setup");
     expect(redirectMock.mock.calls.at(-1)).toEqual(["/setup"]);
+  });
+
+  it("recreates a missing user from a stale signed session before accepting an invite", async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+
+    const formData = new FormData();
+    formData.set("code", "abc123");
+
+    let redirectError: unknown;
+    try {
+      await acceptInvite(formData);
+    } catch (error) {
+      redirectError = error;
+    }
+
+    expect(prismaMock.user.upsert).toHaveBeenCalledWith({
+      where: { githubId: "github-1" },
+      create: {
+        githubId: "github-1",
+        githubLogin: "blnayan",
+        githubName: "Nayan Bhut",
+      },
+      update: {
+        githubLogin: "blnayan",
+        githubName: "Nayan Bhut",
+      },
+      select: {
+        id: true,
+        githubLogin: true,
+        githubName: true,
+      },
+    });
+    expect(txMemberUpsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          userId: "user-1",
+          username: "blnayan",
+          displayName: "Nayan Bhut",
+        }),
+      }),
+    );
+    expect(() => {
+      throw redirectError;
+    }).toThrow("NEXT_REDIRECT:/setup");
   });
 });

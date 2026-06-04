@@ -15,6 +15,10 @@ vi.mock("@/auth", () => ({
   signOut: vi.fn(),
 }));
 
+vi.mock("@/components/app-nav", () => ({
+  AppNav: vi.fn().mockResolvedValue(<nav data-testid="app-nav" />),
+}));
+
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     asChild,
@@ -102,6 +106,7 @@ describe("AdminInvitesPage", () => {
 
     expect(screen.getByRole("heading", { name: "Invites" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
   });
 
   it("lets signed-in non-admin users sign out and switch accounts", async () => {
@@ -120,8 +125,7 @@ describe("AdminInvitesPage", () => {
 
     expect(screen.getByRole("heading", { name: "Admin Required" })).toBeTruthy();
     expect(screen.getByText("Only the configured admin can create invites.")).toBeTruthy();
-    expect(screen.getByText("Signed in as @wrong-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
   });
 
   it("lets the configured admin create invites and sign out", async () => {
@@ -140,7 +144,6 @@ describe("AdminInvitesPage", () => {
 
     expect(screen.getByRole("heading", { name: "Invites" })).toBeTruthy();
     expect(screen.getByRole("button", { name: "Create invite" })).toBeTruthy();
-    expect(screen.getByText("Signed in as @admin-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
   });
 });

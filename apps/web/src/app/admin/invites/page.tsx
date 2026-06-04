@@ -2,7 +2,8 @@
 import { redirect } from "next/navigation";
 
 import { auth } from "@/auth";
-import { SessionControls, SignInWithGitHubButton } from "@/components/session-controls";
+import { AppNav } from "@/components/app-nav";
+import { SignInWithGitHubButton } from "@/components/session-controls";
 import { Button } from "@/components/ui/button";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -42,16 +43,20 @@ export default async function AdminInvitesPage({
   searchParams: Promise<{ code?: string }>;
 }) {
   const session = await auth();
+  const appNav = await AppNav({ session, currentPath: "/admin/invites" });
 
   if (!session?.user) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-6 px-5 py-8">
-        <div className="flex flex-col gap-2">
-          <h1 className="text-3xl font-semibold">Invites</h1>
-          <p className="text-sm text-muted-foreground">Sign in with GitHub to manage member invites.</p>
-        </div>
-        <SignInWithGitHubButton redirectTo="/admin/invites" />
-      </main>
+      <>
+        {appNav}
+        <main className="mx-auto flex w-full max-w-xl flex-col justify-center gap-6 px-5 py-16">
+          <div className="flex flex-col gap-2">
+            <h1 className="text-3xl font-semibold">Invites</h1>
+            <p className="text-sm text-muted-foreground">Sign in with GitHub to manage member invites.</p>
+          </div>
+          <SignInWithGitHubButton redirectTo="/admin/invites" />
+        </main>
+      </>
     );
   }
 
@@ -65,11 +70,13 @@ export default async function AdminInvitesPage({
 
   if (!user || user.githubLogin !== env.ADMIN_GITHUB_LOGIN) {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-4 px-5 py-8">
-        <h1 className="text-3xl font-semibold">Admin Required</h1>
-        <p className="text-sm text-muted-foreground">Only the configured admin can create invites.</p>
-        <SessionControls session={session} redirectTo="/admin/invites" />
-      </main>
+      <>
+        {appNav}
+        <main className="mx-auto flex w-full max-w-xl flex-col justify-center gap-4 px-5 py-16">
+          <h1 className="text-3xl font-semibold">Admin Required</h1>
+          <p className="text-sm text-muted-foreground">Only the configured admin can create invites.</p>
+        </main>
+      </>
     );
   }
 
@@ -88,19 +95,21 @@ export default async function AdminInvitesPage({
   const ignoredCode = code && !invite;
 
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-xl flex-col justify-center gap-6 px-5 py-8">
-      <div className="flex flex-col gap-2">
-        <h1 className="text-3xl font-semibold">Invites</h1>
-        <p className="text-sm text-muted-foreground">Create a one-time member invite that expires in seven days.</p>
-      </div>
+    <>
+      {appNav}
+      <main className="mx-auto flex w-full max-w-xl flex-col justify-center gap-6 px-5 py-16">
+        <div className="flex flex-col gap-2">
+          <h1 className="text-3xl font-semibold">Invites</h1>
+          <p className="text-sm text-muted-foreground">Create a one-time member invite that expires in seven days.</p>
+        </div>
 
-      <form action={createInvite}>
-        <Button type="submit">Create invite</Button>
-      </form>
+        <form action={createInvite}>
+          <Button type="submit">Create invite</Button>
+        </form>
 
-      {inviteUrl ? <InviteUrlCopy inviteUrl={inviteUrl} /> : null}
-      {ignoredCode ? <p className="text-sm text-muted-foreground">That invite link is no longer available.</p> : null}
-      <SessionControls session={session} redirectTo="/admin/invites" />
-    </main>
+        {inviteUrl ? <InviteUrlCopy inviteUrl={inviteUrl} /> : null}
+        {ignoredCode ? <p className="text-sm text-muted-foreground">That invite link is no longer available.</p> : null}
+      </main>
+    </>
   );
 }

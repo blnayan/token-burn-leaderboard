@@ -11,6 +11,10 @@ vi.mock("@/auth", () => ({
   signIn: vi.fn(),
 }));
 
+vi.mock("@/components/app-nav", () => ({
+  AppNav: vi.fn(),
+}));
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     user: {

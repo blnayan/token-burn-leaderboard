@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatTokens, sumTokenCategories } from "./tokens";
+import { formatTokens, formatUsd, sumTokenCategories } from "./tokens";
 
 describe("sumTokenCategories", () => {
   it("counts every token category in the score", () => {
@@ -32,5 +32,17 @@ describe("formatTokens", () => {
   it("rejects invalid token totals", () => {
     expect(() => formatTokens(-1)).toThrow("Token totals cannot be negative");
     expect(() => formatTokens(Number.POSITIVE_INFINITY)).toThrow("Token totals must be finite numbers");
+  });
+});
+
+describe("formatUsd", () => {
+  it("formats USD values with a dollar sign, commas, and cents", () => {
+    expect(formatUsd(1234.5)).toBe("$1,234.50");
+    expect(formatUsd(0.123456)).toBe("$0.12");
+  });
+
+  it("rejects invalid cost totals", () => {
+    expect(() => formatUsd(-1)).toThrow("Cost totals cannot be negative");
+    expect(() => formatUsd(Number.POSITIVE_INFINITY)).toThrow("Cost totals must be finite numbers");
   });
 });

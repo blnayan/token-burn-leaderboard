@@ -19,6 +19,10 @@ vi.mock("@/auth", () => ({
   signOut: vi.fn(),
 }));
 
+vi.mock("@/components/app-nav", () => ({
+  AppNav: vi.fn().mockResolvedValue(<nav data-testid="app-nav" />),
+}));
+
 vi.mock("@/lib/env", () => ({
   env: {
     ADMIN_GITHUB_LOGIN: "admin-user",
@@ -62,6 +66,7 @@ vi.mock("@/server/leaderboard", () => ({
 }));
 
 import { auth } from "@/auth";
+import { AppNav } from "@/components/app-nav";
 
 import HomePage from "./page";
 
@@ -78,20 +83,28 @@ const authMock = auth as unknown as {
   mockResolvedValue: (value: AuthMockSession) => void;
 };
 
+const appNavMock = AppNav as unknown as {
+  mockClear: () => void;
+  mockResolvedValue: (value: ReactNode) => void;
+  mock: { calls: Array<[unknown]> };
+};
+
 async function renderHomePage() {
   render(await HomePage({ searchParams: Promise.resolve({}) }));
 }
 
-describe("HomePage admin invite button", () => {
+describe("HomePage", () => {
   beforeEach(() => {
     authMock.mockReset();
+    appNavMock.mockClear();
+    appNavMock.mockResolvedValue(<nav data-testid="app-nav" />);
   });
 
   afterEach(() => {
     cleanup();
   });
 
-  it("renders an invite link for the configured admin", async () => {
+  it("renders the leaderboard with app navigation", async () => {
     authMock.mockResolvedValue({
       user: {
         githubLogin: "admin-user",
@@ -101,13 +114,35 @@ describe("HomePage admin invite button", () => {
 
     await renderHomePage();
 
-    const inviteLink = screen.getByRole("link", { name: "Invite" });
-    expect(inviteLink.getAttribute("href")).toBe("/admin/invites");
-    expect(screen.getByText("Signed in as @admin-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Leaderboard" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Token Burn" })).toBeNull();
+    expect(screen.queryByText("Public leaderboard. Private submissions.")).toBeNull();
+    expect(screen.getByTestId("period-tabs")).toBeTruthy();
+    expect(screen.getByTestId("leaderboard-table")).toBeTruthy();
+    expect(appNavMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      currentPath: "/",
+      session: {
+        user: {
+          githubLogin: "admin-user",
+        },
+      },
+    });
   });
 
-  it("renders account controls without an invite link for a non-admin user", async () => {
+  it("passes signed-out sessions to app navigation", async () => {
+    authMock.mockResolvedValue(null);
+
+    await renderHomePage();
+
+    expect(screen.getByTestId("app-nav")).toBeTruthy();
+    expect(appNavMock.mock.calls.at(-1)?.[0]).toMatchObject({
+      currentPath: "/",
+      session: null,
+    });
+  });
+
+  it("keeps account controls out of the leaderboard header", async () => {
     authMock.mockResolvedValue({
       user: {
         githubLogin: "member-user",
@@ -117,17 +152,8 @@ describe("HomePage admin invite button", () => {
 
     await renderHomePage();
 
-    expect(screen.queryByRole("link", { name: "Invite" })).toBeNull();
-    expect(screen.getByText("Signed in as @member-user")).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Sign out" })).toBeTruthy();
-  });
-
-  it("renders sign-in controls without an invite link for signed-out users", async () => {
-    authMock.mockResolvedValue(null);
-
-    await renderHomePage();
-
-    expect(screen.queryByRole("link", { name: "Invite" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Sign in with GitHub" })).toBeTruthy();
+    const leaderboardHeader = screen.getByRole("banner");
+    expect(leaderboardHeader.textContent).not.toContain("Signed in as @member-user");
+    expect(leaderboardHeader.textContent).not.toContain("Sign out");
   });
 });
