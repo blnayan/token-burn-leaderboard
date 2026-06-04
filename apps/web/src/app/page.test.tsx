@@ -120,6 +120,9 @@ describe("HomePage", () => {
     expect(screen.queryByText("Public leaderboard. Private submissions.")).toBeNull();
     expect(screen.getByTestId("period-tabs")).toBeTruthy();
     expect(screen.getByTestId("leaderboard-table")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "GitHub" }).getAttribute("href")).toBe(
+      "https://github.com/blnayan/token-burn-leaderboard",
+    );
     expect(appNavMock.mock.calls.at(-1)?.[0]).toMatchObject({
       currentPath: "/",
       session: {

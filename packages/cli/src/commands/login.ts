@@ -1,3 +1,6 @@
+import { execFile as execFileCallback } from "node:child_process";
+import { promisify } from "node:util";
+
 import { Command } from "commander";
 import { z } from "zod";
 
@@ -29,6 +32,7 @@ export type LoginDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
   log?: (message: string) => void;
+  openBrowser?: (url: string) => Promise<void>;
   sleep?: (milliseconds: number) => Promise<void>;
   now?: () => Date;
 };
@@ -43,6 +47,7 @@ export async function runLogin({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
   log = console.log,
+  openBrowser = openDefaultBrowser,
   sleep = defaultSleep,
   now = () => new Date(),
 }: LoginOptions): Promise<void> {
@@ -53,8 +58,13 @@ export async function runLogin({
   );
   const expiresAt = new Date(startResponse.expiresAt);
 
-  log(startResponse.loginUrl);
-  log("Waiting for approval. Press Ctrl+C to cancel.");
+  try {
+    await openBrowser(startResponse.loginUrl);
+    log("Opening approval link in your browser...");
+    log("Waiting for approval. Press Ctrl+C to cancel.");
+  } catch {
+    log(`Could not open your browser automatically. Open this link in your browser: ${startResponse.loginUrl}`);
+  }
 
   while (now().getTime() < expiresAt.getTime()) {
     const pollResponse = loginPollResponseSchema.parse(
@@ -93,6 +103,22 @@ export function createLoginCommand(): Command {
 
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.replace(/\/+$/, "");
+}
+
+const execFileAsync = promisify(execFileCallback);
+
+async function openDefaultBrowser(url: string): Promise<void> {
+  if (process.platform === "darwin") {
+    await execFileAsync("open", [url]);
+    return;
+  }
+
+  if (process.platform === "win32") {
+    await execFileAsync("cmd", ["/c", "start", "", url]);
+    return;
+  }
+
+  await execFileAsync("xdg-open", [url]);
 }
 
 function defaultSleep(milliseconds: number): Promise<void> {
