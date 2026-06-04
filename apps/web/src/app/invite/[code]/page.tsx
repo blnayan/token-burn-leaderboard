@@ -61,7 +61,7 @@ export async function acceptInvite(formData: FormData) {
     if (redeemed.count !== 1) throw new Error("Invite is invalid or expired");
   });
 
-  redirect("/settings/display-name");
+  redirect("/setup");
 }
 
 export default async function InvitePage({ params }: { params: Promise<{ code: string }> }) {
