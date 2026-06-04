@@ -102,7 +102,7 @@ jobs:
         run: node scripts/e2e-cli-cross-platform.mjs
 
   sync-e2e:
-    name: Sync E2E
+    name: Setup + Sync E2E
     needs: unit
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -177,7 +177,7 @@ jobs:
           }
           echo "WEB_PID=$web_pid" >> "$GITHUB_ENV"
 
-      - name: Run sync E2E
+      - name: Run setup and sync E2E
         run: pnpm --filter @token-burn/web test:sync-e2e
 
       - name: Show web server logs on failure

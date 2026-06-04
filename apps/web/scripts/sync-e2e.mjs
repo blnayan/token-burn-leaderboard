@@ -1,7 +1,6 @@
-import crypto from "node:crypto";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { spawn } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -17,11 +16,11 @@ assertLocalE2eTargets({ databaseUrl, serverUrl });
 const adapter = new PrismaPg({ connectionString: databaseUrl });
 const prisma = new PrismaClient({ adapter });
 
-const expectedDeviceId = "4f43b27d-7d86-4ff8-8c98-f74158819e59";
 const expectedDeviceName = hostname();
 const expectedDate = "2026-06-03";
 const expectedOs = process.platform;
 const syncTimeoutMs = 60_000;
+const setupTimeoutMs = 90_000;
 
 const expectedProviders = {
   claude_code: {
@@ -71,23 +70,22 @@ try {
   await waitForHealth();
 
   const member = await seedMember();
-  const token = await mintCliToken(member.id);
-  await assertCliTokenStartsUnused({ memberId: member.id, token });
   const fixtureDir = await writeFixtures();
-  const configDir = await writeConfig(token);
+  const setup = await runSetupFlow({ memberId: member.id, fixtureDir });
+  const { configDir, config } = setup;
+  const expectedDeviceId = config.deviceId;
 
-  await runSync({ configDir, fixtureDir, expectSuccess: true });
-  await assertDatabaseState({ memberId: member.id, expectedLastSyncCount: 1 });
+  await assertDatabaseState({ memberId: member.id, expectedDeviceId, expectedLastSyncCount: 1 });
   const countsAfterFirstSync = await readCounts(member.id);
 
   await runSync({ configDir, fixtureDir, expectSuccess: true });
-  await assertDatabaseState({ memberId: member.id, expectedLastSyncCount: 2 });
+  await assertDatabaseState({ memberId: member.id, expectedDeviceId, expectedLastSyncCount: 2 });
   const countsAfterSecondSync = await readCounts(member.id);
   assertJsonEqual(countsAfterSecondSync, countsAfterFirstSync, "second sync row counts");
 
   const countsBeforeBadToken = await readCounts(member.id);
   const globalCountsBeforeBadToken = await readGlobalCounts();
-  const badConfigDir = await writeConfig("tb_bad_token_for_e2e");
+  const badConfigDir = await writeAuthenticatedConfig("tb_bad_token_for_e2e", { deviceId: expectedDeviceId });
   await runSync({ configDir: badConfigDir, fixtureDir, expectSuccess: false });
   await assertCountsUnchanged(member.id, countsBeforeBadToken);
   await assertGlobalCountsUnchanged(globalCountsBeforeBadToken);
@@ -146,38 +144,133 @@ async function cleanupPriorE2eData({ githubId, githubLogin }) {
   if (memberIds.length > 0) {
     await prisma.cliLoginSession.deleteMany({ where: { memberId: { in: memberIds } } });
   }
+  await prisma.cliLoginSession.deleteMany({ where: { memberId: null } });
 
   await prisma.user.deleteMany({
     where: { id: { in: e2eUsers.map((user) => user.id) } },
   });
 }
 
-async function mintCliToken(memberId) {
-  const startResponse = await postJson("/api/cli/login/start", {});
-  const pollToken = requireString(startResponse.pollToken, "pollToken");
-  const loginUrl = requireString(startResponse.loginUrl, "loginUrl");
+async function runSetupFlow({ memberId, fixtureDir }) {
+  const configDir = await makeTempDir("token-burn-setup-config-");
+  const schedulerRuntime = await writeFakeSchedulerRuntime();
+  const setupResultPromise = run(
+    cliBin,
+    ["setup", "--server-url", serverUrl],
+    {
+      HOME: schedulerRuntime.homeDir,
+      PATH: `${schedulerRuntime.binDir}${delimiter}${process.env.PATH ?? ""}`,
+      TOKEN_BURN_CONFIG_DIR: configDir,
+      TOKEN_BURN_E2E_FIXTURE_DIR: fixtureDir,
+    },
+    setupTimeoutMs,
+  );
 
-  await prisma.cliLoginSession.update({
-    where: { pollTokenHash: hashSecret(pollToken) },
-    data: { approvedAt: new Date(), memberId },
-  });
+  await approveNextCliLoginSession(memberId);
+  const result = await setupResultPromise;
 
-  const pollResponse = await postJson("/api/cli/login/poll", { pollToken });
-  if (pollResponse.status !== "approved") {
-    throw new Error(`Expected approved login poll for ${loginUrl}.`);
+  if (result.error) {
+    throw new Error(`Failed to start token-burn setup: ${result.error}`);
   }
 
-  return requireString(pollResponse.token, "token");
+  if (result.timedOut) {
+    throw new Error(
+      `token-burn setup timed out after ${result.timeoutMs}ms.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
+    );
+  }
+
+  if (result.code !== 0) {
+    throw new Error(`Expected token-burn setup to pass.\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`);
+  }
+
+  const output = `${result.stdout}\n${result.stderr}`;
+  assertIncludes(output, "Starting Token Burn setup.", "setup output should include start message");
+  assertIncludes(output, "Waiting for approval. Press Ctrl+C to cancel.", "setup output should include login wait message");
+  assertIncludes(output, "Authenticated as sync-e2e-user.", "setup output should authenticate with GitHub username");
+  assertIncludes(output, "Submitted 2 usage rows.", "setup output should include first sync summary");
+  assertIncludes(output, "First sync complete.", "setup output should include first sync completion");
+  assertIncludes(
+    output,
+    "Installed Token Burn systemd user timer token-burn-sync.timer.",
+    "setup output should include scheduler install",
+  );
+  assertIncludes(
+    output,
+    "Setup complete. Automatic sync will run every 15 minutes.",
+    "setup output should include completion",
+  );
+
+  const config = JSON.parse(await readFile(join(configDir, "config.json"), "utf8"));
+  assertEqual(config.serverUrl, serverUrl, "setup config serverUrl");
+  assertMatches(config.token, /^tb_[A-Za-z0-9._-]+$/, "setup config token");
+  assertMatches(config.deviceId, /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, "setup config deviceId");
+  assertEqual(config.deviceName, expectedDeviceName, "setup config deviceName");
+  assertEqual(config.lastSync?.ok, true, "setup config lastSync.ok");
+  assertIncludes(config.lastSync?.message ?? "", "Submitted 2 usage rows.", "setup config lastSync message");
+
+  const servicePath = join(schedulerRuntime.homeDir, ".config", "systemd", "user", "token-burn-sync.service");
+  const timerPath = join(schedulerRuntime.homeDir, ".config", "systemd", "user", "token-burn-sync.timer");
+  const service = await readFile(servicePath, "utf8");
+  const timer = await readFile(timerPath, "utf8");
+  assertIncludes(service, "ExecStart=", "setup should write systemd service");
+  assertIncludes(service, "token-burn sync", "setup scheduler service should run token-burn sync");
+  assertIncludes(timer, "OnUnitActiveSec=15min", "setup should write 15 minute systemd timer");
+
+  return { configDir, config };
 }
 
-async function assertCliTokenStartsUnused({ memberId, token }) {
-  const cliToken = await prisma.cliToken.findFirst({
-    where: { memberId, tokenHash: hashSecret(token) },
-    select: { lastUsedAt: true },
-  });
+async function approveNextCliLoginSession(memberId) {
+  for (let attempt = 1; attempt <= 60; attempt += 1) {
+    const session = await prisma.cliLoginSession.findFirst({
+      where: {
+        memberId: null,
+        approvedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { id: true },
+    });
 
-  assert(cliToken, "Expected minted CLI token row.");
-  assert(cliToken.lastUsedAt === null, "Expected minted CLI token lastUsedAt to start as null.");
+    if (session) {
+      await prisma.cliLoginSession.update({
+        where: { id: session.id },
+        data: { approvedAt: new Date(), memberId },
+      });
+      return;
+    }
+
+    await delay(500);
+  }
+
+  throw new Error("Timed out waiting for token-burn setup to create a CLI login session.");
+}
+
+async function writeFakeSchedulerRuntime() {
+  const homeDir = await makeTempDir("token-burn-scheduler-home-");
+  const binDir = await makeTempDir("token-burn-scheduler-bin-");
+
+  if (process.platform === "linux") {
+    await writeExecutable(
+      join(binDir, "systemctl"),
+      ["#!/bin/sh", `printf '%s\\n' "$*" >> ${shellQuote(join(homeDir, "systemctl.log"))}`, "exit 0", ""].join("\n"),
+    );
+    return { binDir, homeDir };
+  }
+
+  if (process.platform === "darwin") {
+    await writeExecutable(
+      join(binDir, "launchctl"),
+      ["#!/bin/sh", `printf '%s\\n' "$*" >> ${shellQuote(join(homeDir, "launchctl.log"))}`, "exit 0", ""].join("\n"),
+    );
+    return { binDir, homeDir };
+  }
+
+  throw new Error(`Setup E2E scheduler isolation does not support ${process.platform}.`);
+}
+
+async function writeExecutable(path, content) {
+  await writeFile(path, content, "utf8");
+  await chmod(path, 0o755);
 }
 
 async function writeFixtures() {
@@ -262,12 +355,12 @@ async function writeFixtures() {
   return dir;
 }
 
-async function writeConfig(token) {
+async function writeAuthenticatedConfig(token, { deviceId }) {
   const dir = await makeTempDir("token-burn-config-");
   const config = {
     serverUrl,
     token,
-    deviceId: expectedDeviceId,
+    deviceId,
     deviceName: expectedDeviceName,
   };
 
@@ -304,7 +397,7 @@ async function runSync({ configDir, fixtureDir, expectSuccess }) {
   }
 }
 
-async function assertDatabaseState({ memberId, expectedLastSyncCount }) {
+async function assertDatabaseState({ memberId, expectedDeviceId, expectedLastSyncCount }) {
   const device = await prisma.device.findUnique({
     where: {
       memberId_clientDeviceId: {
@@ -472,10 +565,6 @@ async function makeTempDir(prefix) {
   return dir;
 }
 
-function hashSecret(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
-}
-
 function requiredEnv(name) {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required.`);
@@ -505,13 +594,6 @@ function isLocalHost(host) {
   return host === "localhost" || host === "127.0.0.1" || host === "::1";
 }
 
-function requireString(value, name) {
-  if (typeof value !== "string" || value.length === 0) {
-    throw new Error(`Expected ${name} to be a non-empty string.`);
-  }
-  return value;
-}
-
 function formatDate(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -527,6 +609,18 @@ function assert(value, message) {
 function assertEqual(actual, expected, label) {
   if (actual !== expected) {
     throw new Error(`${label}: expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}.`);
+  }
+}
+
+function assertIncludes(actual, expected, label) {
+  if (typeof actual !== "string" || !actual.includes(expected)) {
+    throw new Error(`${label}: expected ${JSON.stringify(actual)} to include ${JSON.stringify(expected)}.`);
+  }
+}
+
+function assertMatches(actual, expected, label) {
+  if (typeof actual !== "string" || !expected.test(actual)) {
+    throw new Error(`${label}: expected ${JSON.stringify(actual)} to match ${expected}.`);
   }
 }
 
@@ -556,4 +650,8 @@ function sortJsonValue(value) {
   }
 
   return value;
+}
+
+function shellQuote(value) {
+  return `'${value.replaceAll("'", "'\\''")}'`;
 }
