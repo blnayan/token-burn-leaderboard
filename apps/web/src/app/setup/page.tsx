@@ -5,6 +5,8 @@ import { auth, signIn } from "@/auth";
 import { Button } from "@/components/ui/button";
 import { prisma } from "@/lib/prisma";
 
+import { SetupCommandCopy } from "./setup-command-copy";
+
 async function signInWithGitHub() {
   "use server";
 
@@ -80,9 +82,7 @@ export default async function SetupPage() {
                 Open a terminal on the device you want to track and run this command.
               </p>
             </div>
-            <pre className="overflow-x-auto rounded-md bg-muted px-3 py-2 text-sm">
-              <code>npx @blnayan/token-burn@latest setup</code>
-            </pre>
+            <SetupCommandCopy />
           </div>
         </li>
 

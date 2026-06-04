@@ -44,6 +44,11 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+vi.mock("./setup-command-copy", () => ({
+  SETUP_COMMAND: "npx @blnayan/token-burn@latest setup",
+  SetupCommandCopy: () => <div>npx @blnayan/token-burn@latest setup</div>,
+}));
+
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 
