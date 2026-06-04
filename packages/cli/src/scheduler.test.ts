@@ -236,17 +236,38 @@ describe("scheduler install runtime", () => {
 });
 
 describe("scheduler commands", () => {
-  it("defaults to invoking the current CLI entrypoint through node", () => {
-    expect(
-      getDefaultSyncCommandArgv({
-        argv: ["/usr/bin/node", "/repo/packages/cli/dist/index.js", "install-scheduler", "--dry-run"],
-        execPath: "/usr/bin/node",
-      }),
-    ).toEqual(["/usr/bin/node", "/repo/packages/cli/dist/index.js", "sync"]);
+  it("defaults to npm latest sync on Linux and macOS", () => {
+    expect(getDefaultSyncCommandArgv({ platform: "linux" })).toEqual([
+      "npm",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+
+    expect(getDefaultSyncCommandArgv({ platform: "darwin" })).toEqual([
+      "npm",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
   });
 
-  it("falls back to the installed binary name when no CLI entrypoint is present", () => {
-    expect(getDefaultSyncCommandArgv({ argv: ["/usr/bin/node"], execPath: "/usr/bin/node" })).toEqual([
+  it("defaults to npm.cmd latest sync on Windows", () => {
+    expect(getDefaultSyncCommandArgv({ platform: "win32" })).toEqual([
+      "npm.cmd",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
       "token-burn",
       "sync",
     ]);
@@ -258,18 +279,29 @@ describe("scheduler commands", () => {
     await runInstallScheduler({
       dryRun: true,
       platform: "linux",
-      syncCommandArgv: ["/usr/bin/node", "/repo/packages/cli/dist/index.js", "sync"],
+      syncCommandArgv: [
+        "npm",
+        "exec",
+        "--yes",
+        "--package",
+        "@blnayan/token-burn@latest",
+        "--",
+        "token-burn",
+        "sync",
+      ],
       log,
     });
 
     const output = log.mock.calls[0]?.[0] as string;
     expect(output).toContain("token-burn-sync.service");
-    expect(output).toContain("ExecStart=/usr/bin/node /repo/packages/cli/dist/index.js sync");
+    expect(output).toContain(
+      "ExecStart=npm exec --yes --package @blnayan/token-burn@latest -- token-burn sync",
+    );
     expect(output).toContain("token-burn-sync.timer");
     expect(output).toContain("OnUnitActiveSec=15min");
     expect(output).toContain("# Cron fallback");
     expect(output).toContain(
-      "*/15 * * * * '/usr/bin/node' '/repo/packages/cli/dist/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+      "*/15 * * * * 'npm' 'exec' '--yes' '--package' '@blnayan/token-burn@latest' '--' 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 

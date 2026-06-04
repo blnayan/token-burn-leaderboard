@@ -26,7 +26,7 @@ export type UninstallSchedulerOptions = {
 export async function runInstallScheduler({
   dryRun,
   platform = process.platform,
-  syncCommandArgv = getDefaultSyncCommandArgv(),
+  syncCommandArgv = getDefaultSyncCommandArgv({ platform }),
   install = async (selectedPlatform, selectedSyncCommandArgv) =>
     installScheduler({
       runtime: createNodeSchedulerRuntime(selectedPlatform),
@@ -66,14 +66,20 @@ export function createUninstallSchedulerCommand(): Command {
 }
 
 export function getDefaultSyncCommandArgv({
-  argv = process.argv,
-  execPath = process.execPath,
+  platform = process.platform,
 }: {
-  argv?: readonly string[];
-  execPath?: string;
+  platform?: SchedulerPlatform;
 } = {}): SchedulerCommandArgv {
-  const cliEntrypoint = argv[1];
-  if (!cliEntrypoint) return ["token-burn", "sync"];
+  const npmCommand = platform === "win32" ? "npm.cmd" : "npm";
 
-  return [execPath, cliEntrypoint, "sync"];
+  return [
+    npmCommand,
+    "exec",
+    "--yes",
+    "--package",
+    "@blnayan/token-burn@latest",
+    "--",
+    "token-burn",
+    "sync",
+  ];
 }
