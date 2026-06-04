@@ -21,6 +21,8 @@ token-burn setup
 
 ## Commands
 
+Command names are shown as `token-burn`; use `npx @blnayan/token-burn@latest <command>` for no-install usage, or run them after a global install.
+
 - `token-burn setup` authenticates, syncs once, and installs automatic sync.
 - `token-burn login` authenticates the CLI with `https://tokenburn.nayanbhut.dev`.
 - `token-burn login --server-url <url>` authenticates with another Token Burn server.

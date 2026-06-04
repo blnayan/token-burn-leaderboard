@@ -29,10 +29,10 @@ You do not need a global `token-burn` install for normal usage.
 Optional troubleshooting commands:
 
 ```bash
-token-burn status
-token-burn devices
-token-burn devices merge <old-device-id> <new-device-id>
-token-burn uninstall-scheduler
+npx @blnayan/token-burn@latest status
+npx @blnayan/token-burn@latest devices
+npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
+npx @blnayan/token-burn@latest uninstall-scheduler
 ```
 
 For more CLI details, see [packages/cli/README.md](packages/cli/README.md) and [docs/cli-install.md](docs/cli-install.md).
@@ -68,10 +68,9 @@ The CLI keeps a random per-install device ID in your local Token Burn config. No
 If the config is deleted or a duplicate device appears:
 
 ```bash
-token-burn login
-token-burn sync
-token-burn devices
-token-burn devices merge <old-device-id> <new-device-id>
+npx @blnayan/token-burn@latest setup
+npx @blnayan/token-burn@latest devices
+npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
 ```
 
 Merges automatically keep the higher total for overlapping provider/date rows.
