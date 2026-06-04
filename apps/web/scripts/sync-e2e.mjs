@@ -187,7 +187,7 @@ async function runSetupFlow({ memberId, fixtureDir }) {
   assertIncludes(output, "Starting Token Burn setup.", "setup output should include start message");
   assertIncludes(
     output,
-    "Could not open your browser automatically. Open this link in your browser:",
+    "Could not open your browser automatically.\nOpen this link in your browser:\n",
     "setup output should include manual login URL fallback",
   );
   assertNotIncludes(
