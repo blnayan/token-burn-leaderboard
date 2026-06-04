@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
@@ -124,16 +124,31 @@ describe("acceptInvite", () => {
     });
   });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("redirects accepted invites to setup instructions", async () => {
     const formData = new FormData();
     formData.set("code", "abc123");
 
     await expect(acceptInvite(formData)).rejects.toThrow("NEXT_REDIRECT:/setup");
 
+    expect(prismaMock.$transaction).toHaveBeenCalled();
+    expect(prismaMock.member.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          userId: "user-1",
+        }),
+        where: {
+          userId: "user-1",
+        },
+      }),
+    );
+    expect(prismaMock.invite.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: "invite-1",
+          redeemedAt: null,
+        }),
+      }),
+    );
     expect(redirectMock.mock.calls.at(-1)).toEqual(["/setup"]);
   });
 });
