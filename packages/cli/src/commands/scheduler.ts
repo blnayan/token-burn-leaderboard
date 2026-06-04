@@ -67,13 +67,18 @@ export function createUninstallSchedulerCommand(): Command {
 
 export function getDefaultSyncCommandArgv({
   platform = process.platform,
+  execPath = process.execPath,
+  npmExecPath = process.env.npm_execpath,
 }: {
   platform?: SchedulerPlatform;
+  execPath?: string;
+  npmExecPath?: string;
 } = {}): SchedulerCommandArgv {
   const npmCommand = platform === "win32" ? "npm.cmd" : "npm";
+  const npmArgv = npmExecPath ? [execPath, npmExecPath] : [npmCommand];
 
   return [
-    npmCommand,
+    ...npmArgv,
     "exec",
     "--yes",
     "--package",

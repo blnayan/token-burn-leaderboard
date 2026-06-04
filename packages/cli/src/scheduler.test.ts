@@ -236,8 +236,66 @@ describe("scheduler install runtime", () => {
 });
 
 describe("scheduler commands", () => {
-  it("defaults to npm latest sync on Linux and macOS", () => {
-    expect(getDefaultSyncCommandArgv({ platform: "linux" })).toEqual([
+  it("defaults to the npm CLI path when npm_execpath is available on Linux and macOS", () => {
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "linux",
+        execPath: "/usr/local/bin/node",
+        npmExecPath: "/usr/local/lib/node_modules/npm/bin/npm-cli.js",
+      }),
+    ).toEqual([
+      "/usr/local/bin/node",
+      "/usr/local/lib/node_modules/npm/bin/npm-cli.js",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "darwin",
+        execPath: "/opt/homebrew/bin/node",
+        npmExecPath: "/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js",
+      }),
+    ).toEqual([
+      "/opt/homebrew/bin/node",
+      "/opt/homebrew/lib/node_modules/npm/bin/npm-cli.js",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+  });
+
+  it("defaults to the npm CLI path when npm_execpath is available on Windows", () => {
+    expect(
+      getDefaultSyncCommandArgv({
+        platform: "win32",
+        execPath: "C:\\Program Files\\nodejs\\node.exe",
+        npmExecPath: "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+      }),
+    ).toEqual([
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+      "exec",
+      "--yes",
+      "--package",
+      "@blnayan/token-burn@latest",
+      "--",
+      "token-burn",
+      "sync",
+    ]);
+  });
+
+  it("falls back to bare npm latest sync on Linux and macOS when npm_execpath is unavailable", () => {
+    expect(getDefaultSyncCommandArgv({ platform: "linux", npmExecPath: "" })).toEqual([
       "npm",
       "exec",
       "--yes",
@@ -248,7 +306,7 @@ describe("scheduler commands", () => {
       "sync",
     ]);
 
-    expect(getDefaultSyncCommandArgv({ platform: "darwin" })).toEqual([
+    expect(getDefaultSyncCommandArgv({ platform: "darwin", npmExecPath: "" })).toEqual([
       "npm",
       "exec",
       "--yes",
@@ -260,8 +318,8 @@ describe("scheduler commands", () => {
     ]);
   });
 
-  it("defaults to npm.cmd latest sync on Windows", () => {
-    expect(getDefaultSyncCommandArgv({ platform: "win32" })).toEqual([
+  it("falls back to bare npm.cmd latest sync on Windows when npm_execpath is unavailable", () => {
+    expect(getDefaultSyncCommandArgv({ platform: "win32", npmExecPath: "" })).toEqual([
       "npm.cmd",
       "exec",
       "--yes",
@@ -280,7 +338,8 @@ describe("scheduler commands", () => {
       dryRun: true,
       platform: "linux",
       syncCommandArgv: [
-        "npm",
+        "/usr/local/bin/node",
+        "/usr/local/lib/node_modules/npm/bin/npm-cli.js",
         "exec",
         "--yes",
         "--package",
@@ -295,13 +354,13 @@ describe("scheduler commands", () => {
     const output = log.mock.calls[0]?.[0] as string;
     expect(output).toContain("token-burn-sync.service");
     expect(output).toContain(
-      "ExecStart=npm exec --yes --package @blnayan/token-burn@latest -- token-burn sync",
+      "ExecStart=/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js exec --yes --package @blnayan/token-burn@latest -- token-burn sync",
     );
     expect(output).toContain("token-burn-sync.timer");
     expect(output).toContain("OnUnitActiveSec=15min");
     expect(output).toContain("# Cron fallback");
     expect(output).toContain(
-      "*/15 * * * * 'npm' 'exec' '--yes' '--package' '@blnayan/token-burn@latest' '--' 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+      "*/15 * * * * '/usr/local/bin/node' '/usr/local/lib/node_modules/npm/bin/npm-cli.js' 'exec' '--yes' '--package' '@blnayan/token-burn@latest' '--' 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
