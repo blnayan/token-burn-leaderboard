@@ -25,6 +25,7 @@ services:
       - .env.prod
     environment:
       TZ: UTC
+      HOSTNAME: 0.0.0.0
       ADMIN_GITHUB_LOGIN: ${ADMIN_GITHUB_LOGIN}
       AUTH_GITHUB_ID: ${AUTH_GITHUB_ID}
       AUTH_GITHUB_SECRET: ${AUTH_GITHUB_SECRET}
