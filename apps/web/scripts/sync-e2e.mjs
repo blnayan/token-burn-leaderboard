@@ -185,7 +185,16 @@ async function runSetupFlow({ memberId, fixtureDir }) {
 
   const output = `${result.stdout}\n${result.stderr}`;
   assertIncludes(output, "Starting Token Burn setup.", "setup output should include start message");
-  assertIncludes(output, "Waiting for approval. Press Ctrl+C to cancel.", "setup output should include login wait message");
+  assertIncludes(
+    output,
+    "Could not open your browser automatically. Open this link in your browser:",
+    "setup output should include manual login URL fallback",
+  );
+  assertNotIncludes(
+    output,
+    "Waiting for approval. Press Ctrl+C to cancel.",
+    "setup output should not obscure manual login URL fallback",
+  );
   assertIncludes(output, "Authenticated as sync-e2e-user.", "setup output should authenticate with GitHub username");
   assertIncludes(output, "Submitted 2 usage rows.", "setup output should include first sync summary");
   assertIncludes(output, "First sync complete.", "setup output should include first sync completion");
@@ -615,6 +624,12 @@ function assertEqual(actual, expected, label) {
 function assertIncludes(actual, expected, label) {
   if (typeof actual !== "string" || !actual.includes(expected)) {
     throw new Error(`${label}: expected ${JSON.stringify(actual)} to include ${JSON.stringify(expected)}.`);
+  }
+}
+
+function assertNotIncludes(actual, expected, label) {
+  if (typeof actual === "string" && actual.includes(expected)) {
+    throw new Error(`${label}: expected ${JSON.stringify(actual)} not to include ${JSON.stringify(expected)}.`);
   }
 }
 
