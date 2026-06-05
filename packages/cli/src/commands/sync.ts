@@ -26,7 +26,14 @@ export function renderSyncResult(result: SyncResult, ui: UiRenderer): void {
     });
   }
 
-  ui.result({ ok: result.failedProviders.length === 0, ...result });
+  ui.result({
+    ok: result.failedProviders.length === 0,
+    failedProviders: result.failedProviders,
+    lastSync: result.lastSync,
+    skippedProviders: result.skippedProviders,
+    submitted: result.submitted,
+    syncedAt: result.syncedAt,
+  });
 }
 
 export function createSyncCommand(): Command {

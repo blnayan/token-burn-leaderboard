@@ -43,7 +43,7 @@ export type SyncProviderIssue = {
   message: string;
 };
 
-export type SyncResult = {
+type SyncResultData = {
   failedProviders: SyncProviderIssue[];
   lastSync: NonNullable<CliConfig["lastSync"]>;
   skippedProviders: SyncProviderIssue[];
@@ -51,10 +51,10 @@ export type SyncResult = {
   syncedAt: string;
 };
 
+export type SyncResult = void & SyncResultData;
+
 const providers: Provider[] = ["claude_code", "codex"];
 
-export function syncUsage(): Promise<void>;
-export function syncUsage(dependencies: SyncDependencies): Promise<SyncResult>;
 export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
@@ -68,7 +68,7 @@ export async function syncUsage({
   createDeviceId = randomUUID,
   readDeviceName = hostname,
   log = console.log,
-}: SyncDependencies = {}): Promise<void | SyncResult> {
+}: SyncDependencies = {}): Promise<SyncResult> {
   const config = await readConfig();
 
   if (!config?.token) {
@@ -131,7 +131,7 @@ export async function syncUsage({
     skippedProviders: skipped.map(({ provider, error }) => ({ provider, message: trimTrailingPeriod(error.message) })),
     submitted,
     syncedAt,
-  };
+  } as SyncResult;
 }
 
 function buildPayload(

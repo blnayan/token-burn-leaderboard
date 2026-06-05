@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 
 import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
-import { syncUsage } from "./sync.js";
+import { syncUsage, type SyncResult } from "./sync.js";
 import { cliVersion as currentCliVersion } from "./version.js";
+
+if (false) {
+  const _defaultSyncUsageResult: Promise<SyncResult> = syncUsage();
+  void _defaultSyncUsageResult;
+}
 
 describe("syncUsage", () => {
   it("throws a helpful login message when no token is configured", async () => {
