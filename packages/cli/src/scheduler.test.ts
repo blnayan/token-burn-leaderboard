@@ -119,8 +119,24 @@ describe("scheduler builders", () => {
 });
 
 describe("scheduler install runtime", () => {
-  it("installs a Linux systemd user timer when systemd is available", async () => {
-    const runtime = createMockSchedulerRuntime({ platform: "linux", homeDir: "/home/me" });
+  it("installs a Linux systemd user timer and removes an existing cron fallback", async () => {
+    const runtime = createMockSchedulerRuntime({
+      platform: "linux",
+      homeDir: "/home/me",
+      commandOutput: new Map([
+        [
+          "crontab -l",
+          [
+            "MAILTO=me@example.com",
+            "# BEGIN Token Burn scheduler",
+            "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+            "# END Token Burn scheduler",
+            "0 0 * * * echo midnight",
+            "",
+          ].join("\n"),
+        ],
+      ]),
+    });
 
     await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
 
@@ -135,7 +151,28 @@ describe("scheduler install runtime", () => {
     expect(runtime.commands).toEqual([
       ["systemctl", ["--user", "daemon-reload"]],
       ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
+      ["crontab", ["-l"]],
     ]);
+    expect(runtime.stdinCommands).toEqual([
+      { command: "crontab", args: ["-"], input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n" },
+    ]);
+  });
+
+  it("does not rewrite crontab after systemd install when no cron fallback exists", async () => {
+    const runtime = createMockSchedulerRuntime({
+      platform: "linux",
+      homeDir: "/home/me",
+      commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n"]]),
+    });
+
+    await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
+
+    expect(runtime.commands).toEqual([
+      ["systemctl", ["--user", "daemon-reload"]],
+      ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
+      ["crontab", ["-l"]],
+    ]);
+    expect(runtime.stdinCommands).toEqual([]);
   });
 
   it("falls back to cron when Linux user systemd is unavailable", async () => {

@@ -208,11 +208,21 @@ async function installLinuxSystemdScheduler(
   await runtime.writeFile(`${dir}/token-burn-sync.timer`, buildSystemdTimer());
   await runtime.execFile("systemctl", ["--user", "daemon-reload"]);
   await runtime.execFile("systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]);
+  await removeLinuxCronFallbackIfPresent(runtime);
 }
 
 async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<void> {
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
   await runtime.execFileWithInput("crontab", ["-"], mergeCronBlock(existing, buildCronBlock(syncCommandArgv)));
+}
+
+async function removeLinuxCronFallbackIfPresent(runtime: SchedulerRuntime): Promise<void> {
+  const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
+  const cleaned = removeCronBlock(existing);
+
+  if (cleaned === existing || cleaned === ensureTrailingNewline(existing)) return;
+
+  await runtime.execFileWithInput("crontab", ["-"], cleaned);
 }
 
 async function installMacScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
