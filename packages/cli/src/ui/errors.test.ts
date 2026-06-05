@@ -60,6 +60,13 @@ describe("classifyError", () => {
     });
   });
 
+  it("does not classify unrelated scheduler metadata as a scheduler error", () => {
+    expect(classifyError(new Error("provider scheduler metadata unavailable"))).toEqual({
+      code: "CLI_ERROR",
+      message: "provider scheduler metadata unavailable",
+    });
+  });
+
   it("classifies device merge and check failures", () => {
     expect(classifyError(new Error("Cannot merge devices with conflicting totals"))).toEqual({
       code: "DEVICE_ERROR",
