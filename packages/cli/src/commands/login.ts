@@ -126,14 +126,19 @@ export function createLoginCommand(): Command {
     .option("--server <url>", "Alias for --server-url")
     .action(async (options: { serverUrl?: string; server?: string }) => {
       const flags = command.parent?.opts<OutputFlags>() ?? {};
+      const outputMode = resolveOutputMode({ flags });
       await runLogin({
         serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl(),
-        ui: createRenderer(resolveOutputMode({ flags })),
-        emitPendingApprovalResult: flags.json === true,
+        ui: createRenderer(outputMode),
+        emitPendingApprovalResult: shouldEmitPendingApprovalResult(flags),
       });
     });
 
   return command;
+}
+
+export function shouldEmitPendingApprovalResult(flags: OutputFlags): boolean {
+  return resolveOutputMode({ flags }).mode === "json";
 }
 
 function normalizeServerUrl(serverUrl: string): string {

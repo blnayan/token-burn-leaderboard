@@ -1,9 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { resolveOutputMode } from "../ui/mode.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
-import { createLoginCommand, runLogin } from "./login.js";
+import { createLoginCommand, runLogin, shouldEmitPendingApprovalResult } from "./login.js";
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("runLogin", () => {
   it("prints the login URL and stores the approved token", async () => {
@@ -197,5 +201,11 @@ describe("createLoginCommand", () => {
     const help = createLoginCommand().helpInformation();
 
     expect(help).toContain("--server <url>");
+  });
+
+  it("emits the pending approval payload when JSON mode comes from the environment", () => {
+    vi.stubEnv("TOKEN_BURN_OUTPUT", "json");
+
+    expect(shouldEmitPendingApprovalResult({})).toBe(true);
   });
 });
