@@ -2,7 +2,8 @@ import { Command } from "commander";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
-import { resolveOutputMode } from "../ui/mode.js";
+import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
+import { createPlainRenderer } from "../ui/plain-renderer.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
@@ -35,13 +36,15 @@ export type StatusResult = {
 export async function runStatus({
   readConfig = readConfigFile,
   readHealth = readHealthFromServer,
-  ui = createRenderer(resolveOutputMode({ flags: {} })),
+  log,
+  ui,
 }: StatusDependencies = {}): Promise<StatusResult> {
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await readConfig();
 
   if (!config) {
     const result = { authenticated: false, cliVersion };
-    renderStatus(result, ui);
+    renderStatus(result, renderer);
     return result;
   }
 
@@ -53,7 +56,7 @@ export async function runStatus({
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,
     };
-    renderStatus(result, ui);
+    renderStatus(result, renderer);
     return result;
   }
 
@@ -78,7 +81,7 @@ export async function runStatus({
     ...(serverHealthError ? { serverHealthError } : {}),
     serverUrl: config.serverUrl,
   };
-  renderStatus(result, ui);
+  renderStatus(result, renderer);
   return result;
 }
 
@@ -104,9 +107,37 @@ export function renderStatus(result: StatusResult, ui: UiRenderer): void {
 }
 
 export function createStatusCommand(): Command {
-  return new Command("status").description("Show Token Burn CLI authentication status").action(async () => {
-    await runStatus();
+  const command = new Command("status").description("Show Token Burn CLI authentication status").action(async () => {
+    const flags = command.parent?.opts<OutputFlags>() ?? {};
+    await runStatus({ ui: createRenderer(resolveOutputMode({ flags })) });
   });
+
+  return command;
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return createPlainRenderer({ write: (line) => log(formatLegacyLogLine(line)) });
+}
+
+function formatLegacyLogLine(line: string): string {
+  if (line.startsWith("CLI: ")) return `CLI version: ${line.slice("CLI: ".length)}.`;
+  if (line.startsWith("OK: ")) return withTrailingPeriod(line.slice("OK: ".length));
+  if (line.startsWith("Warning: ")) return withTrailingPeriod(line.slice("Warning: ".length));
+  if (line.startsWith("Next: ")) return line.slice("Next: ".length);
+  if (
+    line.startsWith("Device: ") ||
+    line.startsWith("Last sync: ") ||
+    line.startsWith("Remembered server: ") ||
+    line.startsWith("Server health check failed: ")
+  ) {
+    return withTrailingPeriod(line);
+  }
+
+  return line;
+}
+
+function withTrailingPeriod(message: string): string {
+  return message.endsWith(".") ? message : `${message}.`;
 }
 
 async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {

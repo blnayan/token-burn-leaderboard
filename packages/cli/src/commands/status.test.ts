@@ -1,8 +1,18 @@
-import { describe, expect, it } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { Command } from "commander";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
-import { runStatus } from "./status.js";
+import { createStatusCommand, runStatus } from "./status.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe("runStatus", () => {
   it("renders status with the provided renderer", async () => {
@@ -28,6 +38,47 @@ describe("runStatus", () => {
 
     expect(calls).toContain("intro:Token Burn status:2");
     expect(calls).toContain("success:Authenticated with https://token-burn.test");
+    expect(readResultCall(calls)).toEqual({
+      ok: true,
+      authenticated: true,
+      cliVersion,
+      requiredCliVersion: cliVersion,
+      serverUrl: "https://token-burn.test",
+    });
+  });
+
+  it("honors legacy log injection with the default plain renderer", async () => {
+    const lines: string[] = [];
+
+    await runStatus({
+      readConfig: async () => null,
+      log: (message) => lines.push(message),
+    });
+
+    expect(lines).toContain("Token Burn status");
+    expect(lines).toContain("Auth: not authenticated");
+    expect(lines).toContain("Not authenticated.");
+    expect(lines).toContain(JSON.stringify({ ok: true, authenticated: false, cliVersion }));
+  });
+
+  it("honors parent --json output flags in the command action", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "token-burn-status-"));
+    const write = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.stubEnv("TOKEN_BURN_CONFIG_DIR", configDir);
+
+    try {
+      const program = new Command()
+        .name("token-burn")
+        .option("--json")
+        .exitOverride();
+      program.addCommand(createStatusCommand());
+
+      await program.parseAsync(["--json", "status"], { from: "user" });
+    } finally {
+      await rm(configDir, { force: true, recursive: true });
+    }
+
+    expect(write.mock.calls).toEqual([[JSON.stringify({ ok: true, authenticated: false, cliVersion })]]);
   });
 
   it("renders logged-in server and last sync when present", async () => {
@@ -149,6 +200,14 @@ describe("runStatus", () => {
     });
   });
 });
+
+function readResultCall(calls: string[]): Record<string, unknown> {
+  const result = calls.find((call) => call.startsWith("result:"));
+
+  if (!result) throw new Error("Missing result call");
+
+  return JSON.parse(result.slice("result:".length)) as Record<string, unknown>;
+}
 
 function createRecordingUi(calls: string[]): UiRenderer {
   return {

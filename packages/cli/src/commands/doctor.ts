@@ -3,7 +3,8 @@ import { Command } from "commander";
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
 import type { SchedulerPlatform } from "../scheduler.js";
-import { resolveOutputMode } from "../ui/mode.js";
+import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
+import { createPlainRenderer } from "../ui/plain-renderer.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
@@ -51,8 +52,10 @@ export async function runDoctor({
   platform = process.platform,
   readHealth = readHealthFromServer,
   readDevices = readDevicesFromServer,
-  ui = createRenderer(resolveOutputMode({ flags: {} })),
+  log,
+  ui,
 }: DoctorDependencies = {}): Promise<DoctorResult> {
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await readConfig();
 
   if (!config) {
@@ -62,7 +65,7 @@ export async function runDoctor({
       duplicateDeviceGroups: [],
       platform,
     };
-    renderDoctor(result, ui);
+    renderDoctor(result, renderer);
     return result;
   } else if (!config.token) {
     const result = {
@@ -74,7 +77,7 @@ export async function runDoctor({
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,
     };
-    renderDoctor(result, ui);
+    renderDoctor(result, renderer);
     return result;
   }
 
@@ -108,7 +111,7 @@ export async function runDoctor({
     ...(serverHealthError ? { serverHealthError } : {}),
     serverUrl: config.serverUrl,
   };
-  renderDoctor(result, ui);
+  renderDoctor(result, renderer);
   return result;
 }
 
@@ -136,9 +139,39 @@ export function renderDoctor(result: DoctorResult, ui: UiRenderer): void {
 }
 
 export function createDoctorCommand(): Command {
-  return new Command("doctor").description("Check Token Burn CLI setup").action(async () => {
-    await runDoctor();
+  const command = new Command("doctor").description("Check Token Burn CLI setup").action(async () => {
+    const flags = command.parent?.opts<OutputFlags>() ?? {};
+    await runDoctor({ ui: createRenderer(resolveOutputMode({ flags })) });
   });
+
+  return command;
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return createPlainRenderer({ write: (line) => log(formatLegacyLogLine(line)) });
+}
+
+function formatLegacyLogLine(line: string): string {
+  if (line.startsWith("CLI: ")) return `CLI version: ${line.slice("CLI: ".length)}.`;
+  if (line.startsWith("OK: ")) return withTrailingPeriod(line.slice("OK: ".length));
+  if (line.startsWith("Warning: ")) return withTrailingPeriod(line.slice("Warning: ".length));
+  if (line.startsWith("Next: ")) return line.slice("Next: ".length);
+  if (
+    line.startsWith("Device: ") ||
+    line.startsWith("Last sync: ") ||
+    line.startsWith("Platform: ") ||
+    line.startsWith("Remembered server: ") ||
+    line.startsWith("Server health check failed: ") ||
+    line.startsWith("Device check failed: ")
+  ) {
+    return withTrailingPeriod(line);
+  }
+
+  return line;
+}
+
+function withTrailingPeriod(message: string): string {
+  return message.endsWith(".") ? message : `${message}.`;
 }
 
 async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {

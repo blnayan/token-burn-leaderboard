@@ -1,8 +1,18 @@
-import { describe, expect, it, vi } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { Command } from "commander";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
-import { runDoctor } from "./doctor.js";
+import { createDoctorCommand, runDoctor } from "./doctor.js";
+
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllEnvs();
+});
 
 describe("runDoctor", () => {
   it("renders doctor with the provided renderer", async () => {
@@ -33,6 +43,54 @@ describe("runDoctor", () => {
     expect(calls).toContain("intro:Token Burn doctor:2");
     expect(calls).toContain("warning:Likely duplicate devices found. Run token-burn devices to inspect and merge.");
     expect(calls).toContain("next:Run token-burn sync to submit usage now.");
+    expect(readResultCall(calls)).toEqual({
+      ok: true,
+      authenticated: true,
+      cliVersion,
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
+      platform: "linux",
+      serverUrl: "https://token-burn.test",
+    });
+  });
+
+  it("honors legacy log injection with the default plain renderer", async () => {
+    const lines: string[] = [];
+
+    await runDoctor({
+      readConfig: async () => null,
+      platform: "linux",
+      log: (message) => lines.push(message),
+    });
+
+    expect(lines).toContain("Token Burn doctor");
+    expect(lines).toContain("Platform: linux.");
+    expect(lines).toContain("Not authenticated.");
+    expect(lines).toContain("Run token-burn sync to submit usage now.");
+    expect(lines).toContain(
+      JSON.stringify({ ok: true, authenticated: false, cliVersion, duplicateDeviceGroups: [], platform: "linux" }),
+    );
+  });
+
+  it("honors parent --json output flags in the command action", async () => {
+    const configDir = await mkdtemp(join(tmpdir(), "token-burn-doctor-"));
+    const write = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    vi.stubEnv("TOKEN_BURN_CONFIG_DIR", configDir);
+
+    try {
+      const program = new Command()
+        .name("token-burn")
+        .option("--json")
+        .exitOverride();
+      program.addCommand(createDoctorCommand());
+
+      await program.parseAsync(["--json", "doctor"], { from: "user" });
+    } finally {
+      await rm(configDir, { force: true, recursive: true });
+    }
+
+    expect(write.mock.calls).toEqual([
+      [JSON.stringify({ ok: true, authenticated: false, cliVersion, duplicateDeviceGroups: [], platform: process.platform })],
+    ]);
   });
 
   it("renders local setup and duplicate-device warnings", async () => {
@@ -211,6 +269,14 @@ describe("runDoctor", () => {
     });
   });
 });
+
+function readResultCall(calls: string[]): Record<string, unknown> {
+  const result = calls.find((call) => call.startsWith("result:"));
+
+  if (!result) throw new Error("Missing result call");
+
+  return JSON.parse(result.slice("result:".length)) as Record<string, unknown>;
+}
 
 function createRecordingUi(calls: string[]): UiRenderer {
   return {
