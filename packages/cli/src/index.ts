@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { pathToFileURL } from "node:url";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 
 import { createDevicesCommand } from "./commands/devices.js";
 import { createDoctorCommand } from "./commands/doctor.js";
@@ -42,7 +43,13 @@ export function createProgram(): Command {
   return program;
 }
 
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+export function isCliEntrypoint(argvPath: string | undefined, moduleUrl: string): boolean {
+  if (!argvPath) return false;
+
+  return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl));
+}
+
+if (isCliEntrypoint(process.argv[1], import.meta.url)) {
   const program = createProgram();
 
   program.parseAsync().catch((error: unknown) => {

@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
-import { createProgram } from "./index.js";
+import { createProgram, isCliEntrypoint } from "./index.js";
 
 describe("createProgram", () => {
   it("exposes global output flags in help", () => {
@@ -16,5 +20,40 @@ describe("createProgram", () => {
     const help = createProgram().helpInformation();
 
     expect(help).toContain("scheduler");
+  });
+});
+
+describe("isCliEntrypoint", () => {
+  it("matches symlinked argv paths that point to the module path", () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "token-burn-cli-entrypoint-"));
+    const modulePath = join(fixtureDir, "index.js");
+    const binDir = join(fixtureDir, "node_modules", ".bin");
+    const binPath = join(binDir, "token-burn");
+
+    writeFileSync(modulePath, "");
+    mkdirSync(binDir, { recursive: true });
+    symlinkSync(modulePath, binPath);
+
+    expect(isCliEntrypoint(binPath, pathToFileURL(modulePath).href)).toBe(true);
+  });
+
+  it("does not match unrelated argv paths", () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "token-burn-cli-entrypoint-"));
+    const modulePath = join(fixtureDir, "index.js");
+    const unrelatedPath = join(fixtureDir, "other.js");
+
+    writeFileSync(modulePath, "");
+    writeFileSync(unrelatedPath, "");
+
+    expect(isCliEntrypoint(unrelatedPath, pathToFileURL(modulePath).href)).toBe(false);
+  });
+
+  it("handles missing argv paths", () => {
+    const fixtureDir = mkdtempSync(join(tmpdir(), "token-burn-cli-entrypoint-"));
+    const modulePath = join(fixtureDir, "index.js");
+
+    writeFileSync(modulePath, "");
+
+    expect(isCliEntrypoint(undefined, pathToFileURL(modulePath).href)).toBe(false);
   });
 });
