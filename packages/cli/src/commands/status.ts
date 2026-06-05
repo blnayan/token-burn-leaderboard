@@ -17,23 +17,40 @@ export type StatusDependencies = {
   log?: (message: string) => void;
 };
 
+export type StatusResult = {
+  authenticated: boolean;
+  cliVersion: string;
+  device?: { id: string; name: string };
+  lastSync?: CliConfig["lastSync"];
+  rememberedServer?: string;
+  requiredCliVersion?: string;
+  serverHealthError?: string;
+  serverUrl?: string;
+};
+
 export async function runStatus({
   readConfig = readConfigFile,
   readHealth = readHealthFromServer,
   log = console.log,
-}: StatusDependencies = {}): Promise<void> {
+}: StatusDependencies = {}): Promise<StatusResult> {
   log(`CLI version: ${cliVersion}.`);
 
   const config = await readConfig();
 
   if (!config) {
     log("Not authenticated.");
-    return;
+    return { authenticated: false, cliVersion };
   }
 
   if (!config.token) {
     log("Not authenticated.");
     log(`Remembered server: ${config.serverUrl}.`);
+    return {
+      authenticated: false,
+      cliVersion,
+      rememberedServer: config.serverUrl,
+      serverUrl: config.serverUrl,
+    };
   } else {
     log(`Authenticated with ${config.serverUrl}.`);
 
@@ -46,17 +63,32 @@ export async function runStatus({
     log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
   }
 
+  let requiredCliVersion: string | undefined;
+  let serverHealthError: string | undefined;
+
   if (config.token) {
     try {
       const health = await readHealth(config.serverUrl);
+      requiredCliVersion = health.requiredCliVersion;
 
       if (cliVersion !== health.requiredCliVersion) {
         log(formatRequiredCliVersionError(cliVersion, health.requiredCliVersion));
       }
     } catch (error) {
-      log(`Server health check failed: ${error instanceof Error ? error.message : String(error)}.`);
+      serverHealthError = error instanceof Error ? error.message : String(error);
+      log(`Server health check failed: ${serverHealthError}.`);
     }
   }
+
+  return {
+    authenticated: true,
+    cliVersion,
+    ...(config.deviceId && config.deviceName ? { device: { id: config.deviceId, name: config.deviceName } } : {}),
+    ...(config.lastSync ? { lastSync: config.lastSync } : {}),
+    ...(requiredCliVersion ? { requiredCliVersion } : {}),
+    ...(serverHealthError ? { serverHealthError } : {}),
+    serverUrl: config.serverUrl,
+  };
 }
 
 export function createStatusCommand(): Command {

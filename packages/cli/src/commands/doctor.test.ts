@@ -128,4 +128,30 @@ describe("runDoctor", () => {
       "Run token-burn sync to submit usage now.",
     ]);
   });
+
+  it("returns structured diagnostics for renderers", async () => {
+    const result = await runDoctor({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        token: "tb_secret",
+        deviceId: "device-1",
+        deviceName: "nayan-vps",
+      }),
+      platform: "linux",
+      readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
+      readDevices: async () => ({
+        duplicateGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
+      }),
+      log: () => undefined,
+    });
+
+    expect(result).toEqual({
+      authenticated: true,
+      cliVersion,
+      device: { id: "device-1", name: "nayan-vps" },
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
+      platform: "linux",
+      serverUrl: "https://token-burn.test",
+    });
+  });
 });

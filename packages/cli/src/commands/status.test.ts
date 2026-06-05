@@ -63,6 +63,34 @@ describe("runStatus", () => {
     expect(log).toHaveBeenCalledWith("Not authenticated.");
     expect(log).toHaveBeenCalledWith("Remembered server: https://token-burn.test.");
   });
+
+  it("returns structured status for renderers", async () => {
+    const result = await runStatus({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        token: "tb_secret",
+        deviceId: "device-1",
+        deviceName: "nayan-vps",
+        lastSync: { ok: true, message: "Submitted 42 usage rows.", at: "2026-06-01T00:00:00.000Z" },
+      }),
+      readHealth: async () => ({
+        requiredCliVersion: cliVersion,
+        serverTime: "2026-06-03T00:00:00.000Z",
+      }),
+      log: () => undefined,
+    });
+
+    expect(result).toEqual({
+      authenticated: true,
+      cliVersion,
+      device: { id: "device-1", name: "nayan-vps" },
+      lastSync: { ok: true, message: "Submitted 42 usage rows.", at: "2026-06-01T00:00:00.000Z" },
+      rememberedServer: undefined,
+      requiredCliVersion: cliVersion,
+      serverHealthError: undefined,
+      serverUrl: "https://token-burn.test",
+    });
+  });
 });
 
 function createDifferentVersion(version: string): string {

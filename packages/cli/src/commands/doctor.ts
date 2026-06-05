@@ -29,22 +29,53 @@ export type DoctorDependencies = {
   log?: (message: string) => void;
 };
 
+export type DoctorResult = {
+  authenticated: boolean;
+  cliVersion: string;
+  device?: { id: string; name: string };
+  duplicateDeviceGroups: DuplicateDeviceGroup[];
+  deviceCheckError?: string;
+  lastSync?: CliConfig["lastSync"];
+  platform: SchedulerPlatform;
+  rememberedServer?: string;
+  serverHealthError?: string;
+  serverUrl?: string;
+};
+
 export async function runDoctor({
   readConfig = readConfigFile,
   platform = process.platform,
   readHealth = readHealthFromServer,
   readDevices = readDevicesFromServer,
   log = console.log,
-}: DoctorDependencies = {}): Promise<void> {
+}: DoctorDependencies = {}): Promise<DoctorResult> {
   log(`CLI version: ${cliVersion}.`);
 
   const config = await readConfig();
 
   if (!config) {
     log("Not authenticated.");
+    log(`Platform: ${platform}.`);
+    log("Run token-burn sync to submit usage now.");
+    return {
+      authenticated: false,
+      cliVersion,
+      duplicateDeviceGroups: [],
+      platform,
+    };
   } else if (!config.token) {
     log("Not authenticated.");
     log(`Remembered server: ${config.serverUrl}.`);
+    log(`Platform: ${platform}.`);
+    log("Run token-burn sync to submit usage now.");
+    return {
+      authenticated: false,
+      cliVersion,
+      duplicateDeviceGroups: [],
+      platform,
+      rememberedServer: config.serverUrl,
+      serverUrl: config.serverUrl,
+    };
   } else {
     log(`Authenticated with ${config.serverUrl}.`);
 
@@ -59,25 +90,44 @@ export async function runDoctor({
     log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
   }
 
+  let duplicateDeviceGroups: DuplicateDeviceGroup[] = [];
+  let deviceCheckError: string | undefined;
+  let serverHealthError: string | undefined;
+
   if (config?.token) {
     try {
       await readHealth(config.serverUrl);
     } catch (error) {
-      log(`Server health check failed: ${error instanceof Error ? error.message : String(error)}.`);
+      serverHealthError = error instanceof Error ? error.message : String(error);
+      log(`Server health check failed: ${serverHealthError}.`);
     }
 
     try {
       const devices = await readDevices(config.serverUrl, config.token);
+      duplicateDeviceGroups = devices.duplicateGroups;
 
       if (devices.duplicateGroups.length > 0) {
         log("Likely duplicate devices found. Run token-burn devices to inspect and merge.");
       }
     } catch (error) {
-      log(`Device check failed: ${error instanceof Error ? error.message : String(error)}.`);
+      deviceCheckError = error instanceof Error ? error.message : String(error);
+      log(`Device check failed: ${deviceCheckError}.`);
     }
   }
 
   log("Run token-burn sync to submit usage now.");
+
+  return {
+    authenticated: true,
+    cliVersion,
+    ...(config.deviceId && config.deviceName ? { device: { id: config.deviceId, name: config.deviceName } } : {}),
+    duplicateDeviceGroups,
+    ...(deviceCheckError ? { deviceCheckError } : {}),
+    ...(config.lastSync ? { lastSync: config.lastSync } : {}),
+    platform,
+    ...(serverHealthError ? { serverHealthError } : {}),
+    serverUrl: config.serverUrl,
+  };
 }
 
 export function createDoctorCommand(): Command {
