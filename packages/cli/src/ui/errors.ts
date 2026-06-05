@@ -19,8 +19,9 @@ export function classifyError(error: unknown): UiError {
   if (
     normalizedMessage.includes("automatic sync was not installed")
     || normalizedMessage.includes("systemd user timer unavailable")
-    || normalizedMessage.includes("cron")
     || normalizedMessage.includes("crontab")
+    || normalizedMessage.includes("cron entry")
+    || normalizedMessage.includes("token burn cron entry")
   ) {
     return { code: "SCHEDULER_ERROR", message };
   }

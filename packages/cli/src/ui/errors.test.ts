@@ -67,6 +67,13 @@ describe("classifyError", () => {
     });
   });
 
+  it("does not classify unrelated words containing cron as scheduler errors", () => {
+    expect(classifyError(new Error("provider acronym metadata unavailable"))).toEqual({
+      code: "CLI_ERROR",
+      message: "provider acronym metadata unavailable",
+    });
+  });
+
   it("classifies device merge and check failures", () => {
     expect(classifyError(new Error("Cannot merge devices with conflicting totals"))).toEqual({
       code: "DEVICE_ERROR",
