@@ -46,15 +46,17 @@ export type SetupResult = {
 export async function runSetup({
   serverUrl,
   readConfig = readConfigFile,
-  login = runLogin,
+  login,
   sync = syncUsage,
-  installScheduler = runInstallScheduler,
+  installScheduler,
   validateAuth = validateAuthFromServer,
   log,
   ui,
 }: SetupOptions): Promise<SetupResult> {
   const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   const childRenderer = suppressResult(renderer);
+  const runSetupLogin = login ?? runLogin;
+  const runSetupInstallScheduler = installScheduler ?? runInstallScheduler;
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
 
   renderer.intro("Token Burn setup", [{ label: "Server", value: normalizedServerUrl }]);
@@ -64,7 +66,7 @@ export async function runSetup({
   if (authReused) {
     renderer.success("auth", "Existing authentication is valid");
   } else {
-    await login(login === runLogin ? { serverUrl: normalizedServerUrl, ui: childRenderer } : { serverUrl: normalizedServerUrl });
+    await runSetupLogin(login ? { serverUrl: normalizedServerUrl } : { serverUrl: normalizedServerUrl, ui: childRenderer });
   }
 
   let syncFailed = false;
@@ -79,8 +81,8 @@ export async function runSetup({
 
   renderer.step("scheduler", "Installing automatic sync");
   try {
-    await installScheduler(
-      installScheduler === runInstallScheduler ? { dryRun: false, ui: childRenderer } : { dryRun: false },
+    await runSetupInstallScheduler(
+      installScheduler ? { dryRun: false } : { dryRun: false, ui: childRenderer },
     );
   } catch (error) {
     throw new Error(

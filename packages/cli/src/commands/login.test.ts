@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { createLoginCommand, runLogin } from "./login.js";
 
@@ -80,6 +82,45 @@ describe("runLogin", () => {
     );
     expect(log).not.toHaveBeenCalledWith("Waiting for approval. Press Ctrl+C to cancel.");
     expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
+  });
+
+  it("emits pending approval JSON before polling when requested", async () => {
+    const lines: string[] = [];
+    const postJson = vi
+      .fn()
+      .mockResolvedValueOnce({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2026-06-01T00:01:00.000Z",
+      })
+      .mockResolvedValueOnce({
+        status: "approved",
+        token: "tb_secret",
+        member: { displayName: "Ada", username: "blnayan" },
+      });
+
+    await runLogin({
+      serverUrl: "https://token-burn.test",
+      postJson,
+      readConfig: async () => null,
+      writeConfig: vi.fn(),
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+      emitPendingApprovalResult: true,
+      openBrowser: vi.fn().mockRejectedValue(new Error("no default browser")),
+      sleep: async () => undefined,
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    expect(lines).toEqual([
+      JSON.stringify({
+        ok: true,
+        status: "pending_approval",
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        serverUrl: "https://token-burn.test",
+        expiresAt: "2026-06-01T00:01:00.000Z",
+      }),
+      JSON.stringify({ ok: true, authenticatedAs: "blnayan", serverUrl: "https://token-burn.test" }),
+    ]);
   });
 
   it("preserves the existing device identity when re-authenticating", async () => {

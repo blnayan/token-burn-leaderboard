@@ -40,6 +40,7 @@ export type LoginDependencies = {
   openBrowser?: (url: string) => Promise<void>;
   sleep?: (milliseconds: number) => Promise<void>;
   now?: () => Date;
+  emitPendingApprovalResult?: boolean;
 };
 
 export type LoginResult = {
@@ -61,6 +62,7 @@ export async function runLogin({
   openBrowser = openDefaultBrowser,
   sleep = defaultSleep,
   now = () => new Date(),
+  emitPendingApprovalResult = false,
 }: LoginOptions): Promise<LoginResult> {
   const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
@@ -69,6 +71,16 @@ export async function runLogin({
     await postJson(`${normalizedServerUrl}/api/cli/login/start`, {}),
   );
   const expiresAt = new Date(startResponse.expiresAt);
+
+  if (emitPendingApprovalResult) {
+    renderer.result({
+      ok: true,
+      status: "pending_approval",
+      loginUrl: startResponse.loginUrl,
+      serverUrl: normalizedServerUrl,
+      expiresAt: startResponse.expiresAt,
+    });
+  }
 
   try {
     await openBrowser(startResponse.loginUrl);
@@ -117,6 +129,7 @@ export function createLoginCommand(): Command {
       await runLogin({
         serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl(),
         ui: createRenderer(resolveOutputMode({ flags })),
+        emitPendingApprovalResult: flags.json === true,
       });
     });
 

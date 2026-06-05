@@ -29,6 +29,15 @@ export type UninstallSchedulerOptions = {
   ui?: UiRenderer;
 };
 
+export type InstallSchedulerResult = {
+  dryRun: boolean;
+  output: string;
+};
+
+export type UninstallSchedulerResult = {
+  output: string;
+};
+
 export async function runInstallScheduler({
   dryRun,
   platform = process.platform,
@@ -40,14 +49,19 @@ export async function runInstallScheduler({
     }),
   log,
   ui,
-}: InstallSchedulerOptions): Promise<void> {
+}: InstallSchedulerOptions): Promise<InstallSchedulerResult> {
   const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   if (dryRun) {
-    renderer.info(buildSchedulerInstallOutput(platform, syncCommandArgv));
-    return;
+    const result = { dryRun: true, output: buildSchedulerInstallOutput(platform, syncCommandArgv) };
+    renderer.info(result.output);
+    renderer.result({ ok: true, ...result });
+    return result;
   }
 
-  renderer.success("scheduler", await install(platform, syncCommandArgv));
+  const result = { dryRun: false, output: await install(platform, syncCommandArgv) };
+  renderer.success("scheduler", result.output);
+  renderer.result({ ok: true, ...result });
+  return result;
 }
 
 export async function runUninstallScheduler({
@@ -55,9 +69,12 @@ export async function runUninstallScheduler({
   uninstall = async (selectedPlatform) => uninstallScheduler({ runtime: createNodeSchedulerRuntime(selectedPlatform) }),
   log,
   ui,
-}: UninstallSchedulerOptions = {}): Promise<void> {
+}: UninstallSchedulerOptions = {}): Promise<UninstallSchedulerResult> {
   const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
-  renderer.success("scheduler", await uninstall(platform));
+  const result = { output: await uninstall(platform) };
+  renderer.success("scheduler", result.output);
+  renderer.result({ ok: true, ...result });
+  return result;
 }
 
 export function createInstallSchedulerCommand(): Command {

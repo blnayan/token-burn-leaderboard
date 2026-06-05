@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { runInstallScheduler, runUninstallScheduler } from "./scheduler.js";
 
@@ -18,6 +20,21 @@ describe("runInstallScheduler", () => {
     expect(calls[0]).toContain("token-burn-sync.service");
   });
 
+  it("renders dry-run scheduler output as JSON", async () => {
+    const lines: string[] = [];
+
+    const result = await runInstallScheduler({
+      dryRun: true,
+      platform: "linux",
+      syncCommandArgv: ["token-burn", "sync"],
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+    });
+
+    expect(result.dryRun).toBe(true);
+    expect(result.output).toContain("token-burn-sync.service");
+    expect(lines).toEqual([JSON.stringify({ ok: true, dryRun: true, output: result.output })]);
+  });
+
   it("renders install output as a scheduler success", async () => {
     const calls: string[] = [];
     const install = vi.fn(async () => "Installed Token Burn cron entry.");
@@ -33,6 +50,22 @@ describe("runInstallScheduler", () => {
     expect(install).toHaveBeenCalledWith("linux", ["token-burn", "sync"]);
     expect(calls).toContain("success:scheduler:Installed Token Burn cron entry.");
   });
+
+  it("renders install output as JSON", async () => {
+    const lines: string[] = [];
+    const install = vi.fn(async () => "Installed Token Burn cron entry.");
+
+    const result = await runInstallScheduler({
+      dryRun: false,
+      platform: "linux",
+      syncCommandArgv: ["token-burn", "sync"],
+      install,
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+    });
+
+    expect(result).toEqual({ dryRun: false, output: "Installed Token Burn cron entry." });
+    expect(lines).toEqual([JSON.stringify({ ok: true, dryRun: false, output: "Installed Token Burn cron entry." })]);
+  });
 });
 
 describe("runUninstallScheduler", () => {
@@ -44,6 +77,20 @@ describe("runUninstallScheduler", () => {
 
     expect(uninstall).toHaveBeenCalledWith("linux");
     expect(calls).toContain("success:scheduler:Removed Token Burn scheduler.");
+  });
+
+  it("renders uninstall output as JSON", async () => {
+    const lines: string[] = [];
+    const uninstall = vi.fn(async () => "Removed Token Burn scheduler.");
+
+    const result = await runUninstallScheduler({
+      platform: "linux",
+      uninstall,
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+    });
+
+    expect(result).toEqual({ output: "Removed Token Burn scheduler." });
+    expect(lines).toEqual([JSON.stringify({ ok: true, output: "Removed Token Burn scheduler." })]);
   });
 });
 
