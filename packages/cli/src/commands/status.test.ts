@@ -58,7 +58,7 @@ describe("runStatus", () => {
     expect(lines).toContain("Token Burn status");
     expect(lines).toContain("Auth: not authenticated");
     expect(lines).toContain("Not authenticated.");
-    expect(lines).toContain(JSON.stringify({ ok: true, authenticated: false, cliVersion }));
+    expect(lines).not.toContain(JSON.stringify({ ok: true, authenticated: false, cliVersion }));
   });
 
   it("honors parent --json output flags in the command action", async () => {

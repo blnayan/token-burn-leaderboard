@@ -66,7 +66,7 @@ describe("runDoctor", () => {
     expect(lines).toContain("Platform: linux.");
     expect(lines).toContain("Not authenticated.");
     expect(lines).toContain("Run token-burn sync to submit usage now.");
-    expect(lines).toContain(
+    expect(lines).not.toContain(
       JSON.stringify({ ok: true, authenticated: false, cliVersion, duplicateDeviceGroups: [], platform: "linux" }),
     );
   });

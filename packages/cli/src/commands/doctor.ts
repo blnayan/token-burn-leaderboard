@@ -148,7 +148,10 @@ export function createDoctorCommand(): Command {
 }
 
 function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
-  return createPlainRenderer({ write: (line) => log(formatLegacyLogLine(line)) });
+  return {
+    ...createPlainRenderer({ write: (line) => log(formatLegacyLogLine(line)) }),
+    result() {},
+  };
 }
 
 function formatLegacyLogLine(line: string): string {
