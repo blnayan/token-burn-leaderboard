@@ -2,6 +2,9 @@ import { Command } from "commander";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
 
 type CliHealth = {
@@ -15,6 +18,7 @@ export type StatusDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   readHealth?: HealthReader;
   log?: (message: string) => void;
+  ui?: UiRenderer;
 };
 
 export type StatusResult = {
@@ -31,40 +35,26 @@ export type StatusResult = {
 export async function runStatus({
   readConfig = readConfigFile,
   readHealth = readHealthFromServer,
-  log = console.log,
+  ui = createRenderer(resolveOutputMode({ flags: {} })),
 }: StatusDependencies = {}): Promise<StatusResult> {
-  log(`CLI version: ${cliVersion}.`);
-
   const config = await readConfig();
 
   if (!config) {
-    log("Not authenticated.");
-    return { authenticated: false, cliVersion };
+    const result = { authenticated: false, cliVersion };
+    renderStatus(result, ui);
+    return result;
   }
 
   if (!config.token) {
-    log("Not authenticated.");
-    log(`Remembered server: ${config.serverUrl}.`);
-    if (config.lastSync) {
-      log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
-    }
-    return {
+    const result = {
       authenticated: false,
       cliVersion,
       ...(config.lastSync ? { lastSync: config.lastSync } : {}),
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,
     };
-  } else {
-    log(`Authenticated with ${config.serverUrl}.`);
-
-    if (config.deviceId && config.deviceName) {
-      log(`Device: ${config.deviceName} (${config.deviceId}).`);
-    }
-  }
-
-  if (config.lastSync) {
-    log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
+    renderStatus(result, ui);
+    return result;
   }
 
   let requiredCliVersion: string | undefined;
@@ -74,17 +64,12 @@ export async function runStatus({
     try {
       const health = await readHealth(config.serverUrl);
       requiredCliVersion = health.requiredCliVersion;
-
-      if (cliVersion !== health.requiredCliVersion) {
-        log(formatRequiredCliVersionError(cliVersion, health.requiredCliVersion));
-      }
     } catch (error) {
       serverHealthError = error instanceof Error ? error.message : String(error);
-      log(`Server health check failed: ${serverHealthError}.`);
     }
   }
 
-  return {
+  const result = {
     authenticated: true,
     cliVersion,
     ...(config.deviceId && config.deviceName ? { device: { id: config.deviceId, name: config.deviceName } } : {}),
@@ -93,6 +78,29 @@ export async function runStatus({
     ...(serverHealthError ? { serverHealthError } : {}),
     serverUrl: config.serverUrl,
   };
+  renderStatus(result, ui);
+  return result;
+}
+
+export function renderStatus(result: StatusResult, ui: UiRenderer): void {
+  ui.intro("Token Burn status", [
+    { label: "CLI", value: result.cliVersion },
+    { label: "Auth", value: result.authenticated ? "authenticated" : "not authenticated" },
+  ]);
+
+  if (result.serverUrl) ui.info(`Server: ${result.serverUrl}`);
+  if (result.rememberedServer) ui.info(`Remembered server: ${result.rememberedServer}`);
+  if (result.device) ui.info(`Device: ${result.device.name} (${result.device.id})`);
+  if (result.lastSync) {
+    ui.info(`Last sync: ${result.lastSync.ok ? "OK" : "Failed"} - ${result.lastSync.message} at ${result.lastSync.at}`);
+  }
+  if (result.serverHealthError) ui.warning("health", `Server health check failed: ${result.serverHealthError}`);
+  if (result.requiredCliVersion && result.requiredCliVersion !== result.cliVersion) {
+    ui.warning("version", formatRequiredCliVersionError(result.cliVersion, result.requiredCliVersion));
+  }
+  if (result.authenticated && result.serverUrl) ui.success("auth", `Authenticated with ${result.serverUrl}`);
+  if (!result.authenticated) ui.warning("auth", "Not authenticated");
+  ui.result({ ok: true, ...result });
 }
 
 export function createStatusCommand(): Command {

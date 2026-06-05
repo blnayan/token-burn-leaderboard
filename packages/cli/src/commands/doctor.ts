@@ -3,6 +3,9 @@ import { Command } from "commander";
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
 import type { SchedulerPlatform } from "../scheduler.js";
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
 
 type CliHealth = {
@@ -27,6 +30,7 @@ export type DoctorDependencies = {
   readHealth?: (serverUrl: string) => Promise<CliHealth>;
   readDevices?: (serverUrl: string, token: string) => Promise<DeviceList>;
   log?: (message: string) => void;
+  ui?: UiRenderer;
 };
 
 export type DoctorResult = {
@@ -47,31 +51,21 @@ export async function runDoctor({
   platform = process.platform,
   readHealth = readHealthFromServer,
   readDevices = readDevicesFromServer,
-  log = console.log,
+  ui = createRenderer(resolveOutputMode({ flags: {} })),
 }: DoctorDependencies = {}): Promise<DoctorResult> {
-  log(`CLI version: ${cliVersion}.`);
-
   const config = await readConfig();
 
   if (!config) {
-    log("Not authenticated.");
-    log(`Platform: ${platform}.`);
-    log("Run token-burn sync to submit usage now.");
-    return {
+    const result = {
       authenticated: false,
       cliVersion,
       duplicateDeviceGroups: [],
       platform,
     };
+    renderDoctor(result, ui);
+    return result;
   } else if (!config.token) {
-    log("Not authenticated.");
-    log(`Remembered server: ${config.serverUrl}.`);
-    log(`Platform: ${platform}.`);
-    if (config.lastSync) {
-      log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
-    }
-    log("Run token-burn sync to submit usage now.");
-    return {
+    const result = {
       authenticated: false,
       cliVersion,
       duplicateDeviceGroups: [],
@@ -80,18 +74,8 @@ export async function runDoctor({
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,
     };
-  } else {
-    log(`Authenticated with ${config.serverUrl}.`);
-
-    if (config.deviceId && config.deviceName) {
-      log(`Device: ${config.deviceName} (${config.deviceId}).`);
-    }
-  }
-
-  log(`Platform: ${platform}.`);
-
-  if (config?.lastSync) {
-    log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
+    renderDoctor(result, ui);
+    return result;
   }
 
   let duplicateDeviceGroups: DuplicateDeviceGroup[] = [];
@@ -103,25 +87,17 @@ export async function runDoctor({
       await readHealth(config.serverUrl);
     } catch (error) {
       serverHealthError = error instanceof Error ? error.message : String(error);
-      log(`Server health check failed: ${serverHealthError}.`);
     }
 
     try {
       const devices = await readDevices(config.serverUrl, config.token);
       duplicateDeviceGroups = devices.duplicateGroups;
-
-      if (devices.duplicateGroups.length > 0) {
-        log("Likely duplicate devices found. Run token-burn devices to inspect and merge.");
-      }
     } catch (error) {
       deviceCheckError = error instanceof Error ? error.message : String(error);
-      log(`Device check failed: ${deviceCheckError}.`);
     }
   }
 
-  log("Run token-burn sync to submit usage now.");
-
-  return {
+  const result = {
     authenticated: true,
     cliVersion,
     ...(config.deviceId && config.deviceName ? { device: { id: config.deviceId, name: config.deviceName } } : {}),
@@ -132,6 +108,31 @@ export async function runDoctor({
     ...(serverHealthError ? { serverHealthError } : {}),
     serverUrl: config.serverUrl,
   };
+  renderDoctor(result, ui);
+  return result;
+}
+
+export function renderDoctor(result: DoctorResult, ui: UiRenderer): void {
+  ui.intro("Token Burn doctor", [
+    { label: "CLI", value: result.cliVersion },
+    { label: "Platform", value: result.platform },
+  ]);
+
+  if (result.serverUrl) ui.info(`Server: ${result.serverUrl}`);
+  if (result.rememberedServer) ui.info(`Remembered server: ${result.rememberedServer}`);
+  if (result.device) ui.info(`Device: ${result.device.name} (${result.device.id})`);
+  if (result.lastSync) {
+    ui.info(`Last sync: ${result.lastSync.ok ? "OK" : "Failed"} - ${result.lastSync.message} at ${result.lastSync.at}`);
+  }
+  if (result.serverHealthError) ui.warning("health", `Server health check failed: ${result.serverHealthError}`);
+  if (result.deviceCheckError) ui.warning("devices", `Device check failed: ${result.deviceCheckError}`);
+  if (result.duplicateDeviceGroups.length > 0) {
+    ui.warning("devices", "Likely duplicate devices found. Run token-burn devices to inspect and merge.");
+  }
+  if (result.authenticated && result.serverUrl) ui.success("auth", `Authenticated with ${result.serverUrl}`);
+  if (!result.authenticated) ui.warning("auth", "Not authenticated");
+  ui.nextAction("Run token-burn sync to submit usage now.");
+  ui.result({ ok: true, ...result });
 }
 
 export function createDoctorCommand(): Command {
