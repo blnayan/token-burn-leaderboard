@@ -32,7 +32,7 @@ Optional troubleshooting commands:
 npx @blnayan/token-burn@latest status
 npx @blnayan/token-burn@latest devices
 npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
-npx @blnayan/token-burn@latest uninstall-scheduler
+npx @blnayan/token-burn@latest scheduler uninstall
 ```
 
 For more CLI details, see [packages/cli/README.md](packages/cli/README.md) and [docs/cli-install.md](docs/cli-install.md).

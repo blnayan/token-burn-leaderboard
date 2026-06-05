@@ -136,6 +136,46 @@ describe("syncUsage", () => {
     expect(logs).toEqual(["Submitted 2 usage rows."]);
   });
 
+  it("returns structured sync results after a successful sync", async () => {
+    const result = await syncUsage({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      writeConfig: async () => {},
+      postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
+      readProviderUsage: async (provider) => {
+        if (provider === "codex") return [];
+
+        return [
+          {
+            provider,
+            date: "2026-05-31",
+            tokenCategories: { input: 100 },
+            totalTokens: 100,
+          },
+        ];
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
+      log: () => {},
+    });
+
+    expect(result).toEqual({
+      failedProviders: [],
+      lastSync: {
+        ok: true,
+        message: "Submitted 1 usage row.",
+        at: "2026-06-01T00:00:00.000Z",
+      },
+      skippedProviders: [],
+      submitted: 1,
+      syncedAt: "2026-06-01T00:00:00.000Z",
+    });
+  });
+
   it("refuses to sync when the server requires a different CLI version", async () => {
     let readProviderUsageCalled = false;
     let postJsonCalled = false;

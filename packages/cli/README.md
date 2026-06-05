@@ -28,9 +28,18 @@ Command names are shown as `token-burn`; use `npx @blnayan/token-burn@latest <co
 - `token-burn login --server-url <url>` authenticates with another Token Burn server.
 - `token-burn sync` sends aggregate usage totals.
 - `token-burn status` shows auth and last sync state.
-- `token-burn install-scheduler` installs automatic sync.
-- `token-burn install-scheduler --dry-run` previews scheduler changes.
-- `token-burn uninstall-scheduler` removes automatic sync.
+- `token-burn scheduler install` installs automatic sync.
+- `token-burn scheduler install --dry-run` previews scheduler changes.
+- `token-burn scheduler uninstall` removes automatic sync.
+- `token-burn install-scheduler` and `token-burn uninstall-scheduler` remain available as compatibility aliases.
+
+## Output Modes
+
+- Interactive terminals use rich Clean Operator output by default.
+- Non-TTY output, cron, CI, and `NO_COLOR` use plain output.
+- Use `--plain` for log-safe human text.
+- Use `--json` for machine-readable output where supported.
+- Use `--no-color` to keep rich layout without ANSI color.
 
 ## Privacy
 

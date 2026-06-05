@@ -610,7 +610,7 @@ describe("scheduler commands", () => {
     });
 
     expect(install).toHaveBeenCalledWith("linux", ["token-burn", "sync"]);
-    expect(log).toHaveBeenCalledWith("Installed Token Burn cron entry.");
+    expect(log).toHaveBeenCalledWith("OK: Installed Token Burn cron entry.");
   });
 
   it("runs the injected uninstaller", async () => {
@@ -620,7 +620,7 @@ describe("scheduler commands", () => {
     await runUninstallScheduler({ platform: "linux", uninstall, log });
 
     expect(uninstall).toHaveBeenCalledWith("linux");
-    expect(log).toHaveBeenCalledWith("Removed Token Burn scheduler.");
+    expect(log).toHaveBeenCalledWith("OK: Removed Token Burn scheduler.");
   });
 });
 

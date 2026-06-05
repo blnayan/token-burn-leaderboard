@@ -6,11 +6,16 @@ import { readConfig as readConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
 import { getJson, HttpError } from "../http.js";
 import { syncUsage } from "../sync.js";
+import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
+import { createPlainRenderer } from "../ui/plain-renderer.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 import { runLogin } from "./login.js";
 import { runInstallScheduler } from "./scheduler.js";
 
-type SetupLogin = (options: { serverUrl: string }) => Promise<void>;
-type SetupInstallScheduler = (options: { dryRun: boolean }) => Promise<void>;
+type SetupLogin = (options: { serverUrl: string; ui?: UiRenderer }) => Promise<unknown>;
+type SetupInstallScheduler = (options: { dryRun: boolean; ui?: UiRenderer }) => Promise<unknown>;
+type SetupSync = () => Promise<unknown>;
 type SetupValidateAuth = (options: { serverUrl: string; token: string }) => Promise<boolean>;
 
 const authValidationResponseSchema = z.object({
@@ -25,43 +30,60 @@ export type SetupOptions = {
   serverUrl: string;
   readConfig?: () => Promise<CliConfig | null>;
   login?: SetupLogin;
-  sync?: () => Promise<void>;
+  sync?: SetupSync;
   installScheduler?: SetupInstallScheduler;
   validateAuth?: SetupValidateAuth;
   log?: (message: string) => void;
+  ui?: UiRenderer;
+};
+
+export type SetupResult = {
+  authReused: boolean;
+  schedulerInstalled: boolean;
+  syncFailed: boolean;
 };
 
 export async function runSetup({
   serverUrl,
   readConfig = readConfigFile,
-  login = runLogin,
+  login,
   sync = syncUsage,
-  installScheduler = runInstallScheduler,
+  installScheduler,
   validateAuth = validateAuthFromServer,
-  log = console.log,
-}: SetupOptions): Promise<void> {
+  log,
+  ui,
+}: SetupOptions): Promise<SetupResult> {
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
+  const childRenderer = suppressResult(renderer);
+  const runSetupLogin = login ?? runLogin;
+  const runSetupInstallScheduler = installScheduler ?? runInstallScheduler;
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
 
-  log("Starting Token Burn setup.");
+  renderer.intro("Token Burn setup", [{ label: "Server", value: normalizedServerUrl }]);
+  renderer.step("auth", "Checking authentication");
 
-  if (await canReuseExistingAuth({ serverUrl: normalizedServerUrl, readConfig, validateAuth })) {
-    log("Existing authentication is valid.");
+  const authReused = await canReuseExistingAuth({ serverUrl: normalizedServerUrl, readConfig, validateAuth });
+  if (authReused) {
+    renderer.success("auth", "Existing authentication is valid");
   } else {
-    await login({ serverUrl: normalizedServerUrl });
-    log("Login complete.");
+    await runSetupLogin(login ? { serverUrl: normalizedServerUrl } : { serverUrl: normalizedServerUrl, ui: childRenderer });
   }
 
   let syncFailed = false;
+  renderer.step("sync", "Submitting usage totals");
   try {
     await sync();
-    log("First sync complete.");
+    renderer.success("sync", "First sync complete");
   } catch (error) {
     syncFailed = true;
-    log(`First sync failed: ${formatErrorMessage(error)}`);
+    renderer.warning("sync", `First sync failed: ${formatErrorMessage(error)}`);
   }
 
+  renderer.step("scheduler", "Installing automatic sync");
   try {
-    await installScheduler({ dryRun: false });
+    await runSetupInstallScheduler(
+      installScheduler ? { dryRun: false } : { dryRun: false, ui: childRenderer },
+    );
   } catch (error) {
     throw new Error(
       `Setup authenticated and attempted the first sync, but automatic sync was not installed: ${formatErrorMessage(
@@ -71,20 +93,30 @@ export async function runSetup({
   }
 
   if (syncFailed) {
-    log("Automatic sync was still installed or refreshed and will retry on quarter-hour boundaries.");
+    renderer.info("Automatic sync was still installed or refreshed and will retry on quarter-hour boundaries.");
   }
 
-  log("Setup complete. Automatic sync will run on quarter-hour boundaries.");
+  const result = { authReused, schedulerInstalled: true, syncFailed };
+  renderer.success("scheduler", "Automatic sync will run on quarter-hour boundaries");
+  renderer.summary("Setup complete", [{ label: "Automatic sync", value: "Quarter-hour boundaries" }]);
+  renderer.result({ ok: true, ...result });
+  return result;
 }
 
 export function createSetupCommand(): Command {
-  return new Command("setup")
+  const command = new Command("setup")
     .description("Authenticate, sync once, and install automatic Token Burn sync")
     .option("-s, --server-url <url>", "Token Burn server URL")
     .option("--server <url>", "Alias for --server-url")
     .action(async (options: { serverUrl?: string; server?: string }) => {
-      await runSetup({ serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl() });
+      const flags = command.parent?.opts<OutputFlags>() ?? {};
+      await runSetup({
+        serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl(),
+        ui: createRenderer(resolveOutputMode({ flags })),
+      });
     });
+
+  return command;
 }
 
 async function canReuseExistingAuth({
@@ -125,4 +157,15 @@ function normalizeServerUrl(serverUrl: string): string {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function suppressResult(ui: UiRenderer): UiRenderer {
+  return {
+    ...ui,
+    result() {},
+  };
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return suppressResult(createPlainRenderer({ write: log }));
 }
