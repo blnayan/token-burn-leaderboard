@@ -127,7 +127,9 @@ describe("scheduler install runtime", () => {
     expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.service")).toContain(
       "ExecStart=/usr/bin/node /repo/dist/index.js sync",
     );
-    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain(
+    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain("OnCalendar=*:0/15");
+    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain("Persistent=true");
+    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).not.toContain(
       "OnUnitActiveSec=15min",
     );
     expect(runtime.commands).toEqual([
@@ -169,6 +171,12 @@ describe("scheduler install runtime", () => {
 
     const plistPath = "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
     expect(runtime.files.get(plistPath)).toContain("<string>com.token-burn.sync</string>");
+    expect(runtime.files.get(plistPath)).toContain("<key>StartCalendarInterval</key>");
+    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
+    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
+    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
+    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
+    expect(runtime.files.get(plistPath)).not.toContain("<key>StartInterval</key>");
     expect(runtime.commands).toEqual([
       ["launchctl", ["unload", plistPath]],
       ["launchctl", ["load", plistPath]],
@@ -194,6 +202,8 @@ describe("scheduler install runtime", () => {
           "MINUTE",
           "/MO",
           "15",
+          "/ST",
+          "00:00",
           "/TR",
           '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Me\\token burn\\dist\\index.js" sync',
           "/F",
