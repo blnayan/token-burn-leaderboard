@@ -8,6 +8,10 @@ import {
   type SchedulerPlatform,
   uninstallScheduler,
 } from "../scheduler.js";
+import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
+import { createPlainRenderer } from "../ui/plain-renderer.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 
 export type InstallSchedulerOptions = {
   dryRun: boolean;
@@ -15,12 +19,14 @@ export type InstallSchedulerOptions = {
   syncCommandArgv?: SchedulerCommandArgv;
   install?: (platform: SchedulerPlatform, syncCommandArgv: SchedulerCommandArgv) => Promise<string>;
   log?: (message: string) => void;
+  ui?: UiRenderer;
 };
 
 export type UninstallSchedulerOptions = {
   platform?: SchedulerPlatform;
   uninstall?: (platform: SchedulerPlatform) => Promise<string>;
   log?: (message: string) => void;
+  ui?: UiRenderer;
 };
 
 export async function runInstallScheduler({
@@ -32,37 +38,47 @@ export async function runInstallScheduler({
       runtime: createNodeSchedulerRuntime(selectedPlatform),
       syncCommandArgv: selectedSyncCommandArgv,
     }),
-  log = console.log,
+  log,
+  ui,
 }: InstallSchedulerOptions): Promise<void> {
+  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   if (dryRun) {
-    log(buildSchedulerInstallOutput(platform, syncCommandArgv));
+    renderer.info(buildSchedulerInstallOutput(platform, syncCommandArgv));
     return;
   }
 
-  log(await install(platform, syncCommandArgv));
+  renderer.success("scheduler", await install(platform, syncCommandArgv));
 }
 
 export async function runUninstallScheduler({
   platform = process.platform,
   uninstall = async (selectedPlatform) => uninstallScheduler({ runtime: createNodeSchedulerRuntime(selectedPlatform) }),
-  log = console.log,
+  log,
+  ui,
 }: UninstallSchedulerOptions = {}): Promise<void> {
-  log(await uninstall(platform));
+  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  renderer.success("scheduler", await uninstall(platform));
 }
 
 export function createInstallSchedulerCommand(): Command {
-  return new Command("install-scheduler")
+  const command = new Command("install-scheduler")
     .description("Print scheduler setup guidance for automatic sync")
     .option("--dry-run", "Print the generated platform scheduler config or command")
     .action(async (options: { dryRun?: boolean }) => {
-      await runInstallScheduler({ dryRun: options.dryRun === true });
+      const flags = command.parent?.opts<OutputFlags>() ?? {};
+      await runInstallScheduler({ dryRun: options.dryRun === true, ui: createRenderer(resolveOutputMode({ flags })) });
     });
+
+  return command;
 }
 
 export function createUninstallSchedulerCommand(): Command {
-  return new Command("uninstall-scheduler").description("Remove automatic Token Burn sync").action(async () => {
-    await runUninstallScheduler();
+  const command = new Command("uninstall-scheduler").description("Remove automatic Token Burn sync").action(async () => {
+    const flags = command.parent?.opts<OutputFlags>() ?? {};
+    await runUninstallScheduler({ ui: createRenderer(resolveOutputMode({ flags })) });
   });
+
+  return command;
 }
 
 export function createSchedulerCommand(): Command {
@@ -73,11 +89,13 @@ export function createSchedulerCommand(): Command {
     .description("Install automatic Token Burn sync")
     .option("--dry-run", "Print the generated platform scheduler config or command")
     .action(async (options: { dryRun?: boolean }) => {
-      await runInstallScheduler({ dryRun: options.dryRun === true });
+      const flags = command.parent?.opts<OutputFlags>() ?? {};
+      await runInstallScheduler({ dryRun: options.dryRun === true, ui: createRenderer(resolveOutputMode({ flags })) });
     });
 
   command.command("uninstall").description("Remove automatic Token Burn sync").action(async () => {
-    await runUninstallScheduler();
+    const flags = command.parent?.opts<OutputFlags>() ?? {};
+    await runUninstallScheduler({ ui: createRenderer(resolveOutputMode({ flags })) });
   });
 
   return command;

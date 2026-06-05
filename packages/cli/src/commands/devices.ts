@@ -5,6 +5,10 @@ import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
 import { postJson as postJsonRequest } from "../http.js";
+import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
+import { createPlainRenderer } from "../ui/plain-renderer.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 
 const deviceSummarySchema = z.object({
   id: z.string().min(1),
@@ -41,43 +45,63 @@ const deviceMergeResponseSchema = z.object({
 type DeviceListResponse = z.infer<typeof deviceListResponseSchema>;
 type DeviceMergeResponse = z.infer<typeof deviceMergeResponseSchema>;
 
+export type DeviceListResult = DeviceListResponse;
+export type DeviceMergeResult = DeviceMergeResponse;
+
 export type DevicesDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   getJson?: <T>(url: string, token?: string) => Promise<T>;
   postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
   log?: (message: string) => void;
+  ui?: UiRenderer;
 };
 
 export async function runListDevices({
   readConfig = readConfigFile,
   getJson = getJsonRequest,
-  log = console.log,
-}: DevicesDependencies = {}): Promise<void> {
+  log,
+  ui,
+}: DevicesDependencies = {}): Promise<DeviceListResult> {
+  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
   const response = deviceListResponseSchema.parse(
     await getJson<DeviceListResponse>(`${normalizeServerUrl(config.serverUrl)}/api/cli/devices`, config.token),
   );
 
-  log("Devices:");
   if (response.devices.length === 0) {
-    log("No devices found.");
-  }
-
-  for (const device of response.devices) {
-    log(`${device.id}  ${device.name}  ${device.os}  ${device.dailyRows} rows  ${device.totalTokens} tokens`);
+    renderer.info("No devices found.");
+  } else {
+    renderer.table("Devices", {
+      columns: ["ID", "Name", "OS", "Rows", "Tokens"],
+      rows: response.devices.map((device) => [
+        device.id,
+        device.name,
+        device.os,
+        String(device.dailyRows),
+        device.totalTokens,
+      ]),
+    });
   }
 
   if (response.duplicateGroups.length === 0) {
-    log("No likely duplicate devices found.");
-    return;
+    renderer.info("No likely duplicate devices found.");
+    renderer.result({ ok: true, ...response });
+    return response;
   }
 
-  log("Likely duplicates:");
-  for (const group of response.duplicateGroups) {
-    log(`${group.name} / ${group.os}: ${group.duplicateRows} duplicate rows, ${group.conflictRows} conflicts`);
+  renderer.table("Likely duplicates", {
+    columns: ["Name", "OS", "Duplicates", "Conflicts"],
+    rows: response.duplicateGroups.map((group) => [
+      group.name,
+      group.os,
+      String(group.duplicateRows),
+      String(group.conflictRows),
+    ]),
+  });
 
+  for (const group of response.duplicateGroups) {
     if (group.conflictRows > 0) {
-      log("Conflicts will be resolved automatically by keeping the higher provider/date total.");
+      renderer.info("Conflicts will be resolved automatically by keeping the higher provider/date total.");
     }
 
     if (group.devices.length >= 2) {
@@ -86,10 +110,13 @@ export async function runListDevices({
       const target = sortedDevices[sortedDevices.length - 1];
 
       if (source && target && source.id !== target.id) {
-        log(`Merge suggestion: token-burn devices merge ${source.id} ${target.id}`);
+        renderer.nextAction(`Merge suggestion: token-burn devices merge ${source.id} ${target.id}`);
       }
     }
   }
+
+  renderer.result({ ok: true, ...response });
+  return response;
 }
 
 export async function runMergeDevices({
@@ -97,11 +124,13 @@ export async function runMergeDevices({
   targetDeviceId,
   readConfig = readConfigFile,
   postJson = postJsonRequest,
-  log = console.log,
+  log,
+  ui,
 }: DevicesDependencies & {
   sourceDeviceId: string;
   targetDeviceId: string;
-}): Promise<void> {
+}): Promise<DeviceMergeResult> {
+  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
   const response = deviceMergeResponseSchema.parse(
     await postJson<DeviceMergeResponse>(
@@ -111,17 +140,30 @@ export async function runMergeDevices({
     ),
   );
 
-  log(`Merged ${response.sourceDeviceId} into ${response.targetDeviceId}.`);
-  log(`Deleted duplicate rows: ${response.deletedDuplicateRows}`);
-  log(`Moved rows: ${response.movedRows}`);
-  log(`Resolved conflict rows: ${response.resolvedConflictRows}`);
-  log(`Deleted source device: ${response.deletedSourceDevice ? "yes" : "no"}`);
+  renderer.summary("Merge complete", [
+    { label: "Merged", value: `${response.sourceDeviceId} into ${response.targetDeviceId}` },
+    { label: "Deleted duplicate rows", value: String(response.deletedDuplicateRows) },
+    { label: "Moved rows", value: String(response.movedRows) },
+    { label: "Resolved conflict rows", value: String(response.resolvedConflictRows) },
+    { label: "Deleted source device", value: response.deletedSourceDevice ? "yes" : "no" },
+  ]);
+  renderer.result({ ok: true, ...response });
+  return response;
 }
 
 export function createDevicesCommand(): Command {
   const command = new Command("devices").description("List and merge Token Burn devices").action(async () => {
-    await runListDevices();
+    const flags = command.parent?.opts<OutputFlags>() ?? {};
+    await runListDevices({ ui: createRenderer(resolveOutputMode({ flags })) });
   });
+
+  command
+    .command("list")
+    .description("List Token Burn devices")
+    .action(async () => {
+      const flags = command.parent?.opts<OutputFlags>() ?? {};
+      await runListDevices({ ui: createRenderer(resolveOutputMode({ flags })) });
+    });
 
   command
     .command("merge")
@@ -129,7 +171,12 @@ export function createDevicesCommand(): Command {
     .argument("<source-device-id>")
     .argument("<target-device-id>")
     .action(async (sourceDeviceId: string, targetDeviceId: string) => {
-      await runMergeDevices({ sourceDeviceId, targetDeviceId });
+      const flags = command.parent?.opts<OutputFlags>() ?? {};
+      await runMergeDevices({
+        sourceDeviceId,
+        targetDeviceId,
+        ui: createRenderer(resolveOutputMode({ flags })),
+      });
     });
 
   return command;

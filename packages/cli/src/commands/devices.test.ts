@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
+import type { UiRenderer } from "../ui/types.js";
 import { createDevicesCommand, runListDevices, runMergeDevices } from "./devices.js";
 
 describe("runListDevices", () => {
@@ -10,7 +13,7 @@ describe("runListDevices", () => {
   });
 
   it("prints devices and likely duplicate groups", async () => {
-    const log = vi.fn();
+    const calls: string[] = [];
     const getJson = vi.fn().mockResolvedValue({
       devices: [
         {
@@ -62,19 +65,19 @@ describe("runListDevices", () => {
       ],
     });
 
-    await runListDevices({
+    const result = await runListDevices({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
       getJson,
-      log,
+      ui: createRecordingUi(calls),
     });
 
     expect(getJson).toHaveBeenCalledWith("https://token-burn.test/api/cli/devices", "tb_secret");
-    expect(log).toHaveBeenCalledWith("Devices:");
-    expect(log).toHaveBeenCalledWith("old-device  Nayans-MacBook-Air.local  darwin  21 rows  471033315 tokens");
-    expect(log).toHaveBeenCalledWith("new-device  Nayans-MacBook-Air.local  darwin  32 rows  2162169624 tokens");
-    expect(log).toHaveBeenCalledWith("Likely duplicates:");
-    expect(log).toHaveBeenCalledWith("Nayans-MacBook-Air.local / darwin: 21 duplicate rows, 0 conflicts");
-    expect(log).toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
+    expect(result.devices).toHaveLength(2);
+    expect(result.duplicateGroups).toHaveLength(1);
+    expect(calls).toContain("table:Devices:[[\"old-device\",\"Nayans-MacBook-Air.local\",\"darwin\",\"21\",\"471033315\"],[\"new-device\",\"Nayans-MacBook-Air.local\",\"darwin\",\"32\",\"2162169624\"]]");
+    expect(calls).toContain("table:Likely duplicates:[[\"Nayans-MacBook-Air.local\",\"darwin\",\"21\",\"0\"]]");
+    expect(calls).toContain("next:Merge suggestion: token-burn devices merge old-device new-device");
+    expect(readResultCall(calls)).toMatchObject({ ok: true });
   });
 
   it("prints automatic conflict resolution messaging and merge suggestions for conflicted duplicate groups", async () => {
@@ -136,11 +139,26 @@ describe("runListDevices", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("Nayans-MacBook-Air.local / darwin: 0 duplicate rows, 1 conflicts");
+    expect(log).toHaveBeenCalledWith("Likely duplicates");
+    expect(log).toHaveBeenCalledWith(expect.stringContaining("Nayans-MacBook-Air.local  darwin  0           1"));
     expect(log).toHaveBeenCalledWith(
       "Conflicts will be resolved automatically by keeping the higher provider/date total.",
     );
-    expect(log).toHaveBeenCalledWith("Merge suggestion: token-burn devices merge old-device new-device");
+    expect(log).toHaveBeenCalledWith("Next: Merge suggestion: token-burn devices merge old-device new-device");
+  });
+
+  it("renders JSON output when a JSON renderer is injected", async () => {
+    const lines: string[] = [];
+    const response = { devices: [], duplicateGroups: [] };
+
+    const result = await runListDevices({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
+      getJson: vi.fn().mockResolvedValue(response),
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+    });
+
+    expect(result).toEqual(response);
+    expect(lines).toEqual([JSON.stringify({ ok: true, ...response })]);
   });
 });
 
@@ -156,12 +174,14 @@ describe("runMergeDevices", () => {
     });
     const log = vi.fn();
 
-    await runMergeDevices({
+    const calls: string[] = [];
+
+    const result = await runMergeDevices({
       sourceDeviceId: "old-device",
       targetDeviceId: "new-device",
       readConfig: async () => ({ serverUrl: "https://token-burn.test/", token: "tb_secret" }),
       postJson,
-      log,
+      ui: createRecordingUi(calls),
     });
 
     expect(postJson).toHaveBeenCalledWith(
@@ -169,10 +189,17 @@ describe("runMergeDevices", () => {
       { sourceDeviceId: "old-device", targetDeviceId: "new-device" },
       "tb_secret",
     );
-    expect(log).toHaveBeenCalledWith("Deleted duplicate rows: 21");
-    expect(log).toHaveBeenCalledWith("Moved rows: 0");
-    expect(log).toHaveBeenCalledWith("Resolved conflict rows: 2");
-    expect(log).toHaveBeenCalledWith("Deleted source device: yes");
+    expect(result).toEqual({
+      sourceDeviceId: "old-device",
+      targetDeviceId: "new-device",
+      deletedDuplicateRows: 21,
+      movedRows: 0,
+      resolvedConflictRows: 2,
+      deletedSourceDevice: true,
+    });
+    expect(calls).toContain("summary:Merge complete:5");
+    expect(readResultCall(calls)).toEqual({ ok: true, ...result });
+    expect(log).not.toHaveBeenCalled();
   });
 
   it("surfaces merge failures from the server", async () => {
@@ -196,4 +223,33 @@ describe("createDevicesCommand", () => {
 
     expect(help).toContain("merge");
   });
+
+  it("contains the explicit list subcommand", () => {
+    const help = createDevicesCommand().helpInformation();
+
+    expect(help).toContain("list");
+  });
 });
+
+function readResultCall(calls: string[]): Record<string, unknown> {
+  const result = calls.find((call) => call.startsWith("result:"));
+
+  if (!result) throw new Error("Missing result call");
+
+  return JSON.parse(result.slice("result:".length)) as Record<string, unknown>;
+}
+
+function createRecordingUi(calls: string[]): UiRenderer {
+  return {
+    intro: (title, details = []) => calls.push(`intro:${title}:${details.length}`),
+    step: (id, message) => calls.push(`step:${id}:${message}`),
+    success: (id, message) => calls.push(`success:${id}:${message}`),
+    warning: (id, message) => calls.push(`warning:${id}:${message}`),
+    info: (message) => calls.push(`info:${message}`),
+    table: (title, table) => calls.push(`table:${title}:${JSON.stringify(table.rows)}`),
+    summary: (title, details = []) => calls.push(`summary:${title}:${details.length}`),
+    nextAction: (message) => calls.push(`next:${message}`),
+    error: (error) => calls.push(`error:${error.code}:${error.message}`),
+    result: (result) => calls.push(`result:${JSON.stringify(result)}`),
+  };
+}
