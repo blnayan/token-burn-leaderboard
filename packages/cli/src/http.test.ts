@@ -7,6 +7,31 @@ describe("http helpers", () => {
     vi.restoreAllMocks();
   });
 
+  it("postJson sends JSON request details and parses JSON", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    );
+
+    await expect(
+      postJson<{ ok: boolean }>("https://token-burn.test/api/polls", { pollToken: "poll_123" }, "tb_secret"),
+    ).resolves.toEqual({ ok: true });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://token-burn.test/api/polls", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: "Bearer tb_secret",
+      },
+      body: JSON.stringify({ pollToken: "poll_123" }),
+    });
+  });
+
+  it("postJson rejects malformed JSON from successful responses", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("not json", { status: 200 }));
+
+    await expect(postJson("https://token-burn.test/api/polls", {})).rejects.toThrow("Expected JSON response.");
+  });
+
   it("postJson uses API error messages from JSON responses", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ error: "pollToken is required" }), {
