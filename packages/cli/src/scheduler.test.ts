@@ -95,6 +95,7 @@ describe("scheduler builders", () => {
     expect(plist).toContain("<string>sync</string>");
     expect(plist).toContain("<key>StandardOutPath</key>");
     expect(plist).toContain("<key>StandardErrorPath</key>");
+    expect(Array.from(plist.matchAll(/<string>\/tmp\/token-burn-sync\.log<\/string>/g))).toHaveLength(2);
   });
 
   it("XML-escapes launchd command arguments", () => {
