@@ -59,12 +59,16 @@ export function buildCronBlock(commandArgv: SchedulerCommandArgv): string {
 }
 
 export function mergeCronBlock(existingCrontab: string, block: string): string {
-  const markerPattern = new RegExp(
-    `${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`,
-    "m",
-  );
-  if (markerPattern.test(existingCrontab)) {
-    return ensureTrailingNewline(existingCrontab.replace(markerPattern, `${block}\n`));
+  const markerPattern = cronMarkerPattern();
+  let replaced = false;
+  const withFreshBlock = existingCrontab.replace(markerPattern, () => {
+    if (replaced) return "";
+    replaced = true;
+    return `${block}\n`;
+  });
+
+  if (replaced) {
+    return ensureTrailingNewline(withFreshBlock.trimEnd());
   }
 
   const trimmed = existingCrontab.trimEnd();
@@ -72,11 +76,7 @@ export function mergeCronBlock(existingCrontab: string, block: string): string {
 }
 
 export function removeCronBlock(existingCrontab: string): string {
-  const markerPattern = new RegExp(
-    `${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`,
-    "m",
-  );
-  const withoutExisting = existingCrontab.replace(markerPattern, "").trimEnd();
+  const withoutExisting = existingCrontab.replace(cronMarkerPattern(), "").trimEnd();
   return withoutExisting ? `${withoutExisting}\n` : "";
 }
 
@@ -190,11 +190,16 @@ export function createNodeSchedulerRuntime(platform: SchedulerPlatform = process
 async function installLinuxScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
   try {
     await installLinuxSystemdScheduler(runtime, syncCommandArgv);
-    return "Installed Token Burn systemd user timer token-burn-sync.timer.";
   } catch (error) {
     await installLinuxCronScheduler(runtime, syncCommandArgv);
-    const message = error instanceof Error ? error.message : String(error);
-    return `Installed Token Burn cron entry after systemd user timer was unavailable: ${message}`;
+    return `Installed Token Burn cron entry after systemd user timer was unavailable: ${errorMessage(error)}`;
+  }
+
+  try {
+    await removeLinuxCronFallbackIfPresent(runtime);
+    return "Installed Token Burn systemd user timer token-burn-sync.timer.";
+  } catch (error) {
+    return `Installed Token Burn systemd user timer token-burn-sync.timer, but existing cron fallback could not be removed: ${errorMessage(error)}`;
   }
 }
 
@@ -208,7 +213,6 @@ async function installLinuxSystemdScheduler(
   await runtime.writeFile(`${dir}/token-burn-sync.timer`, buildSystemdTimer());
   await runtime.execFile("systemctl", ["--user", "daemon-reload"]);
   await runtime.execFile("systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]);
-  await removeLinuxCronFallbackIfPresent(runtime);
 }
 
 async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<void> {
@@ -302,8 +306,16 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function cronMarkerPattern(): RegExp {
+  return new RegExp(`${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`, "gm");
+}
+
 function ensureTrailingNewline(value: string): string {
   return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function escapeXml(value: string): string {

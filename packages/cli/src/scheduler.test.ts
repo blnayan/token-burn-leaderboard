@@ -11,6 +11,7 @@ import {
   buildWindowsTaskCommand,
   installScheduler,
   mergeCronBlock,
+  removeCronBlock,
   uninstallScheduler,
 } from "./scheduler.js";
 import { cliVersion } from "./version.js";
@@ -76,6 +77,48 @@ describe("scheduler builders", () => {
         "0 0 * * * echo midnight",
         "",
       ].join("\n"),
+    );
+  });
+
+  it("collapses duplicate marked cron blocks to one fresh block", () => {
+    const existing = [
+      "MAILTO=me@example.com",
+      "# BEGIN Token Burn scheduler",
+      "*/15 * * * * old command",
+      "# END Token Burn scheduler",
+      "0 0 * * * echo midnight",
+      "# BEGIN Token Burn scheduler",
+      "*/15 * * * * older command",
+      "# END Token Burn scheduler",
+    ].join("\n");
+
+    expect(mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"]))).toBe(
+      [
+        "MAILTO=me@example.com",
+        "# BEGIN Token Burn scheduler",
+        "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+        "# END Token Burn scheduler",
+        "0 0 * * * echo midnight",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("removes all marked cron blocks while preserving unrelated lines", () => {
+    const existing = [
+      "MAILTO=me@example.com",
+      "# BEGIN Token Burn scheduler",
+      "*/15 * * * * old command",
+      "# END Token Burn scheduler",
+      "0 0 * * * echo midnight",
+      "# BEGIN Token Burn scheduler",
+      "*/15 * * * * older command",
+      "# END Token Burn scheduler",
+      "30 1 * * * echo late",
+    ].join("\n");
+
+    expect(removeCronBlock(existing)).toBe(
+      ["MAILTO=me@example.com", "0 0 * * * echo midnight", "30 1 * * * echo late", ""].join("\n"),
     );
   });
 
@@ -173,6 +216,42 @@ describe("scheduler install runtime", () => {
       ["crontab", ["-l"]],
     ]);
     expect(runtime.stdinCommands).toEqual([]);
+  });
+
+  it("reports cleanup failure after systemd install without installing cron fallback again", async () => {
+    const runtime = createMockSchedulerRuntime({
+      platform: "linux",
+      homeDir: "/home/me",
+      failingCommands: new Set(["crontab -"]),
+      commandOutput: new Map([
+        [
+          "crontab -l",
+          [
+            "MAILTO=me@example.com",
+            "# BEGIN Token Burn scheduler",
+            "*/15 * * * * 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+            "# END Token Burn scheduler",
+            "0 0 * * * echo midnight",
+            "",
+          ].join("\n"),
+        ],
+      ]),
+    });
+
+    const message = await installScheduler({
+      runtime,
+      syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"],
+    });
+
+    expect(message).toContain("but existing cron fallback could not be removed");
+    expect(runtime.commands).toEqual([
+      ["systemctl", ["--user", "daemon-reload"]],
+      ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
+      ["crontab", ["-l"]],
+    ]);
+    expect(runtime.stdinCommands).toEqual([
+      { command: "crontab", args: ["-"], input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n" },
+    ]);
   });
 
   it("falls back to cron when Linux user systemd is unavailable", async () => {
