@@ -15,6 +15,7 @@ import {
 import { createSetupCommand } from "./commands/setup.js";
 import { createSyncCommand } from "./commands/sync.js";
 import { createStatusCommand } from "./commands/status.js";
+import { classifyError } from "./ui/errors.js";
 import { resolveOutputMode, type OutputFlags } from "./ui/mode.js";
 import { createRenderer } from "./ui/renderer.js";
 import { cliVersion } from "./version.js";
@@ -56,9 +57,8 @@ if (isCliEntrypoint(process.argv[1], import.meta.url)) {
     const flags = program.opts<OutputFlags>();
     const outputMode = resolveOutputMode({ flags });
     const ui = createRenderer(outputMode, { write: console.error });
-    const message = error instanceof Error ? error.message : String(error);
 
-    ui.error({ code: "CLI_ERROR", message });
+    ui.error(classifyError(error));
     process.exitCode = 1;
   });
 }
