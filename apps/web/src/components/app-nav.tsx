@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { AppNavLink } from "@/components/app-nav-link";
 import { SessionControls } from "@/components/session-controls";
+import { ThemeSwitcher } from "@/components/theme-switcher";
 import { NavigationMenu, NavigationMenuList } from "@/components/ui/navigation-menu";
 import { env } from "@/lib/env";
 import { prisma } from "@/lib/prisma";
@@ -31,8 +32,8 @@ export async function AppNav({ session, currentPath = "/" }: AppNavProps) {
 
   return (
     <header className="border-b bg-background" data-testid="app-nav">
-      <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+      <div className="mx-auto flex min-h-14 w-full max-w-4xl flex-col gap-2 px-5 py-2 sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
           <Link className="text-base font-semibold" href="/">
             Token Burn
           </Link>
@@ -49,7 +50,10 @@ export async function AppNav({ session, currentPath = "/" }: AppNavProps) {
             </NavigationMenuList>
           </NavigationMenu>
         </div>
-        <SessionControls session={navSession} redirectTo={currentPath} layout="inline" />
+        <div className="flex flex-wrap items-center gap-1">
+          <ThemeSwitcher />
+          <SessionControls session={navSession} redirectTo={currentPath} layout="inline" />
+        </div>
       </div>
     </header>
   );

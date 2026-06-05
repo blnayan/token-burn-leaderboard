@@ -23,7 +23,11 @@ export function AppNavLink({ href, currentPath, children }: AppNavLinkProps) {
     <NavigationMenuItem>
       <NavigationMenuLink
         asChild
-        className={cn(navigationMenuTriggerStyle(), isCurrent && "bg-accent text-accent-foreground")}
+        className={cn(
+          navigationMenuTriggerStyle(),
+          "h-8 px-2 text-sm font-medium text-muted-foreground hover:bg-transparent hover:text-foreground focus:bg-transparent focus:text-foreground data-[state=open]:bg-transparent",
+          isCurrent && "text-foreground",
+        )}
         aria-current={isCurrent ? "page" : undefined}
       >
         <Link href={href}>{children}</Link>
