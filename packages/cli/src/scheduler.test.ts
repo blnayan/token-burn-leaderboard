@@ -79,15 +79,22 @@ describe("scheduler builders", () => {
     );
   });
 
-  it("builds a launchd plist with the expected interval, label, and command", () => {
+  it("builds a launchd plist with quarter-hour calendar entries, label, and command", () => {
     const plist = buildLaunchdPlist(["/usr/local/bin/node", "/tmp/token-burn/dist/index.js", "sync"]);
 
     expect(plist).toContain("<string>com.token-burn.sync</string>");
-    expect(plist).toContain("<key>StartInterval</key>");
-    expect(plist).toContain("<integer>900</integer>");
+    expect(plist).toContain("<key>StartCalendarInterval</key>");
+    expect(plist).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
+    expect(plist).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
+    expect(plist).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
+    expect(plist).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
+    expect(plist).not.toContain("<key>StartInterval</key>");
+    expect(plist).not.toContain("<integer>900</integer>");
     expect(plist).toContain("<string>/usr/local/bin/node</string>");
     expect(plist).toContain("<string>/tmp/token-burn/dist/index.js</string>");
     expect(plist).toContain("<string>sync</string>");
+    expect(plist).toContain("<key>StandardOutPath</key>");
+    expect(plist).toContain("<key>StandardErrorPath</key>");
   });
 
   it("XML-escapes launchd command arguments", () => {
@@ -96,14 +103,14 @@ describe("scheduler builders", () => {
     expect(plist).toContain("<string>/tmp/token&amp;burn/index.js</string>");
   });
 
-  it("builds a Windows scheduled task command for a 15 minute sync", () => {
+  it("builds a Windows scheduled task command anchored to quarter-hour boundaries", () => {
     const command = buildWindowsTaskCommand([
       "C:\\Program Files\\nodejs\\node.exe",
       "C:\\Users\\Me\\token burn\\dist\\index.js",
       "sync",
     ]);
 
-    expect(command).toContain("/SC MINUTE /MO 15");
+    expect(command).toContain("/SC MINUTE /MO 15 /ST 00:00");
     expect(command).toContain(
       '/TR "\\"C:\\Program Files\\nodejs\\node.exe\\" \\"C:\\Users\\Me\\token burn\\dist\\index.js\\" sync"',
     );

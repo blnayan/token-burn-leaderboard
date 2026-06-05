@@ -93,8 +93,13 @@ export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
   <array>
 ${programArguments}
   </array>
-  <key>StartInterval</key>
-  <integer>900</integer>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>0</integer></dict>
+    <dict><key>Minute</key><integer>15</integer></dict>
+    <dict><key>Minute</key><integer>30</integer></dict>
+    <dict><key>Minute</key><integer>45</integer></dict>
+  </array>
   <key>StandardOutPath</key>
   <string>${escapeXml(cronLogPath)}</string>
   <key>StandardErrorPath</key>
@@ -116,6 +121,8 @@ export function buildWindowsTaskArgs(commandArgv: SchedulerCommandArgv): string[
     "MINUTE",
     "/MO",
     "15",
+    "/ST",
+    "00:00",
     "/TR",
     commandArgv.map(windowsQuoteIfNeeded).join(" "),
     "/F",
