@@ -205,7 +205,7 @@ async function runSetupFlow({ memberId, fixtureDir }) {
   );
   assertIncludes(
     output,
-    "Setup complete. Automatic sync will run every 15 minutes.",
+    "Setup complete. Automatic sync will run on quarter-hour boundaries.",
     "setup output should include completion",
   );
 
