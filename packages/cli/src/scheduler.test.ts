@@ -432,10 +432,52 @@ describe("scheduler commands", () => {
       "ExecStart=/usr/local/bin/node /usr/local/lib/node_modules/npm/bin/npm-cli.js exec --yes --package @blnayan/token-burn@latest -- token-burn sync",
     );
     expect(output).toContain("token-burn-sync.timer");
-    expect(output).toContain("OnUnitActiveSec=15min");
+    expect(output).toContain("OnCalendar=*:0/15");
+    expect(output).toContain("Persistent=true");
+    expect(output).not.toContain("OnUnitActiveSec=15min");
+    expect(output).not.toContain("OnBootSec=5min");
     expect(output).toContain("# Cron fallback");
     expect(output).toContain(
       "*/15 * * * * '/usr/local/bin/node' '/usr/local/lib/node_modules/npm/bin/npm-cli.js' 'exec' '--yes' '--package' '@blnayan/token-burn@latest' '--' 'token-burn' 'sync' >> /tmp/token-burn-sync.log 2>&1",
+    );
+  });
+
+  it("prints macOS quarter-hour launchd content on dry run", async () => {
+    const log = vi.fn();
+
+    await runInstallScheduler({
+      dryRun: true,
+      platform: "darwin",
+      syncCommandArgv: ["/usr/local/bin/node", "/repo/dist/index.js", "sync"],
+      log,
+    });
+
+    const output = log.mock.calls[0]?.[0] as string;
+    expect(output).toContain("<key>StartCalendarInterval</key>");
+    expect(output).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
+    expect(output).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
+    expect(output).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
+    expect(output).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
+    expect(output).not.toContain("<key>StartInterval</key>");
+    expect(output).toContain("<string>/usr/local/bin/node</string>");
+    expect(output).toContain("<string>/repo/dist/index.js</string>");
+    expect(output).toContain("<string>sync</string>");
+  });
+
+  it("prints Windows quarter-hour scheduled task command on dry run", async () => {
+    const log = vi.fn();
+
+    await runInstallScheduler({
+      dryRun: true,
+      platform: "win32",
+      syncCommandArgv: ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\Me\\token burn\\dist\\index.js", "sync"],
+      log,
+    });
+
+    const output = log.mock.calls[0]?.[0] as string;
+    expect(output).toContain("schtasks /Create /TN TokenBurnSync /SC MINUTE /MO 15 /ST 00:00");
+    expect(output).toContain(
+      '/TR "\\"C:\\Program Files\\nodejs\\node.exe\\" \\"C:\\Users\\Me\\token burn\\dist\\index.js\\" sync"',
     );
   });
 
