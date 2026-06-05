@@ -434,14 +434,19 @@ function assertSchedulerOutput(output) {
   if (os === "Linux") {
     assertIncludes(output, "token-burn-sync.service", "Linux scheduler dry-run should include systemd service");
     assertIncludes(output, "token-burn-sync.timer", "Linux scheduler dry-run should include systemd timer");
+    assertIncludes(output, "OnCalendar=*:0/15", "Linux scheduler dry-run should include quarter-hour calendar timer");
+    assertIncludes(output, "Persistent=true", "Linux scheduler dry-run should persist missed timer events");
     assertIncludes(output, "# Cron fallback", "Linux scheduler dry-run should include cron fallback");
     return;
   }
 
   if (os === "macOS") {
     assertIncludes(output, "com.token-burn.sync", "macOS scheduler dry-run should include launchd label");
-    assertIncludes(output, "StartInterval", "macOS scheduler dry-run should include StartInterval");
-    assertIncludes(output, "900", "macOS scheduler dry-run should sync every 900 seconds");
+    assertIncludes(output, "StartCalendarInterval", "macOS scheduler dry-run should include calendar schedule");
+    assertIncludes(output, "<integer>0</integer>", "macOS scheduler dry-run should include minute 0");
+    assertIncludes(output, "<integer>15</integer>", "macOS scheduler dry-run should include minute 15");
+    assertIncludes(output, "<integer>30</integer>", "macOS scheduler dry-run should include minute 30");
+    assertIncludes(output, "<integer>45</integer>", "macOS scheduler dry-run should include minute 45");
     return;
   }
 
@@ -450,6 +455,7 @@ function assertSchedulerOutput(output) {
     assertIncludes(output, "/TN TokenBurnSync", "Windows scheduler dry-run should include task name");
     assertIncludes(output, "/SC MINUTE", "Windows scheduler dry-run should include minute schedule");
     assertIncludes(output, "/MO 15", "Windows scheduler dry-run should include 15 minute interval");
+    assertIncludes(output, "/ST 00:00", "Windows scheduler dry-run should anchor to midnight");
     return;
   }
 

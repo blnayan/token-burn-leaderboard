@@ -44,18 +44,24 @@ case "$runner_os" in
   Linux)
     assert_contains "$scheduler_output" "token-burn-sync.service"
     assert_contains "$scheduler_output" "token-burn-sync.timer"
+    assert_contains "$scheduler_output" "OnCalendar=*:0/15"
+    assert_contains "$scheduler_output" "Persistent=true"
     assert_contains "$scheduler_output" "# Cron fallback"
     ;;
   macOS)
     assert_contains "$scheduler_output" "com.token-burn.sync"
-    assert_contains "$scheduler_output" "StartInterval"
-    assert_contains "$scheduler_output" "900"
+    assert_contains "$scheduler_output" "StartCalendarInterval"
+    assert_contains "$scheduler_output" "<integer>0</integer>"
+    assert_contains "$scheduler_output" "<integer>15</integer>"
+    assert_contains "$scheduler_output" "<integer>30</integer>"
+    assert_contains "$scheduler_output" "<integer>45</integer>"
     ;;
   Windows)
     assert_contains "$scheduler_output" "schtasks"
     assert_contains "$scheduler_output" "/TN TokenBurnSync"
     assert_contains "$scheduler_output" "/SC MINUTE"
     assert_contains "$scheduler_output" "/MO 15"
+    assert_contains "$scheduler_output" "/ST 00:00"
     ;;
   *)
     printf 'Unsupported runner OS for smoke assertions: %s\n' "$runner_os" >&2

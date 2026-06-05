@@ -223,7 +223,9 @@ async function runSetupFlow({ memberId, fixtureDir }) {
   const timer = await readFile(timerPath, "utf8");
   assertIncludes(service, "ExecStart=", "setup should write systemd service");
   assertIncludes(service, "token-burn sync", "setup scheduler service should run token-burn sync");
-  assertIncludes(timer, "OnUnitActiveSec=15min", "setup should write 15 minute systemd timer");
+  assertIncludes(timer, "OnCalendar=*:0/15", "setup should write quarter-hour systemd timer");
+  assertIncludes(timer, "Persistent=true", "setup should persist missed systemd timer events");
+  assertNotIncludes(timer, "OnUnitActiveSec=15min", "setup should not write interval-after-activation timer");
 
   return { configDir, config };
 }
