@@ -1,7 +1,8 @@
 import type { UiError } from "./types.js";
 
 export function classifyError(error: unknown): UiError {
-  const message = error instanceof Error ? error.message : String(error);
+  const message = toErrorMessage(error);
+  const normalizedMessage = message.toLowerCase();
 
   if (message.includes("to authenticate")) {
     return { code: "AUTH_REQUIRED", message, nextAction: "token-burn login" };
@@ -15,7 +16,10 @@ export function classifyError(error: unknown): UiError {
     return { code: "CCUSAGE_BINARY_PERMISSION", message };
   }
 
-  if (message.includes("automatic sync was not installed") || message.includes("scheduler")) {
+  if (
+    normalizedMessage.includes("automatic sync was not installed")
+    || normalizedMessage.includes("scheduler")
+  ) {
     return { code: "SCHEDULER_ERROR", message };
   }
 
@@ -24,4 +28,14 @@ export function classifyError(error: unknown): UiError {
   }
 
   return { code: "CLI_ERROR", message };
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+
+  try {
+    return String(error);
+  } catch {
+    return "Unknown error";
+  }
 }

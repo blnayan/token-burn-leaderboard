@@ -25,4 +25,50 @@ describe("classifyError", () => {
       message: "network down",
     });
   });
+
+  it("uses CLI_ERROR for plain string input", () => {
+    expect(classifyError("network down")).toEqual({
+      code: "CLI_ERROR",
+      message: "network down",
+    });
+  });
+
+  it("uses Unknown error when coercion throws", () => {
+    const error = {
+      toString() {
+        throw new Error("cannot stringify");
+      },
+    };
+
+    expect(classifyError(error)).toEqual({
+      code: "CLI_ERROR",
+      message: "Unknown error",
+    });
+  });
+
+  it("classifies ccusage native binary permissions", () => {
+    expect(classifyError(new Error("ccusage native binary is not executable at /usr/bin/ccusage"))).toEqual({
+      code: "CCUSAGE_BINARY_PERMISSION",
+      message: "ccusage native binary is not executable at /usr/bin/ccusage",
+    });
+  });
+
+  it("classifies scheduler setup failures case-insensitively", () => {
+    expect(classifyError(new Error("Automatic sync was not installed because launchd failed."))).toEqual({
+      code: "SCHEDULER_ERROR",
+      message: "Automatic sync was not installed because launchd failed.",
+    });
+  });
+
+  it("classifies device merge and check failures", () => {
+    expect(classifyError(new Error("Cannot merge devices with conflicting totals"))).toEqual({
+      code: "DEVICE_ERROR",
+      message: "Cannot merge devices with conflicting totals",
+    });
+
+    expect(classifyError(new Error("Device check failed: duplicate devices found"))).toEqual({
+      code: "DEVICE_ERROR",
+      message: "Device check failed: duplicate devices found",
+    });
+  });
 });
