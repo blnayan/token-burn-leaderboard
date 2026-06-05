@@ -1,14 +1,20 @@
+import type { CliConfig } from "../config.js";
 import { describe, expect, it, vi } from "vitest";
 
 import { runSetup } from "./setup.js";
 
 describe("runSetup", () => {
-  it("runs login, sync, and scheduler install in order", async () => {
+  it("runs login, sync, and scheduler install in order when no reusable config exists", async () => {
     const events: string[] = [];
     const log = vi.fn();
 
     await runSetup({
-      serverUrl: "https://token-burn.test",
+      serverUrl: "https://token-burn.test/",
+      readConfig: async () => null,
+      validateAuth: async () => {
+        events.push("validate");
+        return true;
+      },
       login: async ({ serverUrl }) => {
         events.push(`login:${serverUrl}`);
       },
@@ -22,21 +28,128 @@ describe("runSetup", () => {
     });
 
     expect(events).toEqual(["login:https://token-burn.test", "sync", "install:false"]);
-    expect(log).toHaveBeenCalledWith("Setup complete. Automatic sync will run every 15 minutes.");
+    expect(log).toHaveBeenCalledWith("Login complete.");
+    expect(log).toHaveBeenCalledWith(
+      "Setup complete. Automatic sync will run on quarter-hour boundaries.",
+    );
   });
 
-  it("passes --server-url through to login", async () => {
+  it("skips login and continues setup when same-server auth validates", async () => {
+    const events: string[] = [];
+    const login = vi.fn(async () => {
+      events.push("login");
+    });
+    const validateAuth = vi.fn(async () => {
+      events.push("validate");
+      return true;
+    });
+    const log = vi.fn();
+
+    await runSetup({
+      serverUrl: "https://token-burn.test///",
+      readConfig: async () => config({ serverUrl: "https://token-burn.test/", token: "tok_valid" }),
+      validateAuth,
+      login,
+      sync: async () => {
+        events.push("sync");
+      },
+      installScheduler: async ({ dryRun }) => {
+        events.push(`install:${dryRun}`);
+      },
+      log,
+    });
+
+    expect(validateAuth).toHaveBeenCalledWith({
+      serverUrl: "https://token-burn.test",
+      token: "tok_valid",
+    });
+    expect(login).not.toHaveBeenCalled();
+    expect(events).toEqual(["validate", "sync", "install:false"]);
+    expect(log).toHaveBeenCalledWith("Existing authentication is valid.");
+    expect(log).not.toHaveBeenCalledWith("Login complete.");
+  });
+
+  it("runs login when same-server auth is rejected", async () => {
+    const events: string[] = [];
+
+    await runSetup({
+      serverUrl: "https://token-burn.test",
+      readConfig: async () => config({ serverUrl: "https://token-burn.test", token: "tok_invalid" }),
+      validateAuth: async () => {
+        events.push("validate");
+        return false;
+      },
+      login: async ({ serverUrl }) => {
+        events.push(`login:${serverUrl}`);
+      },
+      sync: async () => {
+        events.push("sync");
+      },
+      installScheduler: async ({ dryRun }) => {
+        events.push(`install:${dryRun}`);
+      },
+      log: vi.fn(),
+    });
+
+    expect(events).toEqual(["validate", "login:https://token-burn.test", "sync", "install:false"]);
+  });
+
+  it("runs login without validation when config has no token", async () => {
+    const validateAuth = vi.fn(async () => true);
     const login = vi.fn(async () => undefined);
 
     await runSetup({
-      serverUrl: "https://custom-token-burn.test",
+      serverUrl: "https://token-burn.test",
+      readConfig: async () => config({ serverUrl: "https://token-burn.test", token: undefined }),
+      validateAuth,
       login,
       sync: async () => undefined,
       installScheduler: async () => undefined,
       log: vi.fn(),
     });
 
-    expect(login).toHaveBeenCalledWith({ serverUrl: "https://custom-token-burn.test" });
+    expect(validateAuth).not.toHaveBeenCalled();
+    expect(login).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test" });
+  });
+
+  it("runs login without validation when config server differs from the selected server", async () => {
+    const validateAuth = vi.fn(async () => true);
+    const login = vi.fn(async () => undefined);
+
+    await runSetup({
+      serverUrl: "https://selected-token-burn.test/",
+      readConfig: async () => config({ serverUrl: "https://saved-token-burn.test", token: "tok_saved" }),
+      validateAuth,
+      login,
+      sync: async () => undefined,
+      installScheduler: async () => undefined,
+      log: vi.fn(),
+    });
+
+    expect(validateAuth).not.toHaveBeenCalled();
+    expect(login).toHaveBeenCalledWith({ serverUrl: "https://selected-token-burn.test" });
+  });
+
+  it("propagates validation non-auth failures before sync or scheduler install", async () => {
+    const sync = vi.fn(async () => undefined);
+    const installScheduler = vi.fn(async () => undefined);
+
+    await expect(
+      runSetup({
+        serverUrl: "https://token-burn.test",
+        readConfig: async () => config({ serverUrl: "https://token-burn.test", token: "tok_valid" }),
+        validateAuth: async () => {
+          throw new Error("network unavailable");
+        },
+        login: async () => undefined,
+        sync,
+        installScheduler,
+        log: vi.fn(),
+      }),
+    ).rejects.toThrow("network unavailable");
+
+    expect(sync).not.toHaveBeenCalled();
+    expect(installScheduler).not.toHaveBeenCalled();
   });
 
   it("stops when login fails", async () => {
@@ -46,6 +159,7 @@ describe("runSetup", () => {
     await expect(
       runSetup({
         serverUrl: "https://token-burn.test",
+        readConfig: async () => null,
         login: async () => {
           throw new Error("Login session expired before approval.");
         },
@@ -59,12 +173,14 @@ describe("runSetup", () => {
     expect(installScheduler).not.toHaveBeenCalled();
   });
 
-  it("attempts scheduler install when first sync fails after login", async () => {
+  it("still attempts scheduler install when first sync fails after valid auth", async () => {
     const installScheduler = vi.fn(async () => undefined);
     const log = vi.fn();
 
     await runSetup({
       serverUrl: "https://token-burn.test",
+      readConfig: async () => config({ serverUrl: "https://token-burn.test", token: "tok_valid" }),
+      validateAuth: async () => true,
       login: async () => undefined,
       sync: async () => {
         throw new Error("All supported providers failed: codex: fixture missing.");
@@ -77,13 +193,17 @@ describe("runSetup", () => {
     expect(log).toHaveBeenCalledWith(
       "First sync failed: All supported providers failed: codex: fixture missing.",
     );
-    expect(log).toHaveBeenCalledWith("Automatic sync was still installed and will retry every 15 minutes.");
+    expect(log).toHaveBeenCalledWith(
+      "Automatic sync was still installed or refreshed and will retry on quarter-hour boundaries.",
+    );
   });
 
-  it("reports scheduler install failure clearly", async () => {
+  it("reports scheduler install failure with existing retry guidance", async () => {
     await expect(
       runSetup({
         serverUrl: "https://token-burn.test",
+        readConfig: async () => config({ serverUrl: "https://token-burn.test", token: "tok_valid" }),
+        validateAuth: async () => true,
         login: async () => undefined,
         sync: async () => undefined,
         installScheduler: async () => {
@@ -96,3 +216,11 @@ describe("runSetup", () => {
     );
   });
 });
+
+function config(overrides: Partial<CliConfig>): CliConfig {
+  return {
+    serverUrl: "https://token-burn.test",
+    token: "tok_default",
+    ...overrides,
+  };
+}
