@@ -13,13 +13,15 @@ export type OutputModeConfig = {
   quiet: boolean;
 };
 
+type OutputModeEnv = Partial<Record<"CI" | "NO_COLOR", string | undefined>>;
+
 export function resolveOutputMode({
   stdoutIsTTY = Boolean(process.stdout.isTTY),
   env = process.env,
   flags,
 }: {
   stdoutIsTTY?: boolean;
-  env?: Pick<NodeJS.ProcessEnv, "CI" | "NO_COLOR">;
+  env?: OutputModeEnv;
   flags: OutputFlags;
 }): OutputModeConfig {
   if (flags.json) {
