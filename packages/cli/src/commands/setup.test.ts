@@ -1,8 +1,18 @@
 import type { CliConfig } from "../config.js";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { resolveOutputMode } from "../ui/mode.js";
+import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { runSetup } from "./setup.js";
+
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.doUnmock("node:child_process");
+  vi.doUnmock("../config.js");
+});
 
 describe("runSetup", () => {
   it("runs login, sync, and scheduler install in order when no reusable config exists", async () => {
@@ -232,6 +242,47 @@ describe("runSetup", () => {
       "Setup authenticated and attempted the first sync, but automatic sync was not installed: systemd user timer unavailable. Retry with npx @blnayan/token-burn@latest install-scheduler.",
     );
   });
+
+  it("suppresses nested login results when setup renders JSON", async () => {
+    vi.resetModules();
+    vi.doMock("node:child_process", () => ({
+      execFile: (_command: string, _args: string[], callback: (error: Error | null) => void) => {
+        callback(null);
+      },
+    }));
+    vi.doMock("../config.js", () => ({
+      readConfig: vi.fn(async () => null),
+      writeConfig: vi.fn(async () => undefined),
+    }));
+
+    const lines: string[] = [];
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2026-07-01T00:01:00.000Z",
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        status: "approved",
+        token: "tb_secret",
+        member: { displayName: "Ada", username: "blnayan" },
+      }));
+    globalThis.fetch = fetch;
+
+    const { runSetup: runSetupWithDefaultLogin } = await import("./setup.js");
+
+    await runSetupWithDefaultLogin({
+      serverUrl: "https://token-burn.test",
+      sync: async () => undefined,
+      installScheduler: async () => undefined,
+      ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
+    });
+
+    expect(lines).toEqual([
+      JSON.stringify({ ok: true, authReused: false, schedulerInstalled: true, syncFailed: false }),
+    ]);
+  });
 });
 
 function config(overrides: Partial<CliConfig>): CliConfig {
@@ -240,6 +291,13 @@ function config(overrides: Partial<CliConfig>): CliConfig {
     token: "tok_default",
     ...overrides,
   };
+}
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status: 200,
+  });
 }
 
 function readResultCall(calls: string[]): Record<string, unknown> {

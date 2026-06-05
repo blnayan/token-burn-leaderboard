@@ -54,6 +54,7 @@ export async function runSetup({
   ui,
 }: SetupOptions): Promise<SetupResult> {
   const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const childRenderer = suppressResult(renderer);
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
 
   renderer.intro("Token Burn setup", [{ label: "Server", value: normalizedServerUrl }]);
@@ -63,7 +64,7 @@ export async function runSetup({
   if (authReused) {
     renderer.success("auth", "Existing authentication is valid");
   } else {
-    await login(login === runLogin ? { serverUrl: normalizedServerUrl, ui: renderer } : { serverUrl: normalizedServerUrl });
+    await login(login === runLogin ? { serverUrl: normalizedServerUrl, ui: childRenderer } : { serverUrl: normalizedServerUrl });
   }
 
   let syncFailed = false;
@@ -78,7 +79,9 @@ export async function runSetup({
 
   renderer.step("scheduler", "Installing automatic sync");
   try {
-    await installScheduler(installScheduler === runInstallScheduler ? { dryRun: false, ui: renderer } : { dryRun: false });
+    await installScheduler(
+      installScheduler === runInstallScheduler ? { dryRun: false, ui: childRenderer } : { dryRun: false },
+    );
   } catch (error) {
     throw new Error(
       `Setup authenticated and attempted the first sync, but automatic sync was not installed: ${formatErrorMessage(
@@ -152,4 +155,11 @@ function normalizeServerUrl(serverUrl: string): string {
 
 function formatErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function suppressResult(ui: UiRenderer): UiRenderer {
+  return {
+    ...ui,
+    result() {},
+  };
 }
