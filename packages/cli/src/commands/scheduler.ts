@@ -65,6 +65,24 @@ export function createUninstallSchedulerCommand(): Command {
   });
 }
 
+export function createSchedulerCommand(): Command {
+  const command = new Command("scheduler").description("Manage automatic Token Burn sync");
+
+  command
+    .command("install")
+    .description("Install automatic Token Burn sync")
+    .option("--dry-run", "Print the generated platform scheduler config or command")
+    .action(async (options: { dryRun?: boolean }) => {
+      await runInstallScheduler({ dryRun: options.dryRun === true });
+    });
+
+  command.command("uninstall").description("Remove automatic Token Burn sync").action(async () => {
+    await runUninstallScheduler();
+  });
+
+  return command;
+}
+
 export function getDefaultSyncCommandArgv({
   platform = process.platform,
   execPath = process.execPath,
