@@ -222,6 +222,8 @@ async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandA
 
 async function removeLinuxCronFallbackIfPresent(runtime: SchedulerRuntime): Promise<void> {
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
+  if (!hasCronBlock(existing)) return;
+
   const cleaned = removeCronBlock(existing);
 
   if (cleaned === existing || cleaned === ensureTrailingNewline(existing)) return;
@@ -308,6 +310,10 @@ function escapeRegExp(value: string): string {
 
 function cronMarkerPattern(): RegExp {
   return new RegExp(`${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`, "gm");
+}
+
+function hasCronBlock(existingCrontab: string): boolean {
+  return cronMarkerPattern().test(existingCrontab);
 }
 
 function ensureTrailingNewline(value: string): string {

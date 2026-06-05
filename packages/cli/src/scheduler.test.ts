@@ -205,7 +205,7 @@ describe("scheduler install runtime", () => {
     const runtime = createMockSchedulerRuntime({
       platform: "linux",
       homeDir: "/home/me",
-      commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n"]]),
+      commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n\n"]]),
     });
 
     await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
