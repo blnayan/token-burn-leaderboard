@@ -59,6 +59,18 @@ describe("runLogout", () => {
     expect(log).toHaveBeenCalledWith("Warning: Not authenticated");
   });
 
+  it("does not emit structured results through legacy log fallback", async () => {
+    const messages: string[] = [];
+
+    await runLogout({
+      readConfig: async () => null,
+      writeConfig: vi.fn(),
+      log: (message) => messages.push(message),
+    });
+
+    expect(messages).toEqual(["Warning: Not authenticated"]);
+  });
+
   it("renders JSON output when a JSON renderer is injected", async () => {
     const lines: string[] = [];
 

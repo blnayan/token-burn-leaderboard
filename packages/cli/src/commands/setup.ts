@@ -53,7 +53,7 @@ export async function runSetup({
   log,
   ui,
 }: SetupOptions): Promise<SetupResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const childRenderer = suppressResult(renderer);
   const runSetupLogin = login ?? runLogin;
   const runSetupInstallScheduler = installScheduler ?? runInstallScheduler;
@@ -164,4 +164,8 @@ function suppressResult(ui: UiRenderer): UiRenderer {
     ...ui,
     result() {},
   };
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return suppressResult(createPlainRenderer({ write: log }));
 }

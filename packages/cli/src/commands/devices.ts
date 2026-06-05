@@ -62,7 +62,7 @@ export async function runListDevices({
   log,
   ui,
 }: DevicesDependencies = {}): Promise<DeviceListResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
   const response = deviceListResponseSchema.parse(
     await getJson<DeviceListResponse>(`${normalizeServerUrl(config.serverUrl)}/api/cli/devices`, config.token),
@@ -130,7 +130,7 @@ export async function runMergeDevices({
   sourceDeviceId: string;
   targetDeviceId: string;
 }): Promise<DeviceMergeResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
   const response = deviceMergeResponseSchema.parse(
     await postJson<DeviceMergeResponse>(
@@ -230,4 +230,11 @@ function parseJsonOrNull(text: string): unknown {
 
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.replace(/\/+$/, "");
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return {
+    ...createPlainRenderer({ write: log }),
+    result() {},
+  };
 }

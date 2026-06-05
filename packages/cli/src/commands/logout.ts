@@ -25,7 +25,7 @@ export async function runLogout({
   log,
   ui,
 }: LogoutDependencies = {}): Promise<LogoutResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await readConfig();
 
   if (!config) {
@@ -54,4 +54,11 @@ export function createLogoutCommand(): Command {
   });
 
   return command;
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return {
+    ...createPlainRenderer({ write: log }),
+    result() {},
+  };
 }

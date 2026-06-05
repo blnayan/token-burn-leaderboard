@@ -50,7 +50,7 @@ export async function runInstallScheduler({
   log,
   ui,
 }: InstallSchedulerOptions): Promise<InstallSchedulerResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   if (dryRun) {
     const result = { dryRun: true, output: buildSchedulerInstallOutput(platform, syncCommandArgv) };
     renderer.info(result.output);
@@ -70,7 +70,7 @@ export async function runUninstallScheduler({
   log,
   ui,
 }: UninstallSchedulerOptions = {}): Promise<UninstallSchedulerResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const result = { output: await uninstall(platform) };
   renderer.success("scheduler", result.output);
   renderer.result({ ok: true, ...result });
@@ -148,4 +148,11 @@ export function getDefaultSyncCommandArgv({
 
 function isNpmCliPath(value: string): boolean {
   return /(^|[\\/])npm-cli\.js$/i.test(value);
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return {
+    ...createPlainRenderer({ write: log }),
+    result() {},
+  };
 }

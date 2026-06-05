@@ -64,7 +64,7 @@ export async function runLogin({
   now = () => new Date(),
   emitPendingApprovalResult = false,
 }: LoginOptions): Promise<LoginResult> {
-  const renderer = ui ?? (log ? createPlainRenderer({ write: log }) : createRenderer(resolveOutputMode({ flags: {} })));
+  const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
   const existingConfig = await readConfig();
   const startResponse = loginStartResponseSchema.parse(
@@ -138,6 +138,13 @@ export function createLoginCommand(): Command {
 
 function normalizeServerUrl(serverUrl: string): string {
   return serverUrl.replace(/\/+$/, "");
+}
+
+function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
+  return {
+    ...createPlainRenderer({ write: log }),
+    result() {},
+  };
 }
 
 const execFileAsync = promisify(execFileCallback);

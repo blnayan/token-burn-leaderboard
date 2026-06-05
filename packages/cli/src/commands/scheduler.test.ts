@@ -79,6 +79,19 @@ describe("runUninstallScheduler", () => {
     expect(calls).toContain("success:scheduler:Removed Token Burn scheduler.");
   });
 
+  it("does not emit structured results through legacy log fallback", async () => {
+    const messages: string[] = [];
+    const uninstall = vi.fn(async () => "Removed Token Burn scheduler.");
+
+    await runUninstallScheduler({
+      platform: "linux",
+      uninstall,
+      log: (message) => messages.push(message),
+    });
+
+    expect(messages).toEqual(["OK: Removed Token Burn scheduler."]);
+  });
+
   it("renders uninstall output as JSON", async () => {
     const lines: string[] = [];
     const uninstall = vi.fn(async () => "Removed Token Burn scheduler.");
