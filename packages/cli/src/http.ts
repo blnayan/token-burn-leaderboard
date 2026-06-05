@@ -1,3 +1,23 @@
+export class HttpError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "HttpError";
+    this.status = status;
+  }
+}
+
+export async function getJson<T>(url: string, token?: string): Promise<T> {
+  const response = await fetch(url, {
+    method: "GET",
+    headers: {
+      ...(token ? { authorization: `Bearer ${token}` } : {}),
+    },
+  });
+  return parseJsonResponse<T>(response);
+}
+
 export async function postJson<T>(url: string, body: unknown, token?: string): Promise<T> {
   const response = await fetch(url, {
     method: "POST",
@@ -7,6 +27,10 @@ export async function postJson<T>(url: string, body: unknown, token?: string): P
     },
     body: JSON.stringify(body),
   });
+  return parseJsonResponse<T>(response);
+}
+
+async function parseJsonResponse<T>(response: Response): Promise<T> {
   const text = await response.text();
   const data = parseJsonOrNull(text);
 
@@ -15,7 +39,7 @@ export async function postJson<T>(url: string, body: unknown, token?: string): P
       data && typeof data === "object" && "error" in data && typeof data.error === "string"
         ? data.error
         : formatHttpError(response, text);
-    throw new Error(message);
+    throw new HttpError(message, response.status);
   }
 
   if (text && data === null) {
