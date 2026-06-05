@@ -41,11 +41,11 @@ export function buildSystemdService(commandArgv: SchedulerCommandArgv): string {
 export function buildSystemdTimer(): string {
   return [
     "[Unit]",
-    "Description=Run Token Burn sync every 15 minutes",
+    "Description=Run Token Burn sync on quarter-hour boundaries",
     "",
     "[Timer]",
-    "OnBootSec=5min",
-    "OnUnitActiveSec=15min",
+    "OnCalendar=*:0/15",
+    "Persistent=true",
     "Unit=token-burn-sync.service",
     "",
     "[Install]",

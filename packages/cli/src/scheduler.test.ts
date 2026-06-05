@@ -34,16 +34,18 @@ describe("scheduler builders", () => {
     );
   });
 
-  it("builds a systemd user service and timer for 15 minute sync", () => {
+  it("builds a systemd user service and quarter-hour calendar timer", () => {
     const service = buildSystemdService(["/usr/bin/node", "/repo/dist/index.js", "sync"]);
     const timer = buildSystemdTimer();
 
     expect(service).toContain("[Service]");
     expect(service).toContain("Type=oneshot");
     expect(service).toContain("ExecStart=/usr/bin/node /repo/dist/index.js sync");
-    expect(timer).toContain("OnBootSec=5min");
-    expect(timer).toContain("OnUnitActiveSec=15min");
+    expect(timer).toContain("OnCalendar=*:0/15");
+    expect(timer).toContain("Persistent=true");
     expect(timer).toContain("Unit=token-burn-sync.service");
+    expect(timer).not.toContain("OnBootSec=5min");
+    expect(timer).not.toContain("OnUnitActiveSec=15min");
   });
 
   it("wraps the cron line in stable marker comments", () => {
