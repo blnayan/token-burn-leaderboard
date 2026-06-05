@@ -11,6 +11,7 @@ import { runInstallScheduler } from "./scheduler.js";
 
 type SetupLogin = (options: { serverUrl: string }) => Promise<void>;
 type SetupInstallScheduler = (options: { dryRun: boolean }) => Promise<void>;
+type SetupSync = () => Promise<unknown>;
 type SetupValidateAuth = (options: { serverUrl: string; token: string }) => Promise<boolean>;
 
 const authValidationResponseSchema = z.object({
@@ -25,7 +26,7 @@ export type SetupOptions = {
   serverUrl: string;
   readConfig?: () => Promise<CliConfig | null>;
   login?: SetupLogin;
-  sync?: () => Promise<void>;
+  sync?: SetupSync;
   installScheduler?: SetupInstallScheduler;
   validateAuth?: SetupValidateAuth;
   log?: (message: string) => void;
