@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { createProgram, isCliEntrypoint } from "./index.js";
+import { createProgram, isCliEntrypoint, renderCliError } from "./index.js";
 
 describe("createProgram", () => {
   it("exposes global output flags in help", () => {
@@ -55,5 +55,43 @@ describe("isCliEntrypoint", () => {
     writeFileSync(modulePath, "");
 
     expect(isCliEntrypoint(undefined, pathToFileURL(modulePath).href)).toBe(false);
+  });
+});
+
+describe("renderCliError", () => {
+  it("writes JSON errors to stdout", () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    renderCliError(new Error("Login required"), {
+      flags: { json: true },
+      stdout: (line) => stdout.push(line),
+      stderr: (line) => stderr.push(line),
+    });
+
+    expect(stdout).toEqual([
+      JSON.stringify({
+        ok: false,
+        error: {
+          code: "CLI_ERROR",
+          message: "Login required",
+        },
+      }),
+    ]);
+    expect(stderr).toEqual([]);
+  });
+
+  it("writes human errors to stderr", () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    renderCliError(new Error("Login required"), {
+      flags: { plain: true },
+      stdout: (line) => stdout.push(line),
+      stderr: (line) => stderr.push(line),
+    });
+
+    expect(stdout).toEqual([]);
+    expect(stderr).toEqual(["Error: Login required"]);
   });
 });

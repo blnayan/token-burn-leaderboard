@@ -55,10 +55,7 @@ export function createPlainRenderer({
         write(`Next: ${error.nextAction}`);
       }
     },
-    result(result) {
-      if (quiet) return;
-      write(JSON.stringify(result));
-    },
+    result() {},
   };
 }
 

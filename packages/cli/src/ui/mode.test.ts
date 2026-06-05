@@ -43,6 +43,38 @@ describe("resolveOutputMode", () => {
     });
   });
 
+  it("honors TOKEN_BURN_OUTPUT=json", () => {
+    expect(resolveOutputMode({ stdoutIsTTY: true, env: { TOKEN_BURN_OUTPUT: "json" }, flags: {} })).toEqual({
+      color: false,
+      mode: "json",
+      quiet: false,
+    });
+  });
+
+  it("honors TOKEN_BURN_OUTPUT=plain", () => {
+    expect(resolveOutputMode({ stdoutIsTTY: true, env: { TOKEN_BURN_OUTPUT: "plain" }, flags: {} })).toEqual({
+      color: false,
+      mode: "plain",
+      quiet: false,
+    });
+  });
+
+  it("honors TOKEN_BURN_OUTPUT=rich for TTY output", () => {
+    expect(resolveOutputMode({ stdoutIsTTY: true, env: { TOKEN_BURN_OUTPUT: "rich" }, flags: {} })).toEqual({
+      color: true,
+      mode: "rich",
+      quiet: false,
+    });
+  });
+
+  it("uses flags before TOKEN_BURN_OUTPUT", () => {
+    expect(resolveOutputMode({ stdoutIsTTY: true, env: { TOKEN_BURN_OUTPUT: "json" }, flags: { plain: true } })).toEqual({
+      color: false,
+      mode: "plain",
+      quiet: false,
+    });
+  });
+
   it("keeps rich layout without ANSI color for --no-color", () => {
     expect(resolveOutputMode({ stdoutIsTTY: true, env: {}, flags: { color: false } })).toEqual({
       color: false,

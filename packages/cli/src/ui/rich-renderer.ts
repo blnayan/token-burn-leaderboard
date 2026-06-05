@@ -55,10 +55,7 @@ export function createRichRenderer({
       write(`${paint.red(cleanOperatorTheme.symbols.error)} ${error.message}`);
       if (error.nextAction) write(`  ${paint.dim("Next".padEnd(4))}  ${error.nextAction}`);
     },
-    result(result) {
-      if (quiet) return;
-      write(JSON.stringify(result));
-    },
+    result() {},
   };
 }
 

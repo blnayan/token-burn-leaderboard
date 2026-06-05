@@ -26,4 +26,13 @@ describe("createRichRenderer", () => {
       "  Next  token-burn login",
     ]);
   });
+
+  it("does not write machine-readable results in human output", () => {
+    const write = vi.fn();
+    const ui = createRichRenderer({ color: false, write });
+
+    ui.result({ ok: true, submitted: 42 });
+
+    expect(write).not.toHaveBeenCalled();
+  });
 });

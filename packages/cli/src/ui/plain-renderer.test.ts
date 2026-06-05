@@ -38,6 +38,15 @@ describe("createPlainRenderer", () => {
     ]);
   });
 
+  it("does not write machine-readable results in human output", () => {
+    const write = vi.fn();
+    const ui = createPlainRenderer({ write });
+
+    ui.result({ ok: true, submitted: 42 });
+
+    expect(write).not.toHaveBeenCalled();
+  });
+
   it("omits nonessential output in quiet mode", () => {
     const write = vi.fn();
     const ui = createPlainRenderer({ quiet: true, write });

@@ -50,15 +50,30 @@ export function isCliEntrypoint(argvPath: string | undefined, moduleUrl: string)
   return realpathSync(argvPath) === realpathSync(fileURLToPath(moduleUrl));
 }
 
+export function renderCliError(
+  error: unknown,
+  {
+    flags,
+    stdout = console.log,
+    stderr = console.error,
+  }: {
+    flags: OutputFlags;
+    stdout?: (line: string) => void;
+    stderr?: (line: string) => void;
+  },
+): void {
+  const outputMode = resolveOutputMode({ flags });
+  const write = outputMode.mode === "json" ? stdout : stderr;
+  const ui = createRenderer(outputMode, { write });
+
+  ui.error(classifyError(error));
+}
+
 if (isCliEntrypoint(process.argv[1], import.meta.url)) {
   const program = createProgram();
 
   program.parseAsync().catch((error: unknown) => {
-    const flags = program.opts<OutputFlags>();
-    const outputMode = resolveOutputMode({ flags });
-    const ui = createRenderer(outputMode, { write: console.error });
-
-    ui.error(classifyError(error));
+    renderCliError(error, { flags: program.opts<OutputFlags>() });
     process.exitCode = 1;
   });
 }

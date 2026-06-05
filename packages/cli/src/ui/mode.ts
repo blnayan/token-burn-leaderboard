@@ -13,7 +13,7 @@ export type OutputModeConfig = {
   quiet: boolean;
 };
 
-type OutputModeEnv = Partial<Record<"CI" | "NO_COLOR", string | undefined>>;
+type OutputModeEnv = Partial<Record<"CI" | "NO_COLOR" | "TOKEN_BURN_OUTPUT", string | undefined>>;
 
 export function resolveOutputMode({
   stdoutIsTTY = Boolean(process.stdout.isTTY),
@@ -28,7 +28,19 @@ export function resolveOutputMode({
     return { color: false, mode: "json", quiet: flags.quiet === true };
   }
 
-  if (flags.plain || !stdoutIsTTY || env.NO_COLOR || env.CI) {
+  if (flags.plain) {
+    return { color: false, mode: "plain", quiet: flags.quiet === true };
+  }
+
+  if (env.TOKEN_BURN_OUTPUT === "json") {
+    return { color: false, mode: "json", quiet: flags.quiet === true };
+  }
+
+  if (env.TOKEN_BURN_OUTPUT === "plain") {
+    return { color: false, mode: "plain", quiet: flags.quiet === true };
+  }
+
+  if (!stdoutIsTTY || env.NO_COLOR || env.CI) {
     return { color: false, mode: "plain", quiet: flags.quiet === true };
   }
 
