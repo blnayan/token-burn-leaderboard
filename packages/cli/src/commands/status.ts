@@ -45,9 +45,13 @@ export async function runStatus({
   if (!config.token) {
     log("Not authenticated.");
     log(`Remembered server: ${config.serverUrl}.`);
+    if (config.lastSync) {
+      log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
+    }
     return {
       authenticated: false,
       cliVersion,
+      ...(config.lastSync ? { lastSync: config.lastSync } : {}),
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,
     };

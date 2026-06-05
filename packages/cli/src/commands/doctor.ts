@@ -67,11 +67,15 @@ export async function runDoctor({
     log("Not authenticated.");
     log(`Remembered server: ${config.serverUrl}.`);
     log(`Platform: ${platform}.`);
+    if (config.lastSync) {
+      log(`Last sync: ${config.lastSync.ok ? "OK" : "Failed"} - ${config.lastSync.message} at ${config.lastSync.at}.`);
+    }
     log("Run token-burn sync to submit usage now.");
     return {
       authenticated: false,
       cliVersion,
       duplicateDeviceGroups: [],
+      ...(config.lastSync ? { lastSync: config.lastSync } : {}),
       platform,
       rememberedServer: config.serverUrl,
       serverUrl: config.serverUrl,

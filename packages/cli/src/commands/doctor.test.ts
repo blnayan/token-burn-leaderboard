@@ -82,6 +82,37 @@ describe("runDoctor", () => {
     expect(readDevices).not.toHaveBeenCalled();
   });
 
+  it("reports tokenless last sync and returns it for renderers", async () => {
+    const log = vi.fn();
+
+    const result = await runDoctor({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        lastSync: { ok: true, message: "Submitted 42 usage rows.", at: "2026-06-01T00:00:00.000Z" },
+      }),
+      platform: "linux",
+      log,
+    });
+
+    expect(log.mock.calls.map(([message]) => message)).toEqual([
+      `CLI version: ${cliVersion}.`,
+      "Not authenticated.",
+      "Remembered server: https://token-burn.test.",
+      "Platform: linux.",
+      "Last sync: OK - Submitted 42 usage rows. at 2026-06-01T00:00:00.000Z.",
+      "Run token-burn sync to submit usage now.",
+    ]);
+    expect(result).toEqual({
+      authenticated: false,
+      cliVersion,
+      duplicateDeviceGroups: [],
+      lastSync: { ok: true, message: "Submitted 42 usage rows.", at: "2026-06-01T00:00:00.000Z" },
+      platform: "linux",
+      rememberedServer: "https://token-burn.test",
+      serverUrl: "https://token-burn.test",
+    });
+  });
+
   it("keeps running when health check fails", async () => {
     const log = vi.fn();
 

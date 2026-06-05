@@ -64,6 +64,31 @@ describe("runStatus", () => {
     expect(log).toHaveBeenCalledWith("Remembered server: https://token-burn.test.");
   });
 
+  it("reports tokenless last sync and returns it for renderers", async () => {
+    const log = vi.fn();
+
+    const result = await runStatus({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        lastSync: { ok: false, message: "Failed providers: claude_code", at: "2026-06-01T00:00:00.000Z" },
+      }),
+      log,
+    });
+
+    expect(log).toHaveBeenCalledWith("Not authenticated.");
+    expect(log).toHaveBeenCalledWith("Remembered server: https://token-burn.test.");
+    expect(log).toHaveBeenCalledWith(
+      "Last sync: Failed - Failed providers: claude_code at 2026-06-01T00:00:00.000Z.",
+    );
+    expect(result).toEqual({
+      authenticated: false,
+      cliVersion,
+      lastSync: { ok: false, message: "Failed providers: claude_code", at: "2026-06-01T00:00:00.000Z" },
+      rememberedServer: "https://token-burn.test",
+      serverUrl: "https://token-burn.test",
+    });
+  });
+
   it("returns structured status for renderers", async () => {
     const result = await runStatus({
       readConfig: async () => ({
