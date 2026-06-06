@@ -101,6 +101,41 @@ jobs:
       - name: Run packaged CLI E2E
         run: node scripts/e2e-cli-cross-platform.mjs
 
+  scheduler-smoke:
+    name: Scheduler Smoke (${{ matrix.os }})
+    needs: unit
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24.16.0"
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Ensure cron is available on Linux
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cron
+
+      - name: Run real scheduler smoke
+        shell: bash
+        run: pnpm --filter @blnayan/token-burn exec tsx ../../scripts/smoke-real-scheduler.ts
+
   sync-e2e:
     name: Setup + Sync E2E
     needs: unit
