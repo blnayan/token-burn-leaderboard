@@ -184,10 +184,10 @@ async function runSetupFlow({ memberId, fixtureDir }) {
   }
 
   const output = `${result.stdout}\n${result.stderr}`;
-  assertIncludes(output, "Starting Token Burn setup.", "setup output should include start message");
+  assertIncludes(output, "Token Burn setup", "setup output should include start message");
   assertIncludes(
     output,
-    "Could not open your browser automatically.\nOpen this link in your browser:\n",
+    "Warning: Could not open your browser automatically\nNext: Open this link in your browser:",
     "setup output should include manual login URL fallback",
   );
   assertNotIncludes(
@@ -195,19 +195,16 @@ async function runSetupFlow({ memberId, fixtureDir }) {
     "Waiting for approval. Press Ctrl+C to cancel.",
     "setup output should not obscure manual login URL fallback",
   );
-  assertIncludes(output, "Authenticated as sync-e2e-user.", "setup output should authenticate with GitHub username");
+  assertIncludes(output, "OK: Authenticated as sync-e2e-user", "setup output should authenticate with GitHub username");
   assertIncludes(output, "Submitted 2 usage rows.", "setup output should include first sync summary");
-  assertIncludes(output, "First sync complete.", "setup output should include first sync completion");
+  assertIncludes(output, "OK: First sync complete", "setup output should include first sync completion");
   assertIncludes(
     output,
-    "Installed Token Burn systemd user timer token-burn-sync.timer.",
+    "OK: Installed Token Burn systemd user timer token-burn-sync.timer.",
     "setup output should include scheduler install",
   );
-  assertIncludes(
-    output,
-    "Setup complete. Automatic sync will run on quarter-hour boundaries.",
-    "setup output should include completion",
-  );
+  assertIncludes(output, "Setup complete", "setup output should include completion");
+  assertIncludes(output, "Automatic sync: Quarter-hour boundaries", "setup output should include automatic sync summary");
 
   const config = JSON.parse(await readFile(join(configDir, "config.json"), "utf8"));
   assertEqual(config.serverUrl, serverUrl, "setup config serverUrl");
