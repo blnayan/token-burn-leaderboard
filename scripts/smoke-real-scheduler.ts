@@ -15,6 +15,7 @@ import {
 const execFile = promisify(execFileCallback);
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
+const windowsTaskScriptName = "token-burn-sync.vbs";
 const cronStartMarker = "# BEGIN Token Burn scheduler";
 const cronEndMarker = "# END Token Burn scheduler";
 
@@ -126,6 +127,44 @@ async function assertSchedulerRegistered(installMessage: string) {
       stdout,
       windowsTaskName,
       "Windows scheduled task should be queryable after install",
+    );
+    const { stdout: xml } = await execFile("schtasks", [
+      "/Query",
+      "/TN",
+      windowsTaskName,
+      "/XML",
+    ]);
+    assertIncludes(
+      xml,
+      "wscript.exe",
+      "Windows scheduled task should run through the hidden script launcher",
+    );
+    assertIncludes(
+      xml,
+      windowsTaskScriptName,
+      "Windows scheduled task should reference the generated hidden sync script",
+    );
+
+    const script = await readFile(buildWindowsTaskScriptPath(), "utf8");
+    assertIncludes(
+      script,
+      "WScript.Shell",
+      "Windows hidden sync script should use WScript.Shell",
+    );
+    assertIncludes(
+      script,
+      "shell.Run",
+      "Windows hidden sync script should launch the sync command",
+    );
+    assertIncludes(
+      script,
+      writerPath,
+      "Windows hidden sync script should include the sentinel writer command",
+    );
+    assertIncludes(
+      script,
+      sentinelPath,
+      "Windows hidden sync script should include the sentinel output path",
     );
     return;
   }
@@ -249,6 +288,11 @@ async function assertSchedulerRemoved() {
     ]);
     if (result.ok)
       throw new Error("Windows scheduled task still exists after uninstall");
+    const scriptPath = buildWindowsTaskScriptPath();
+    if (existsSync(scriptPath))
+      throw new Error(
+        `Windows hidden sync script still exists after uninstall: ${scriptPath}`,
+      );
     return;
   }
 
@@ -293,6 +337,16 @@ function assertIncludes(value: string, expected: string, message: string) {
       `${message}: expected ${JSON.stringify(value)} to include ${JSON.stringify(expected)}`,
     );
   }
+}
+
+function buildWindowsTaskScriptPath(): string {
+  return join(
+    homedir(),
+    "AppData",
+    "Local",
+    "TokenBurn",
+    windowsTaskScriptName,
+  );
 }
 
 function sleep(ms: number) {

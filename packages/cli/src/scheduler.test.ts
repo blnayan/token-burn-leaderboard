@@ -12,6 +12,7 @@ import {
   buildLaunchdPlist,
   buildSystemdService,
   buildSystemdTimer,
+  buildWindowsTaskScript,
   buildWindowsTaskCommand,
   installScheduler,
   mergeCronBlock,
@@ -264,15 +265,35 @@ describe("scheduler builders", () => {
   });
 
   it("builds a Windows scheduled task command anchored to quarter-hour boundaries", () => {
-    const command = buildWindowsTaskCommand([
-      "C:\\Program Files\\nodejs\\node.exe",
-      "C:\\Users\\Me\\token burn\\dist\\index.js",
-      "sync",
-    ]);
+    const command = buildWindowsTaskCommand(
+      [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\Me\\token burn\\dist\\index.js",
+        "sync",
+      ],
+      "C:\\Users\\Me\\AppData\\Local\\TokenBurn\\token-burn-sync.vbs",
+    );
 
     expect(command).toContain("/SC MINUTE /MO 15 /ST 00:00");
     expect(command).toContain(
-      '/TR "\\"C:\\Program Files\\nodejs\\node.exe\\" \\"C:\\Users\\Me\\token burn\\dist\\index.js\\" sync"',
+      '/TR "\\"wscript.exe\\" \\"C:\\Users\\Me\\AppData\\Local\\TokenBurn\\token-burn-sync.vbs\\""',
+    );
+  });
+
+  it("builds a Windows task script that runs sync hidden and preserves the exit code", () => {
+    expect(
+      buildWindowsTaskScript([
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\Me\\token burn\\dist\\index.js",
+        "sync",
+      ]),
+    ).toBe(
+      [
+        'Set shell = CreateObject("WScript.Shell")',
+        'exitCode = shell.Run("""C:\\Program Files\\nodejs\\node.exe"" ""C:\\Users\\Me\\token burn\\dist\\index.js"" sync", 0, True)',
+        "WScript.Quit exitCode",
+        "",
+      ].join("\n"),
     );
   });
 });
@@ -476,6 +497,11 @@ describe("scheduler install runtime", () => {
       ],
     });
 
+    expect(
+      runtime.files.get(
+        "C:\\Users\\Me\\AppData\\Local\\TokenBurn\\token-burn-sync.vbs",
+      ),
+    ).toContain("shell.Run");
     expect(runtime.commands).toEqual([
       [
         "schtasks",
@@ -490,7 +516,7 @@ describe("scheduler install runtime", () => {
           "/ST",
           "00:00",
           "/TR",
-          '"C:\\Program Files\\nodejs\\node.exe" "C:\\Users\\Me\\token burn\\dist\\index.js" sync',
+          '"wscript.exe" "C:\\Users\\Me\\AppData\\Local\\TokenBurn\\token-burn-sync.vbs"',
           "/F",
         ],
       ],
@@ -801,7 +827,7 @@ describe("scheduler commands", () => {
       "schtasks /Create /TN TokenBurnSync /SC MINUTE /MO 15 /ST 00:00",
     );
     expect(output).toContain(
-      '/TR "\\"C:\\Program Files\\nodejs\\node.exe\\" \\"C:\\Users\\Me\\token burn\\dist\\index.js\\" sync"',
+      '/TR "\\"wscript.exe\\" \\"%LOCALAPPDATA%\\TokenBurn\\token-burn-sync.vbs\\""',
     );
   });
 

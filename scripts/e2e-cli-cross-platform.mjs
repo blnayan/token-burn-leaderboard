@@ -497,6 +497,8 @@ function assertSchedulerOutput(output) {
     assertIncludes(output, "/SC MINUTE", "Windows scheduler dry-run should include minute schedule");
     assertIncludes(output, "/MO 15", "Windows scheduler dry-run should include 15 minute interval");
     assertIncludes(output, "/ST 00:00", "Windows scheduler dry-run should anchor to midnight");
+    assertIncludes(output, "wscript.exe", "Windows scheduler dry-run should use the hidden script launcher");
+    assertIncludes(output, "token-burn-sync.vbs", "Windows scheduler dry-run should reference the hidden sync script");
     return;
   }
 

@@ -62,6 +62,8 @@ case "$runner_os" in
     assert_contains "$scheduler_output" "/SC MINUTE"
     assert_contains "$scheduler_output" "/MO 15"
     assert_contains "$scheduler_output" "/ST 00:00"
+    assert_contains "$scheduler_output" "wscript.exe"
+    assert_contains "$scheduler_output" "token-burn-sync.vbs"
     ;;
   *)
     printf 'Unsupported runner OS for smoke assertions: %s\n' "$runner_os" >&2

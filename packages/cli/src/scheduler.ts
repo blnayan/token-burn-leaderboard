@@ -25,6 +25,7 @@ const cronStartMarker = "# BEGIN Token Burn scheduler";
 const cronEndMarker = "# END Token Burn scheduler";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
+const windowsTaskScriptName = "token-burn-sync.vbs";
 const execFileAsync = promisify(execFileCallback);
 const launchdDefaultPathSegments = [
   "/opt/homebrew/bin",
@@ -154,12 +155,14 @@ ${environmentBlock}
 
 export function buildWindowsTaskCommand(
   commandArgv: SchedulerCommandArgv,
+  scriptPath = buildDefaultWindowsTaskScriptPath(),
 ): string {
-  return `schtasks ${buildWindowsTaskArgs(commandArgv).map(windowsQuoteIfNeeded).join(" ")}`;
+  return `schtasks ${buildWindowsTaskArgs(commandArgv, scriptPath).map(windowsQuoteIfNeeded).join(" ")}`;
 }
 
 export function buildWindowsTaskArgs(
   commandArgv: SchedulerCommandArgv,
+  scriptPath = buildDefaultWindowsTaskScriptPath(),
 ): string[] {
   return [
     "/Create",
@@ -172,9 +175,22 @@ export function buildWindowsTaskArgs(
     "/ST",
     "00:00",
     "/TR",
-    commandArgv.map(windowsQuoteIfNeeded).join(" "),
+    buildWindowsTaskAction(scriptPath),
     "/F",
   ];
+}
+
+export function buildWindowsTaskScript(
+  commandArgv: SchedulerCommandArgv,
+): string {
+  const command = commandArgv.map(windowsQuoteIfNeeded).join(" ");
+
+  return [
+    'Set shell = CreateObject("WScript.Shell")',
+    `exitCode = shell.Run("${escapeVbsString(command)}", 0, True)`,
+    "WScript.Quit exitCode",
+    "",
+  ].join("\n");
 }
 
 export function buildSchedulerInstallOutput(
@@ -329,7 +345,13 @@ async function installWindowsScheduler(
   runtime: SchedulerRuntime,
   syncCommandArgv: SchedulerCommandArgv,
 ): Promise<string> {
-  await runtime.execFile("schtasks", buildWindowsTaskArgs(syncCommandArgv));
+  const scriptPath = buildWindowsTaskScriptPath(runtime.homeDir);
+  await runtime.mkdir(windowsDirname(scriptPath));
+  await runtime.writeFile(scriptPath, buildWindowsTaskScript(syncCommandArgv));
+  await runtime.execFile(
+    "schtasks",
+    buildWindowsTaskArgs(syncCommandArgv, scriptPath),
+  );
   return "Installed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
@@ -368,6 +390,7 @@ async function uninstallWindowsScheduler(
   runtime: SchedulerRuntime,
 ): Promise<string> {
   await runtime.execFile("schtasks", ["/Delete", "/TN", windowsTaskName, "/F"]);
+  await runtime.rm(buildWindowsTaskScriptPath(runtime.homeDir)).catch(() => "");
   return "Removed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
@@ -412,6 +435,30 @@ function systemdEscapeArg(value: string): string {
 function windowsQuoteIfNeeded(value: string): string {
   if (!/[\s"]/.test(value)) return value;
   return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function windowsQuote(value: string): string {
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function buildWindowsTaskAction(scriptPath: string): string {
+  return ["wscript.exe", scriptPath].map(windowsQuote).join(" ");
+}
+
+function buildWindowsTaskScriptPath(homeDir: string): string {
+  return `${homeDir.replace(/[\\/]+$/, "")}\\AppData\\Local\\TokenBurn\\${windowsTaskScriptName}`;
+}
+
+function buildDefaultWindowsTaskScriptPath(): string {
+  return `%LOCALAPPDATA%\\TokenBurn\\${windowsTaskScriptName}`;
+}
+
+function windowsDirname(path: string): string {
+  return path.replace(/[\\/][^\\/]*$/, "");
+}
+
+function escapeVbsString(value: string): string {
+  return value.replaceAll('"', '""');
 }
 
 function escapeRegExp(value: string): string {
