@@ -61,6 +61,11 @@ export type NormalizedUsageRow = {
 
 type CcusageProvider = Extract<Provider, "claude_code" | "codex">;
 
+export type ProviderUsageWindow = {
+  since?: string;
+  until: string;
+};
+
 type CommandResult = {
   stdout: string;
   stderr: string;
@@ -147,7 +152,7 @@ export function normalizeCcusageDailyRows(provider: Provider, rows: unknown[]): 
 
 export async function readProviderUsage(
   provider: CcusageProvider,
-  { runCommand = spawnCommand }: { runCommand?: CommandRunner } = {},
+  { runCommand = spawnCommand, window }: { runCommand?: CommandRunner; window?: ProviderUsageWindow } = {},
 ): Promise<NormalizedUsageRow[]> {
   const fixtureDir = process.env.TOKEN_BURN_E2E_FIXTURE_DIR;
 
@@ -158,13 +163,13 @@ export async function readProviderUsage(
   let result: CommandResult;
 
   try {
-    result = await runCommand("ccusage", buildCcusageArgs(provider));
+    result = await runCommand("ccusage", buildCcusageArgs(provider, false, window));
   } catch (error) {
     if (provider !== "claude_code" || !isUnsupportedBreakdownError(error)) {
       throw error;
     }
 
-    result = await runCommand("ccusage", buildCcusageArgs(provider, true));
+    result = await runCommand("ccusage", buildCcusageArgs(provider, true, window));
   }
 
   const parsed = JSON.parse(result.stdout) as unknown;
@@ -173,13 +178,25 @@ export async function readProviderUsage(
   return normalizeCcusageDailyRows(provider, rows);
 }
 
-export function buildCcusageArgs(provider: CcusageProvider, fallback = false): string[] {
+export function buildCcusageArgs(provider: CcusageProvider, fallback = false, window?: ProviderUsageWindow): string[] {
+  const windowArgs = buildWindowArgs(window);
+
   if (provider === "claude_code") {
-    const args = ["claude", "daily", "--json", "--timezone", "UTC"];
+    const args = ["claude", "daily", "--json", "--timezone", "UTC", ...windowArgs];
     return fallback ? args : [...args, "--breakdown"];
   }
 
-  return ["codex", "daily", "--json", "--timezone", "UTC"];
+  return ["codex", "daily", "--json", "--timezone", "UTC", ...windowArgs];
+}
+
+function buildWindowArgs(window: ProviderUsageWindow | undefined): string[] {
+  if (!window?.since) return [];
+
+  return ["--since", compactIsoDate(window.since), "--until", compactIsoDate(window.until)];
+}
+
+function compactIsoDate(value: string): string {
+  return value.replaceAll("-", "");
 }
 
 function isUnsupportedBreakdownError(error: unknown): boolean {

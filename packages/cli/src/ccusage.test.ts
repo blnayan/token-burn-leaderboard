@@ -443,6 +443,21 @@ describe("buildCcusageArgs", () => {
     ]);
   });
 
+  it("adds YYYYMMDD since and until flags for Claude Code", () => {
+    expect(buildCcusageArgs("claude_code", false, { since: "2026-06-05", until: "2026-06-06" })).toEqual([
+      "claude",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--since",
+      "20260605",
+      "--until",
+      "20260606",
+      "--breakdown",
+    ]);
+  });
+
   it("treats UTC as an invariant instead of reading TOKEN_BURN_TIMEZONE", () => {
     vi.stubEnv("TOKEN_BURN_TIMEZONE", "America/New_York");
 
@@ -458,6 +473,20 @@ describe("buildCcusageArgs", () => {
 
   it("uses the supported UTC daily JSON report for Codex", () => {
     expect(buildCcusageArgs("codex")).toEqual(["codex", "daily", "--json", "--timezone", "UTC"]);
+  });
+
+  it("adds YYYYMMDD since and until flags for Codex", () => {
+    expect(buildCcusageArgs("codex", false, { since: "2026-06-05", until: "2026-06-06" })).toEqual([
+      "codex",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--since",
+      "20260605",
+      "--until",
+      "20260606",
+    ]);
   });
 });
 
@@ -503,6 +532,45 @@ describe("readProviderUsage", () => {
 
     expect(runCommand.mock.calls[0]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC", "--breakdown"]);
     expect(runCommand.mock.calls[1]?.[1]).toEqual(["claude", "daily", "--json", "--timezone", "UTC"]);
+  });
+
+  it("preserves date windows when Claude breakdown falls back", async () => {
+    const runCommand = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("breakdown unavailable"))
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify([{ date: "2026-06-06", inputTokens: 10 }]),
+        stderr: "",
+      });
+
+    await readProviderUsage("claude_code", {
+      runCommand,
+      window: { since: "2026-06-05", until: "2026-06-06" },
+    });
+
+    expect(runCommand.mock.calls[0]?.[1]).toEqual([
+      "claude",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--since",
+      "20260605",
+      "--until",
+      "20260606",
+      "--breakdown",
+    ]);
+    expect(runCommand.mock.calls[1]?.[1]).toEqual([
+      "claude",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--since",
+      "20260605",
+      "--until",
+      "20260606",
+    ]);
   });
 
   it("does not fall back after a generic Claude primary failure", async () => {
