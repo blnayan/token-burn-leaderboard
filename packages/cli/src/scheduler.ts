@@ -21,6 +21,7 @@ const cronEndMarker = "# END Token Burn scheduler";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
 const execFileAsync = promisify(execFileCallback);
+const launchdDefaultPathSegments = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
 
 export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
   return `*/15 * * * * ${commandArgv.map(shellQuote).join(" ")} >> ${cronLogPath} 2>&1`;
@@ -80,8 +81,13 @@ export function removeCronBlock(existingCrontab: string): string {
   return withoutExisting ? `${withoutExisting}\n` : "";
 }
 
-export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
-  const programArguments = commandArgv.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
+export function buildLaunchdPlist(
+  commandArgv: SchedulerCommandArgv,
+  environmentVariables: Readonly<Record<string, string>> = buildLaunchdEnvironmentVariables(),
+): string {
+  const launchdCommandArgv = makeLaunchdCommandArgv(commandArgv);
+  const programArguments = launchdCommandArgv.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
+  const environmentBlock = buildLaunchdEnvironmentBlock(environmentVariables);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -93,6 +99,7 @@ export function buildLaunchdPlist(commandArgv: SchedulerCommandArgv): string {
   <array>
 ${programArguments}
   </array>
+${environmentBlock}
   <key>StartCalendarInterval</key>
   <array>
     <dict><key>Minute</key><integer>0</integer></dict>
@@ -318,6 +325,38 @@ function hasCronBlock(existingCrontab: string): boolean {
 
 function ensureTrailingNewline(value: string): string {
   return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function buildLaunchdEnvironmentVariables(): Record<string, string> {
+  return { PATH: buildLaunchdPath(process.env.PATH) };
+}
+
+function buildLaunchdPath(shellPath = ""): string {
+  const segments = [...shellPath.split(":"), ...launchdDefaultPathSegments]
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+
+  return Array.from(new Set(segments)).join(":");
+}
+
+function buildLaunchdEnvironmentBlock(environmentVariables: Readonly<Record<string, string>>): string {
+  const entries = Object.entries(environmentVariables).filter(([, value]) => value.trim() !== "");
+  if (entries.length === 0) return "";
+
+  const body = entries
+    .map(([key, value]) => `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`)
+    .join("\n");
+
+  return `  <key>EnvironmentVariables</key>
+  <dict>
+${body}
+  </dict>`;
+}
+
+function makeLaunchdCommandArgv(commandArgv: SchedulerCommandArgv): readonly string[] {
+  if (commandArgv[0].startsWith("/")) return commandArgv;
+
+  return ["/usr/bin/env", ...commandArgv];
 }
 
 function errorMessage(error: unknown): string {

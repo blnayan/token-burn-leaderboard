@@ -147,6 +147,19 @@ describe("scheduler builders", () => {
     expect(plist).toContain("<string>/tmp/token&amp;burn/index.js</string>");
   });
 
+  it("runs relative launchd commands through env with a usable PATH", () => {
+    const plist = buildLaunchdPlist(
+      ["npm", "exec", "--yes", "--package", "@blnayan/token-burn@latest", "--", "token-burn", "sync"],
+      { PATH: "/Users/me/.nvm/versions/node/v24/bin:/opt/homebrew/bin" },
+    );
+
+    expect(plist).toContain("<key>EnvironmentVariables</key>");
+    expect(plist).toContain("<key>PATH</key>");
+    expect(plist).toContain("<string>/Users/me/.nvm/versions/node/v24/bin:/opt/homebrew/bin</string>");
+    expect(plist).toContain("<string>/usr/bin/env</string>");
+    expect(plist).toContain("<string>npm</string>");
+  });
+
   it("builds a Windows scheduled task command anchored to quarter-hour boundaries", () => {
     const command = buildWindowsTaskCommand([
       "C:\\Program Files\\nodejs\\node.exe",
