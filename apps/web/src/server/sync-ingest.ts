@@ -199,10 +199,7 @@ async function persistProviderUsage({
   incomingTotalTokens: bigint;
 }): Promise<{ id: string } | null> {
   const updated = await tx.dailyProviderUsage.updateMany({
-    where: {
-      ...usageKey,
-      totalTokens: { lte: incomingTotalTokens },
-    },
+    where: providerUsageUpdateWhere(usageKey, incomingTotalTokens),
     data: usageData,
   });
 
@@ -231,10 +228,7 @@ async function persistProviderUsage({
   }
 
   const retriedUpdate = await tx.dailyProviderUsage.updateMany({
-    where: {
-      ...usageKey,
-      totalTokens: { lte: incomingTotalTokens },
-    },
+    where: providerUsageUpdateWhere(usageKey, incomingTotalTokens),
     data: usageData,
   });
 
@@ -252,6 +246,26 @@ async function persistProviderUsage({
   }
 
   throw new Error("Daily provider usage row disappeared during ingest");
+}
+
+function providerUsageUpdateWhere(
+  usageKey: {
+    deviceId_provider_date: {
+      deviceId: string;
+      provider: string;
+      date: Date;
+    };
+  },
+  incomingTotalTokens: bigint,
+): Prisma.DailyProviderUsageWhereInput {
+  const { deviceId, provider, date } = usageKey.deviceId_provider_date;
+
+  return {
+    deviceId,
+    provider,
+    date,
+    totalTokens: { lte: incomingTotalTokens },
+  };
 }
 
 async function requireProviderUsageId(

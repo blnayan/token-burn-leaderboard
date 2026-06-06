@@ -15,11 +15,15 @@ let installedCliVersion = null;
 
 const state = {
   acceptedRequests: [],
+  acceptedWindowRequests: [],
   rejectedRequests: [],
+  rejectedWindowRequests: [],
 };
 
 const server = createServer(async (request, response) => {
-  if (request.method === "GET" && request.url === "/api/cli/health") {
+  const url = new URL(request.url ?? "/", "http://127.0.0.1");
+
+  if (request.method === "GET" && url.pathname === "/api/cli/health") {
     response.writeHead(200, { "content-type": "application/json" });
     response.end(
       JSON.stringify({
@@ -30,7 +34,35 @@ const server = createServer(async (request, response) => {
     return;
   }
 
-  if (request.method !== "POST" || request.url !== "/api/sync") {
+  if (request.method === "GET" && url.pathname === "/api/cli/sync-windows") {
+    const authorization = request.headers.authorization ?? "";
+    const received = {
+      authorization,
+      deviceId: url.searchParams.get("deviceId"),
+      method: request.method,
+      url: request.url,
+    };
+
+    if (authorization !== `Bearer ${validToken}`) {
+      state.rejectedWindowRequests.push(received);
+      response.writeHead(401, { "content-type": "application/json" });
+      response.end(JSON.stringify({ error: "Unauthorized" }));
+      return;
+    }
+
+    state.acceptedWindowRequests.push(received);
+    response.writeHead(200, { "content-type": "application/json" });
+    response.end(
+      JSON.stringify({
+        serverTime: new Date().toISOString(),
+        until: fixtureDate,
+        providers: [{ provider: "claude_code" }, { provider: "codex" }],
+      }),
+    );
+    return;
+  }
+
+  if (request.method !== "POST" || url.pathname !== "/api/sync") {
     response.writeHead(404, { "content-type": "application/json" });
     response.end(JSON.stringify({ error: "Not found" }));
     return;
@@ -117,6 +149,7 @@ async function runValidSyncScenario(serverUrl) {
   await writeConfig(configDir, { serverUrl, token: validToken, deviceId });
 
   const beforeAccepted = state.acceptedRequests.length;
+  const beforeAcceptedWindows = state.acceptedWindowRequests.length;
   const result = await runCli(["sync"], {
     env: {
       TOKEN_BURN_CONFIG_DIR: configDir,
@@ -125,6 +158,15 @@ async function runValidSyncScenario(serverUrl) {
   });
 
   assertIncludes(result.stdout, "Submitted 2 usage rows.", "valid sync should submit both providers");
+
+  const newWindowRequests = state.acceptedWindowRequests.slice(beforeAcceptedWindows);
+  assertEqual(newWindowRequests.length, 1, "valid sync should read exactly one accepted sync window");
+  assertEqual(
+    newWindowRequests[0].authorization,
+    `Bearer ${validToken}`,
+    "valid sync window request should use bearer token",
+  );
+  assertEqual(newWindowRequests[0].deviceId, deviceId, "valid sync window request should use stable device ID");
 
   const newRequests = state.acceptedRequests.slice(beforeAccepted);
   assertEqual(newRequests.length, 2, "valid sync should send exactly two accepted requests");
@@ -173,6 +215,7 @@ async function runInvalidTokenScenario(serverUrl) {
 
   const beforeAccepted = state.acceptedRequests.length;
   const beforeRejected = state.rejectedRequests.length;
+  const beforeRejectedWindows = state.rejectedWindowRequests.length;
   const result = await runCli(["sync"], {
     env: {
       TOKEN_BURN_CONFIG_DIR: configDir,
@@ -184,25 +227,23 @@ async function runInvalidTokenScenario(serverUrl) {
   assertIncludes(combinedOutput(result), "Unauthorized", "invalid token sync should surface server Unauthorized response");
   assertEqual(state.acceptedRequests.length, beforeAccepted, "invalid token sync should not send accepted requests");
   assertEqual(
-    state.rejectedRequests.length - beforeRejected,
-    2,
-    "invalid token sync should send two rejected provider requests",
+    state.rejectedWindowRequests.length - beforeRejectedWindows,
+    1,
+    "invalid token sync should send one rejected sync window request",
+  );
+  assertEqual(
+    state.rejectedRequests.length,
+    beforeRejected,
+    "invalid token sync should not send provider requests after rejected sync windows",
   );
 
-  const rejectedRequests = state.rejectedRequests.slice(beforeRejected);
-  assertDeepEqual(
-    rejectedRequests.map((request) => request.body.provider).sort(),
-    ["claude_code", "codex"],
-    "invalid token rejected request providers",
+  const rejectedWindowRequests = state.rejectedWindowRequests.slice(beforeRejectedWindows);
+  assertEqual(
+    rejectedWindowRequests[0].authorization,
+    `Bearer ${invalidToken}`,
+    "invalid token sync window request should use invalid bearer token",
   );
-
-  for (const request of rejectedRequests) {
-    assertEqual(
-      request.authorization,
-      `Bearer ${invalidToken}`,
-      `${request.body.provider} rejected request should use invalid bearer token`,
-    );
-  }
+  assertEqual(rejectedWindowRequests[0].deviceId, deviceId, "invalid token sync window request should use device ID");
 }
 
 async function writeFixtures(fixtureDir) {

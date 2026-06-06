@@ -62,11 +62,9 @@ describe("persistSyncPayload", () => {
 
     expect(tx.dailyProviderUsage.updateMany).toHaveBeenCalledWith({
       where: {
-        deviceId_provider_date: {
-          deviceId: "device-1",
-          provider: "codex",
-          date,
-        },
+        deviceId: "device-1",
+        provider: "codex",
+        date,
         totalTokens: { lte: 150n },
       },
       data: {
