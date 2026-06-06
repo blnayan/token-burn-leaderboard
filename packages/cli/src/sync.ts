@@ -1,10 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { hostname, platform as readPlatform } from "node:os";
 
-import type { Provider, SyncPayload } from "@token-burn/shared";
-import { syncPayloadSchema } from "@token-burn/shared";
+import { syncPayloadSchema, syncWindowsResponseSchema, type Provider, type SyncPayload } from "@token-burn/shared";
 
-import type { NormalizedUsageRow } from "./ccusage.js";
+import type { NormalizedUsageRow, ProviderUsageWindow } from "./ccusage.js";
 import {
   isUnsupportedCcusageProviderError,
   readCcusageVersion as readCcusageVersionFromPackage,
@@ -13,7 +12,7 @@ import {
 import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
 import { defaultServerUrl } from "./defaults.js";
-import { postJson as postJsonRequest } from "./http.js";
+import { getJson as getJsonRequest, postJson as postJsonRequest } from "./http.js";
 import { cliVersion as packageCliVersion } from "./version.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
@@ -26,9 +25,10 @@ type CliHealth = {
 export type SyncDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
+  getJson?: <T>(url: string, token?: string) => Promise<T>;
   postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
   readHealth?: (serverUrl: string) => Promise<CliHealth>;
-  readProviderUsage?: (provider: Provider) => Promise<NormalizedUsageRow[]>;
+  readProviderUsage?: (provider: Provider, options?: { window?: ProviderUsageWindow }) => Promise<NormalizedUsageRow[]>;
   readCcusageVersion?: () => Promise<string>;
   now?: () => Date;
   platform?: SyncPlatform;
@@ -57,6 +57,7 @@ export function syncUsage(dependencies?: SyncDependencies): Promise<SyncResult>;
 export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
+  getJson = getJsonRequest,
   postJson = postJsonRequest,
   readHealth = readHealthFromServer,
   readProviderUsage = readProviderUsageFromCcusage,
@@ -80,18 +81,25 @@ export async function syncUsage({
   const health = await readHealth(config.serverUrl);
   ensureRequiredCliVersion(version, health.requiredCliVersion);
 
-  const ccusageVersion = await readCcusageVersion();
-  const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const deviceId = config.deviceId ?? createDeviceId();
   const deviceName = normalizeDeviceName(readDeviceName());
   const configWithDevice = { ...config, deviceId, deviceName };
+  await writeConfig(configWithDevice);
+
+  const ccusageVersion = await readCcusageVersion();
+  const syncWindows = await readSyncWindows({ getJson, serverUrl: config.serverUrl, token: config.token, deviceId });
+  const providerWindows = new Map(syncWindows.providers.map((window) => [window.provider, window]));
+  const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const failures: Array<{ provider: Provider; error: Error }> = [];
   const skipped: Array<{ provider: Provider; error: Error }> = [];
   let submitted = 0;
 
   for (const provider of providers) {
     try {
-      const rows = await readProviderUsage(provider);
+      const providerWindow = providerWindows.get(provider);
+      const rows = await readProviderUsage(provider, {
+        window: providerWindow?.since ? { since: providerWindow.since, until: syncWindows.until } : undefined,
+      });
 
       for (const row of rows) {
         const payload = buildPayload(row, { cliVersion: version, ccusageVersion, deviceId, deviceName, platform, syncedAt });
@@ -131,6 +139,22 @@ export async function syncUsage({
     submitted,
     syncedAt,
   };
+}
+
+async function readSyncWindows({
+  getJson,
+  serverUrl,
+  token,
+  deviceId,
+}: {
+  getJson: <T>(url: string, token?: string) => Promise<T>;
+  serverUrl: string;
+  token: string;
+  deviceId: string;
+}) {
+  const url = `${serverUrl.replace(/\/+$/, "")}/api/cli/sync-windows?deviceId=${encodeURIComponent(deviceId)}`;
+  const response = await getJson<unknown>(url, token);
+  return syncWindowsResponseSchema.parse(response);
 }
 
 function buildPayload(

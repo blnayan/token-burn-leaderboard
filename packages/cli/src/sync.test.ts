@@ -36,6 +36,7 @@ describe("syncUsage", () => {
         posts.push({ url, body, token });
         return { ok: true };
       },
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => [
         {
@@ -126,6 +127,12 @@ describe("syncUsage", () => {
         token: "secret",
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message: "Submitted 2 usage rows.",
@@ -141,6 +148,7 @@ describe("syncUsage", () => {
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       writeConfig: async () => {},
       postJson: async () => ({ ok: true }),
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "codex") return [];
@@ -174,6 +182,122 @@ describe("syncUsage", () => {
       submitted: 1,
       syncedAt: "2026-06-01T00:00:00.000Z",
     });
+  });
+
+  it("fetches server sync windows and passes provider windows to ccusage", async () => {
+    const readProviderUsageCalls: Array<{ provider: string; window: unknown }> = [];
+    const getCalls: Array<{ url: string; token?: string }> = [];
+    const posts: Array<{ url: string; body: unknown; token?: string }> = [];
+
+    await syncUsage({
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      }),
+      writeConfig: async () => {},
+      getJson: async (url, token) => {
+        getCalls.push({ url, token });
+        return {
+          serverTime: "2026-06-06T12:00:00.000Z",
+          until: "2026-06-06",
+          providers: [
+            { provider: "claude_code", since: "2026-06-05" },
+            { provider: "codex", since: "2026-06-06" },
+          ],
+        };
+      },
+      postJson: async (url, body, token) => {
+        posts.push({ url, body, token });
+        return { ok: true };
+      },
+      readHealth: matchingHealth,
+      readProviderUsage: async (provider, options) => {
+        readProviderUsageCalls.push({ provider, window: options?.window });
+        return [{ provider, date: "2026-06-06", tokenCategories: { input: 10 }, totalTokens: 10 }];
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-06T12:30:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      readDeviceName: () => "nayan-vps",
+      log: () => {},
+    });
+
+    expect(getCalls).toEqual([
+      {
+        url: "https://token-burn.test/api/cli/sync-windows?deviceId=4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        token: "secret",
+      },
+    ]);
+    expect(readProviderUsageCalls).toEqual([
+      { provider: "claude_code", window: { since: "2026-06-05", until: "2026-06-06" } },
+      { provider: "codex", window: { since: "2026-06-06", until: "2026-06-06" } },
+    ]);
+    expect(posts).toHaveLength(2);
+  });
+
+  it("does full-history collection when the server omits provider since", async () => {
+    const windows: unknown[] = [];
+
+    await syncUsage({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      writeConfig: async () => {},
+      getJson: async () => ({
+        serverTime: "2026-06-06T12:00:00.000Z",
+        until: "2026-06-06",
+        providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
+      }),
+      postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
+      readProviderUsage: async (provider, options) => {
+        windows.push(options?.window);
+        return provider === "claude_code"
+          ? [{ provider, date: "2026-05-31", tokenCategories: { input: 10 }, totalTokens: 10 }]
+          : [];
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-06T12:30:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
+      log: () => {},
+    });
+
+    expect(windows).toEqual([undefined, { since: "2026-06-06", until: "2026-06-06" }]);
+  });
+
+  it("ignores unknown provider windows from the server", async () => {
+    const providers: string[] = [];
+
+    await syncUsage({
+      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      writeConfig: async () => {},
+      getJson: async () => ({
+        serverTime: "2026-06-06T12:00:00.000Z",
+        until: "2026-06-06",
+        providers: [
+          { provider: "other_provider", since: "2026-06-06" },
+          { provider: "codex", since: "2026-06-06" },
+        ],
+      }),
+      postJson: async () => ({ ok: true }),
+      readHealth: matchingHealth,
+      readProviderUsage: async (provider) => {
+        providers.push(provider);
+        return [];
+      },
+      readCcusageVersion: async () => "16.2.5",
+      now: () => new Date("2026-06-06T12:30:00.000Z"),
+      platform: "linux",
+      cliVersion: "0.1.0",
+      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      readDeviceName: () => "nayan-vps",
+      log: () => {},
+    });
+
+    expect(providers).toEqual(["claude_code", "codex"]);
   });
 
   it("refuses to sync when the server requires a different CLI version", async () => {
@@ -223,6 +347,7 @@ describe("syncUsage", () => {
         posts.push({ body });
         return { ok: true };
       },
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => [
         {
@@ -265,6 +390,7 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "codex") {
@@ -297,6 +423,12 @@ describe("syncUsage", () => {
         token: "secret",
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message:
@@ -320,6 +452,7 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
@@ -348,6 +481,12 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         token: "secret",
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: true,
           message:
@@ -371,6 +510,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writes.push(config);
       },
       postJson: async () => ({ ok: true }),
+      getJson: fullSyncWindows,
       readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
@@ -403,6 +543,12 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         token: "secret",
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: false,
           message: "Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed.",
@@ -425,6 +571,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writeConfig: async (config) => {
           writes.push(config);
         },
+        getJson: fullSyncWindows,
         readHealth: matchingHealth,
         readProviderUsage: async () => {
           throw nativeBinaryError;
@@ -441,7 +588,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
     );
 
-    expect(writes[0]?.lastSync?.message).toContain(
+    expect(writes[1]?.lastSync?.message).toContain(
       "ccusage native binary is not executable because the global npm install is not user-writable",
     );
   });
@@ -456,6 +603,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
           writes.push(config);
         },
         postJson: async () => ({ ok: true }),
+        getJson: fullSyncWindows,
         readHealth: matchingHealth,
         readProviderUsage: async (provider) => {
           if (provider === "codex") {
@@ -480,6 +628,12 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         token: "secret",
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
         lastSync: {
           ok: false,
           message:
@@ -495,6 +649,14 @@ async function matchingHealth() {
   return {
     requiredCliVersion: "0.1.0",
     serverTime: "2026-06-03T00:00:00.000Z",
+  };
+}
+
+async function fullSyncWindows() {
+  return {
+    serverTime: "2026-06-06T12:00:00.000Z",
+    until: "2026-06-06",
+    providers: [{ provider: "claude_code" }, { provider: "codex" }],
   };
 }
 
