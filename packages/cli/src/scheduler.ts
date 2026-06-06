@@ -1,6 +1,7 @@
 import { execFile as execFileCallback, spawn } from "node:child_process";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
+import { dirname } from "node:path";
 import { promisify } from "node:util";
 
 export type SchedulerPlatform = NodeJS.Platform;
@@ -12,7 +13,11 @@ export type SchedulerRuntime = {
   writeFile(path: string, content: string): Promise<void>;
   rm(path: string): Promise<void>;
   execFile(command: string, args: string[]): Promise<string>;
-  execFileWithInput(command: string, args: string[], input: string): Promise<void>;
+  execFileWithInput(
+    command: string,
+    args: string[],
+    input: string,
+  ): Promise<void>;
 };
 
 const cronLogPath = "/tmp/token-burn-sync.log";
@@ -21,19 +26,43 @@ const cronEndMarker = "# END Token Burn scheduler";
 const launchdLabel = "com.token-burn.sync";
 const windowsTaskName = "TokenBurnSync";
 const execFileAsync = promisify(execFileCallback);
-const launchdDefaultPathSegments = ["/opt/homebrew/bin", "/usr/local/bin", "/usr/bin", "/bin", "/usr/sbin", "/sbin"];
+const launchdDefaultPathSegments = [
+  "/opt/homebrew/bin",
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/sbin",
+  "/sbin",
+];
+const systemdDefaultPathSegments = [
+  "/home/linuxbrew/.linuxbrew/bin",
+  "/usr/local/bin",
+  "/usr/bin",
+  "/bin",
+  "/usr/local/sbin",
+  "/usr/sbin",
+  "/sbin",
+];
 
 export function buildCronLine(commandArgv: SchedulerCommandArgv): string {
   return `*/15 * * * * ${commandArgv.map(shellQuote).join(" ")} >> ${cronLogPath} 2>&1`;
 }
 
-export function buildSystemdService(commandArgv: SchedulerCommandArgv): string {
+export function buildSystemdService(
+  commandArgv: SchedulerCommandArgv,
+  environmentVariables: Readonly<
+    Record<string, string>
+  > = buildSystemdEnvironmentVariables(),
+): string {
+  const environmentLines = buildSystemdEnvironmentLines(environmentVariables);
+
   return [
     "[Unit]",
     "Description=Token Burn sync",
     "",
     "[Service]",
     "Type=oneshot",
+    ...environmentLines,
     `ExecStart=${commandArgv.map(systemdEscapeArg).join(" ")}`,
     "",
   ].join("\n");
@@ -56,7 +85,9 @@ export function buildSystemdTimer(): string {
 }
 
 export function buildCronBlock(commandArgv: SchedulerCommandArgv): string {
-  return [cronStartMarker, buildCronLine(commandArgv), cronEndMarker].join("\n");
+  return [cronStartMarker, buildCronLine(commandArgv), cronEndMarker].join(
+    "\n",
+  );
 }
 
 export function mergeCronBlock(existingCrontab: string, block: string): string {
@@ -77,16 +108,22 @@ export function mergeCronBlock(existingCrontab: string, block: string): string {
 }
 
 export function removeCronBlock(existingCrontab: string): string {
-  const withoutExisting = existingCrontab.replace(cronMarkerPattern(), "").trimEnd();
+  const withoutExisting = existingCrontab
+    .replace(cronMarkerPattern(), "")
+    .trimEnd();
   return withoutExisting ? `${withoutExisting}\n` : "";
 }
 
 export function buildLaunchdPlist(
   commandArgv: SchedulerCommandArgv,
-  environmentVariables: Readonly<Record<string, string>> = buildLaunchdEnvironmentVariables(),
+  environmentVariables: Readonly<
+    Record<string, string>
+  > = buildLaunchdEnvironmentVariables(),
 ): string {
   const launchdCommandArgv = makeLaunchdCommandArgv(commandArgv);
-  const programArguments = launchdCommandArgv.map((arg) => `    <string>${escapeXml(arg)}</string>`).join("\n");
+  const programArguments = launchdCommandArgv
+    .map((arg) => `    <string>${escapeXml(arg)}</string>`)
+    .join("\n");
   const environmentBlock = buildLaunchdEnvironmentBlock(environmentVariables);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -115,11 +152,15 @@ ${environmentBlock}
 </plist>`;
 }
 
-export function buildWindowsTaskCommand(commandArgv: SchedulerCommandArgv): string {
+export function buildWindowsTaskCommand(
+  commandArgv: SchedulerCommandArgv,
+): string {
   return `schtasks ${buildWindowsTaskArgs(commandArgv).map(windowsQuoteIfNeeded).join(" ")}`;
 }
 
-export function buildWindowsTaskArgs(commandArgv: SchedulerCommandArgv): string[] {
+export function buildWindowsTaskArgs(
+  commandArgv: SchedulerCommandArgv,
+): string[] {
   return [
     "/Create",
     "/TN",
@@ -136,7 +177,10 @@ export function buildWindowsTaskArgs(commandArgv: SchedulerCommandArgv): string[
   ];
 }
 
-export function buildSchedulerInstallOutput(platform: SchedulerPlatform, commandArgv: SchedulerCommandArgv): string {
+export function buildSchedulerInstallOutput(
+  platform: SchedulerPlatform,
+  commandArgv: SchedulerCommandArgv,
+): string {
   if (platform === "darwin") return buildLaunchdPlist(commandArgv);
   if (platform === "win32") return buildWindowsTaskCommand(commandArgv);
   return [
@@ -158,20 +202,29 @@ export async function installScheduler({
   runtime: SchedulerRuntime;
   syncCommandArgv: SchedulerCommandArgv;
 }): Promise<string> {
-  if (runtime.platform === "linux") return installLinuxScheduler(runtime, syncCommandArgv);
-  if (runtime.platform === "darwin") return installMacScheduler(runtime, syncCommandArgv);
-  if (runtime.platform === "win32") return installWindowsScheduler(runtime, syncCommandArgv);
+  if (runtime.platform === "linux")
+    return installLinuxScheduler(runtime, syncCommandArgv);
+  if (runtime.platform === "darwin")
+    return installMacScheduler(runtime, syncCommandArgv);
+  if (runtime.platform === "win32")
+    return installWindowsScheduler(runtime, syncCommandArgv);
   throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
 }
 
-export async function uninstallScheduler({ runtime }: { runtime: SchedulerRuntime }): Promise<string> {
+export async function uninstallScheduler({
+  runtime,
+}: {
+  runtime: SchedulerRuntime;
+}): Promise<string> {
   if (runtime.platform === "linux") return uninstallLinuxScheduler(runtime);
   if (runtime.platform === "darwin") return uninstallMacScheduler(runtime);
   if (runtime.platform === "win32") return uninstallWindowsScheduler(runtime);
   throw new Error(`Unsupported scheduler platform: ${runtime.platform}`);
 }
 
-export function createNodeSchedulerRuntime(platform: SchedulerPlatform = process.platform): SchedulerRuntime {
+export function createNodeSchedulerRuntime(
+  platform: SchedulerPlatform = process.platform,
+): SchedulerRuntime {
   return {
     platform,
     homeDir: homedir(),
@@ -194,7 +247,10 @@ export function createNodeSchedulerRuntime(platform: SchedulerPlatform = process
   };
 }
 
-async function installLinuxScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+async function installLinuxScheduler(
+  runtime: SchedulerRuntime,
+  syncCommandArgv: SchedulerCommandArgv,
+): Promise<string> {
   try {
     await installLinuxSystemdScheduler(runtime, syncCommandArgv);
   } catch (error) {
@@ -216,29 +272,50 @@ async function installLinuxSystemdScheduler(
 ): Promise<void> {
   const dir = `${runtime.homeDir}/.config/systemd/user`;
   await runtime.mkdir(dir);
-  await runtime.writeFile(`${dir}/token-burn-sync.service`, buildSystemdService(syncCommandArgv));
+  await runtime.writeFile(
+    `${dir}/token-burn-sync.service`,
+    buildSystemdService(syncCommandArgv),
+  );
   await runtime.writeFile(`${dir}/token-burn-sync.timer`, buildSystemdTimer());
   await runtime.execFile("systemctl", ["--user", "daemon-reload"]);
-  await runtime.execFile("systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]);
+  await runtime.execFile("systemctl", [
+    "--user",
+    "enable",
+    "--now",
+    "token-burn-sync.timer",
+  ]);
 }
 
-async function installLinuxCronScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<void> {
+async function installLinuxCronScheduler(
+  runtime: SchedulerRuntime,
+  syncCommandArgv: SchedulerCommandArgv,
+): Promise<void> {
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
-  await runtime.execFileWithInput("crontab", ["-"], mergeCronBlock(existing, buildCronBlock(syncCommandArgv)));
+  await runtime.execFileWithInput(
+    "crontab",
+    ["-"],
+    mergeCronBlock(existing, buildCronBlock(syncCommandArgv)),
+  );
 }
 
-async function removeLinuxCronFallbackIfPresent(runtime: SchedulerRuntime): Promise<void> {
+async function removeLinuxCronFallbackIfPresent(
+  runtime: SchedulerRuntime,
+): Promise<void> {
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
   if (!hasCronBlock(existing)) return;
 
   const cleaned = removeCronBlock(existing);
 
-  if (cleaned === existing || cleaned === ensureTrailingNewline(existing)) return;
+  if (cleaned === existing || cleaned === ensureTrailingNewline(existing))
+    return;
 
   await runtime.execFileWithInput("crontab", ["-"], cleaned);
 }
 
-async function installMacScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+async function installMacScheduler(
+  runtime: SchedulerRuntime,
+  syncCommandArgv: SchedulerCommandArgv,
+): Promise<string> {
   const dir = `${runtime.homeDir}/Library/LaunchAgents`;
   const plistPath = `${dir}/${launchdLabel}.plist`;
   await runtime.mkdir(dir);
@@ -248,35 +325,57 @@ async function installMacScheduler(runtime: SchedulerRuntime, syncCommandArgv: S
   return `Installed Token Burn launchd agent ${plistPath}.`;
 }
 
-async function installWindowsScheduler(runtime: SchedulerRuntime, syncCommandArgv: SchedulerCommandArgv): Promise<string> {
+async function installWindowsScheduler(
+  runtime: SchedulerRuntime,
+  syncCommandArgv: SchedulerCommandArgv,
+): Promise<string> {
   await runtime.execFile("schtasks", buildWindowsTaskArgs(syncCommandArgv));
   return "Installed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
-async function uninstallLinuxScheduler(runtime: SchedulerRuntime): Promise<string> {
+async function uninstallLinuxScheduler(
+  runtime: SchedulerRuntime,
+): Promise<string> {
   const dir = `${runtime.homeDir}/.config/systemd/user`;
-  await runtime.execFile("systemctl", ["--user", "disable", "--now", "token-burn-sync.timer"]).catch(() => "");
+  await runtime
+    .execFile("systemctl", [
+      "--user",
+      "disable",
+      "--now",
+      "token-burn-sync.timer",
+    ])
+    .catch(() => "");
   await runtime.rm(`${dir}/token-burn-sync.service`).catch(() => "");
   await runtime.rm(`${dir}/token-burn-sync.timer`).catch(() => "");
-  await runtime.execFile("systemctl", ["--user", "daemon-reload"]).catch(() => "");
+  await runtime
+    .execFile("systemctl", ["--user", "daemon-reload"])
+    .catch(() => "");
   const existing = await runtime.execFile("crontab", ["-l"]).catch(() => "");
   await runtime.execFileWithInput("crontab", ["-"], removeCronBlock(existing));
   return "Removed Token Burn Linux scheduler entries.";
 }
 
-async function uninstallMacScheduler(runtime: SchedulerRuntime): Promise<string> {
+async function uninstallMacScheduler(
+  runtime: SchedulerRuntime,
+): Promise<string> {
   const plistPath = `${runtime.homeDir}/Library/LaunchAgents/${launchdLabel}.plist`;
   await runtime.execFile("launchctl", ["unload", plistPath]).catch(() => "");
   await runtime.rm(plistPath).catch(() => "");
   return `Removed Token Burn launchd agent ${plistPath}.`;
 }
 
-async function uninstallWindowsScheduler(runtime: SchedulerRuntime): Promise<string> {
+async function uninstallWindowsScheduler(
+  runtime: SchedulerRuntime,
+): Promise<string> {
   await runtime.execFile("schtasks", ["/Delete", "/TN", windowsTaskName, "/F"]);
   return "Removed Token Burn Windows scheduled task TokenBurnSync.";
 }
 
-async function spawnWithInput(command: string, args: string[], input: string): Promise<void> {
+async function spawnWithInput(
+  command: string,
+  args: string[],
+  input: string,
+): Promise<void> {
   await new Promise<void>((resolve, reject) => {
     const child = spawn(command, args, { stdio: ["pipe", "ignore", "pipe"] });
     let stderr = "";
@@ -291,7 +390,11 @@ async function spawnWithInput(command: string, args: string[], input: string): P
         return;
       }
 
-      reject(new Error(`${command} ${args.join(" ")} exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`));
+      reject(
+        new Error(
+          `${command} ${args.join(" ")} exited with code ${code}${stderr ? `: ${stderr.trim()}` : ""}`,
+        ),
+      );
     });
     child.stdin.end(input);
   });
@@ -316,7 +419,10 @@ function escapeRegExp(value: string): string {
 }
 
 function cronMarkerPattern(): RegExp {
-  return new RegExp(`${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`, "gm");
+  return new RegExp(
+    `${escapeRegExp(cronStartMarker)}[\\s\\S]*?${escapeRegExp(cronEndMarker)}\\n?`,
+    "gm",
+  );
 }
 
 function hasCronBlock(existingCrontab: string): boolean {
@@ -328,23 +434,50 @@ function ensureTrailingNewline(value: string): string {
 }
 
 function buildLaunchdEnvironmentVariables(): Record<string, string> {
-  return { PATH: buildLaunchdPath(process.env.PATH) };
+  return {
+    PATH: buildPathWithDefaults(process.env.PATH, [
+      dirname(process.execPath),
+      ...launchdDefaultPathSegments,
+    ]),
+  };
 }
 
-function buildLaunchdPath(shellPath = ""): string {
-  const segments = [...shellPath.split(":"), ...launchdDefaultPathSegments]
+function buildSystemdEnvironmentVariables(): Record<string, string> {
+  return {
+    PATH: buildPathWithDefaults(process.env.PATH, [
+      dirname(process.execPath),
+      ...systemdDefaultPathSegments,
+    ]),
+  };
+}
+
+function buildPathWithDefaults(
+  shellPath = "",
+  defaultSegments: readonly string[],
+): string {
+  const segments = [...shellPath.split(":"), ...defaultSegments]
     .map((segment) => segment.trim())
-    .filter(Boolean);
+    .filter(
+      (segment) =>
+        segment.startsWith("/") && !segment.endsWith("/node_modules/.bin"),
+    );
 
   return Array.from(new Set(segments)).join(":");
 }
 
-function buildLaunchdEnvironmentBlock(environmentVariables: Readonly<Record<string, string>>): string {
-  const entries = Object.entries(environmentVariables).filter(([, value]) => value.trim() !== "");
+function buildLaunchdEnvironmentBlock(
+  environmentVariables: Readonly<Record<string, string>>,
+): string {
+  const entries = Object.entries(environmentVariables).filter(
+    ([, value]) => value.trim() !== "",
+  );
   if (entries.length === 0) return "";
 
   const body = entries
-    .map(([key, value]) => `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`)
+    .map(
+      ([key, value]) =>
+        `    <key>${escapeXml(key)}</key>\n    <string>${escapeXml(value)}</string>`,
+    )
     .join("\n");
 
   return `  <key>EnvironmentVariables</key>
@@ -353,10 +486,27 @@ ${body}
   </dict>`;
 }
 
-function makeLaunchdCommandArgv(commandArgv: SchedulerCommandArgv): readonly string[] {
+function makeLaunchdCommandArgv(
+  commandArgv: SchedulerCommandArgv,
+): readonly string[] {
   if (commandArgv[0].startsWith("/")) return commandArgv;
 
   return ["/usr/bin/env", ...commandArgv];
+}
+
+function buildSystemdEnvironmentLines(
+  environmentVariables: Readonly<Record<string, string>>,
+): string[] {
+  return Object.entries(environmentVariables)
+    .filter(([, value]) => value.trim() !== "")
+    .map(
+      ([key, value]) =>
+        `Environment="${systemdEscapeEnvironment(`${key}=${value}`)}"`,
+    );
+}
+
+function systemdEscapeEnvironment(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
 }
 
 function errorMessage(error: unknown): string {

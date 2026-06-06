@@ -1,7 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { runDoctor } from "./commands/doctor.js";
-import { getDefaultSyncCommandArgv, runInstallScheduler, runUninstallScheduler } from "./commands/scheduler.js";
+import {
+  getDefaultSyncCommandArgv,
+  runInstallScheduler,
+  runUninstallScheduler,
+} from "./commands/scheduler.js";
 import {
   buildCronBlock,
   buildCronLine,
@@ -24,29 +28,92 @@ describe("scheduler builders", () => {
   });
 
   it("shell-quotes every cron command argument independently", () => {
-    expect(buildCronLine(["/opt/node bin/node", "/tmp/token burn/dist/index.js", "sync"])).toBe(
+    expect(
+      buildCronLine([
+        "/opt/node bin/node",
+        "/tmp/token burn/dist/index.js",
+        "sync",
+      ]),
+    ).toBe(
       "*/15 * * * * '/opt/node bin/node' '/tmp/token burn/dist/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
   it("shell-quotes cron command arguments with shell metacharacters", () => {
-    expect(buildCronLine(["/tmp/a&b/node", "/tmp/project;rm/index.js", "sync"])).toBe(
+    expect(
+      buildCronLine(["/tmp/a&b/node", "/tmp/project;rm/index.js", "sync"]),
+    ).toBe(
       "*/15 * * * * '/tmp/a&b/node' '/tmp/project;rm/index.js' 'sync' >> /tmp/token-burn-sync.log 2>&1",
     );
   });
 
   it("builds a systemd user service and quarter-hour calendar timer", () => {
-    const service = buildSystemdService(["/usr/bin/node", "/repo/dist/index.js", "sync"]);
+    const service = buildSystemdService([
+      "/usr/bin/node",
+      "/repo/dist/index.js",
+      "sync",
+    ]);
     const timer = buildSystemdTimer();
 
     expect(service).toContain("[Service]");
     expect(service).toContain("Type=oneshot");
-    expect(service).toContain("ExecStart=/usr/bin/node /repo/dist/index.js sync");
+    expect(service).toContain(
+      "ExecStart=/usr/bin/node /repo/dist/index.js sync",
+    );
     expect(timer).toContain("OnCalendar=*:0/15");
     expect(timer).toContain("Persistent=true");
     expect(timer).toContain("Unit=token-burn-sync.service");
     expect(timer).not.toContain("OnBootSec=5min");
     expect(timer).not.toContain("OnUnitActiveSec=15min");
+  });
+
+  it("builds a systemd user service with PATH for npm child processes", () => {
+    const service = buildSystemdService(
+      [
+        "/home/me/.nvm/versions/node/v24/bin/node",
+        "/home/me/.nvm/versions/node/v24/lib/node_modules/npm/bin/npm-cli.js",
+        "exec",
+        "--yes",
+        "--package",
+        "@blnayan/token-burn@latest",
+        "--",
+        "token-burn",
+        "sync",
+      ],
+      { PATH: "/home/me/.nvm/versions/node/v24/bin:/usr/local/bin:/usr/bin" },
+    );
+
+    expect(service).toContain(
+      'Environment="PATH=/home/me/.nvm/versions/node/v24/bin:/usr/local/bin:/usr/bin"',
+    );
+  });
+
+  it("omits relative PATH segments from generated scheduler environments", () => {
+    const originalPath = process.env.PATH;
+    process.env.PATH =
+      "./node_modules/.bin:/home/me/project/node_modules/.bin:/home/me/.nvm/versions/node/v24/bin:/usr/bin";
+
+    try {
+      const service = buildSystemdService([
+        "/usr/bin/node",
+        "/repo/dist/index.js",
+        "sync",
+      ]);
+      const plist = buildLaunchdPlist([
+        "/usr/bin/node",
+        "/repo/dist/index.js",
+        "sync",
+      ]);
+
+      expect(service).toContain("/home/me/.nvm/versions/node/v24/bin:/usr/bin");
+      expect(service).not.toContain("./node_modules/.bin");
+      expect(service).not.toContain("/home/me/project/node_modules/.bin");
+      expect(plist).toContain("/home/me/.nvm/versions/node/v24/bin:/usr/bin");
+      expect(plist).not.toContain("./node_modules/.bin");
+      expect(plist).not.toContain("/home/me/project/node_modules/.bin");
+    } finally {
+      process.env.PATH = originalPath;
+    }
   });
 
   it("wraps the cron line in stable marker comments", () => {
@@ -68,7 +135,9 @@ describe("scheduler builders", () => {
       "0 0 * * * echo midnight",
     ].join("\n");
 
-    expect(mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"]))).toBe(
+    expect(
+      mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"])),
+    ).toBe(
       [
         "MAILTO=me@example.com",
         "# BEGIN Token Burn scheduler",
@@ -92,7 +161,9 @@ describe("scheduler builders", () => {
       "# END Token Burn scheduler",
     ].join("\n");
 
-    expect(mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"]))).toBe(
+    expect(
+      mergeCronBlock(existing, buildCronBlock(["token-burn", "sync"])),
+    ).toBe(
       [
         "MAILTO=me@example.com",
         "# BEGIN Token Burn scheduler",
@@ -118,19 +189,36 @@ describe("scheduler builders", () => {
     ].join("\n");
 
     expect(removeCronBlock(existing)).toBe(
-      ["MAILTO=me@example.com", "0 0 * * * echo midnight", "30 1 * * * echo late", ""].join("\n"),
+      [
+        "MAILTO=me@example.com",
+        "0 0 * * * echo midnight",
+        "30 1 * * * echo late",
+        "",
+      ].join("\n"),
     );
   });
 
   it("builds a launchd plist with quarter-hour calendar entries, label, and command", () => {
-    const plist = buildLaunchdPlist(["/usr/local/bin/node", "/tmp/token-burn/dist/index.js", "sync"]);
+    const plist = buildLaunchdPlist([
+      "/usr/local/bin/node",
+      "/tmp/token-burn/dist/index.js",
+      "sync",
+    ]);
 
     expect(plist).toContain("<string>com.token-burn.sync</string>");
     expect(plist).toContain("<key>StartCalendarInterval</key>");
-    expect(plist).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
-    expect(plist).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
-    expect(plist).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
-    expect(plist).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
+    expect(plist).toContain(
+      "<dict><key>Minute</key><integer>0</integer></dict>",
+    );
+    expect(plist).toContain(
+      "<dict><key>Minute</key><integer>15</integer></dict>",
+    );
+    expect(plist).toContain(
+      "<dict><key>Minute</key><integer>30</integer></dict>",
+    );
+    expect(plist).toContain(
+      "<dict><key>Minute</key><integer>45</integer></dict>",
+    );
     expect(plist).not.toContain("<key>StartInterval</key>");
     expect(plist).not.toContain("<integer>900</integer>");
     expect(plist).toContain("<string>/usr/local/bin/node</string>");
@@ -138,7 +226,11 @@ describe("scheduler builders", () => {
     expect(plist).toContain("<string>sync</string>");
     expect(plist).toContain("<key>StandardOutPath</key>");
     expect(plist).toContain("<key>StandardErrorPath</key>");
-    expect(Array.from(plist.matchAll(/<string>\/tmp\/token-burn-sync\.log<\/string>/g))).toHaveLength(2);
+    expect(
+      Array.from(
+        plist.matchAll(/<string>\/tmp\/token-burn-sync\.log<\/string>/g),
+      ),
+    ).toHaveLength(2);
   });
 
   it("XML-escapes launchd command arguments", () => {
@@ -149,13 +241,24 @@ describe("scheduler builders", () => {
 
   it("runs relative launchd commands through env with a usable PATH", () => {
     const plist = buildLaunchdPlist(
-      ["npm", "exec", "--yes", "--package", "@blnayan/token-burn@latest", "--", "token-burn", "sync"],
+      [
+        "npm",
+        "exec",
+        "--yes",
+        "--package",
+        "@blnayan/token-burn@latest",
+        "--",
+        "token-burn",
+        "sync",
+      ],
       { PATH: "/Users/me/.nvm/versions/node/v24/bin:/opt/homebrew/bin" },
     );
 
     expect(plist).toContain("<key>EnvironmentVariables</key>");
     expect(plist).toContain("<key>PATH</key>");
-    expect(plist).toContain("<string>/Users/me/.nvm/versions/node/v24/bin:/opt/homebrew/bin</string>");
+    expect(plist).toContain(
+      "<string>/Users/me/.nvm/versions/node/v24/bin:/opt/homebrew/bin</string>",
+    );
     expect(plist).toContain("<string>/usr/bin/env</string>");
     expect(plist).toContain("<string>npm</string>");
   });
@@ -194,23 +297,36 @@ describe("scheduler install runtime", () => {
       ]),
     });
 
-    await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
+    await installScheduler({
+      runtime,
+      syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"],
+    });
 
-    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.service")).toContain(
-      "ExecStart=/usr/bin/node /repo/dist/index.js sync",
-    );
-    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain("OnCalendar=*:0/15");
-    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).toContain("Persistent=true");
-    expect(runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer")).not.toContain(
-      "OnUnitActiveSec=15min",
-    );
+    expect(
+      runtime.files.get(
+        "/home/me/.config/systemd/user/token-burn-sync.service",
+      ),
+    ).toContain("ExecStart=/usr/bin/node /repo/dist/index.js sync");
+    expect(
+      runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer"),
+    ).toContain("OnCalendar=*:0/15");
+    expect(
+      runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer"),
+    ).toContain("Persistent=true");
+    expect(
+      runtime.files.get("/home/me/.config/systemd/user/token-burn-sync.timer"),
+    ).not.toContain("OnUnitActiveSec=15min");
     expect(runtime.commands).toEqual([
       ["systemctl", ["--user", "daemon-reload"]],
       ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
       ["crontab", ["-l"]],
     ]);
     expect(runtime.stdinCommands).toEqual([
-      { command: "crontab", args: ["-"], input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n" },
+      {
+        command: "crontab",
+        args: ["-"],
+        input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n",
+      },
     ]);
   });
 
@@ -221,7 +337,10 @@ describe("scheduler install runtime", () => {
       commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n\n"]]),
     });
 
-    await installScheduler({ runtime, syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"] });
+    await installScheduler({
+      runtime,
+      syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"],
+    });
 
     expect(runtime.commands).toEqual([
       ["systemctl", ["--user", "daemon-reload"]],
@@ -256,14 +375,20 @@ describe("scheduler install runtime", () => {
       syncCommandArgv: ["/usr/bin/node", "/repo/dist/index.js", "sync"],
     });
 
-    expect(message).toContain("but existing cron fallback could not be removed");
+    expect(message).toContain(
+      "but existing cron fallback could not be removed",
+    );
     expect(runtime.commands).toEqual([
       ["systemctl", ["--user", "daemon-reload"]],
       ["systemctl", ["--user", "enable", "--now", "token-burn-sync.timer"]],
       ["crontab", ["-l"]],
     ]);
     expect(runtime.stdinCommands).toEqual([
-      { command: "crontab", args: ["-"], input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n" },
+      {
+        command: "crontab",
+        args: ["-"],
+        input: "MAILTO=me@example.com\n0 0 * * * echo midnight\n",
+      },
     ]);
   });
 
@@ -275,7 +400,10 @@ describe("scheduler install runtime", () => {
       commandOutput: new Map([["crontab -l", "0 0 * * * echo midnight\n"]]),
     });
 
-    await installScheduler({ runtime, syncCommandArgv: ["token-burn", "sync"] });
+    await installScheduler({
+      runtime,
+      syncCommandArgv: ["token-burn", "sync"],
+    });
 
     expect(runtime.commands).toContainEqual(["crontab", ["-l"]]);
     expect(runtime.stdinCommands).toEqual([
@@ -294,18 +422,39 @@ describe("scheduler install runtime", () => {
   });
 
   it("installs a macOS launchd agent", async () => {
-    const runtime = createMockSchedulerRuntime({ platform: "darwin", homeDir: "/Users/me" });
+    const runtime = createMockSchedulerRuntime({
+      platform: "darwin",
+      homeDir: "/Users/me",
+    });
 
-    await installScheduler({ runtime, syncCommandArgv: ["/usr/local/bin/node", "/repo/dist/index.js", "sync"] });
+    await installScheduler({
+      runtime,
+      syncCommandArgv: ["/usr/local/bin/node", "/repo/dist/index.js", "sync"],
+    });
 
-    const plistPath = "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
-    expect(runtime.files.get(plistPath)).toContain("<string>com.token-burn.sync</string>");
-    expect(runtime.files.get(plistPath)).toContain("<key>StartCalendarInterval</key>");
-    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
-    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
-    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
-    expect(runtime.files.get(plistPath)).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
-    expect(runtime.files.get(plistPath)).not.toContain("<key>StartInterval</key>");
+    const plistPath =
+      "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
+    expect(runtime.files.get(plistPath)).toContain(
+      "<string>com.token-burn.sync</string>",
+    );
+    expect(runtime.files.get(plistPath)).toContain(
+      "<key>StartCalendarInterval</key>",
+    );
+    expect(runtime.files.get(plistPath)).toContain(
+      "<dict><key>Minute</key><integer>0</integer></dict>",
+    );
+    expect(runtime.files.get(plistPath)).toContain(
+      "<dict><key>Minute</key><integer>15</integer></dict>",
+    );
+    expect(runtime.files.get(plistPath)).toContain(
+      "<dict><key>Minute</key><integer>30</integer></dict>",
+    );
+    expect(runtime.files.get(plistPath)).toContain(
+      "<dict><key>Minute</key><integer>45</integer></dict>",
+    );
+    expect(runtime.files.get(plistPath)).not.toContain(
+      "<key>StartInterval</key>",
+    );
     expect(runtime.commands).toEqual([
       ["launchctl", ["unload", plistPath]],
       ["launchctl", ["load", plistPath]],
@@ -313,11 +462,18 @@ describe("scheduler install runtime", () => {
   });
 
   it("installs a Windows scheduled task", async () => {
-    const runtime = createMockSchedulerRuntime({ platform: "win32", homeDir: "C:\\Users\\Me" });
+    const runtime = createMockSchedulerRuntime({
+      platform: "win32",
+      homeDir: "C:\\Users\\Me",
+    });
 
     await installScheduler({
       runtime,
-      syncCommandArgv: ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\Me\\token burn\\dist\\index.js", "sync"],
+      syncCommandArgv: [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\Me\\token burn\\dist\\index.js",
+        "sync",
+      ],
     });
 
     expect(runtime.commands).toEqual([
@@ -361,26 +517,43 @@ describe("scheduler install runtime", () => {
 
     await uninstallScheduler({ runtime });
 
-    expect(runtime.commands).toContainEqual(["systemctl", ["--user", "disable", "--now", "token-burn-sync.timer"]]);
-    expect(runtime.commands).toContainEqual(["systemctl", ["--user", "daemon-reload"]]);
-    expect(runtime.stdinCommands).toEqual([{ command: "crontab", args: ["-"], input: "0 0 * * * echo midnight\n" }]);
+    expect(runtime.commands).toContainEqual([
+      "systemctl",
+      ["--user", "disable", "--now", "token-burn-sync.timer"],
+    ]);
+    expect(runtime.commands).toContainEqual([
+      "systemctl",
+      ["--user", "daemon-reload"],
+    ]);
+    expect(runtime.stdinCommands).toEqual([
+      { command: "crontab", args: ["-"], input: "0 0 * * * echo midnight\n" },
+    ]);
   });
 
   it("uninstalls macOS launchd agent", async () => {
-    const runtime = createMockSchedulerRuntime({ platform: "darwin", homeDir: "/Users/me" });
+    const runtime = createMockSchedulerRuntime({
+      platform: "darwin",
+      homeDir: "/Users/me",
+    });
 
     await uninstallScheduler({ runtime });
 
-    const plistPath = "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
+    const plistPath =
+      "/Users/me/Library/LaunchAgents/com.token-burn.sync.plist";
     expect(runtime.commands).toEqual([["launchctl", ["unload", plistPath]]]);
   });
 
   it("uninstalls Windows scheduled task", async () => {
-    const runtime = createMockSchedulerRuntime({ platform: "win32", homeDir: "C:\\Users\\Me" });
+    const runtime = createMockSchedulerRuntime({
+      platform: "win32",
+      homeDir: "C:\\Users\\Me",
+    });
 
     await uninstallScheduler({ runtime });
 
-    expect(runtime.commands).toEqual([["schtasks", ["/Delete", "/TN", "TokenBurnSync", "/F"]]]);
+    expect(runtime.commands).toEqual([
+      ["schtasks", ["/Delete", "/TN", "TokenBurnSync", "/F"]],
+    ]);
   });
 });
 
@@ -428,7 +601,8 @@ describe("scheduler commands", () => {
       getDefaultSyncCommandArgv({
         platform: "win32",
         execPath: "C:\\Program Files\\nodejs\\node.exe",
-        npmExecPath: "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
+        npmExecPath:
+          "C:\\Program Files\\nodejs\\node_modules\\npm\\bin\\npm-cli.js",
       }),
     ).toEqual([
       "C:\\Program Files\\nodejs\\node.exe",
@@ -444,7 +618,9 @@ describe("scheduler commands", () => {
   });
 
   it("falls back to bare npm latest sync on Linux and macOS when npm_execpath is unavailable", () => {
-    expect(getDefaultSyncCommandArgv({ platform: "linux", npmExecPath: "" })).toEqual([
+    expect(
+      getDefaultSyncCommandArgv({ platform: "linux", npmExecPath: "" }),
+    ).toEqual([
       "npm",
       "exec",
       "--yes",
@@ -455,7 +631,9 @@ describe("scheduler commands", () => {
       "sync",
     ]);
 
-    expect(getDefaultSyncCommandArgv({ platform: "darwin", npmExecPath: "" })).toEqual([
+    expect(
+      getDefaultSyncCommandArgv({ platform: "darwin", npmExecPath: "" }),
+    ).toEqual([
       "npm",
       "exec",
       "--yes",
@@ -468,7 +646,9 @@ describe("scheduler commands", () => {
   });
 
   it("falls back to bare npm.cmd latest sync on Windows when npm_execpath is unavailable", () => {
-    expect(getDefaultSyncCommandArgv({ platform: "win32", npmExecPath: "" })).toEqual([
+    expect(
+      getDefaultSyncCommandArgv({ platform: "win32", npmExecPath: "" }),
+    ).toEqual([
       "npm.cmd",
       "exec",
       "--yes",
@@ -485,7 +665,8 @@ describe("scheduler commands", () => {
       getDefaultSyncCommandArgv({
         platform: "linux",
         execPath: "/usr/local/bin/node",
-        npmExecPath: "/home/me/.cache/node/corepack/v1/pnpm/9.15.0/bin/pnpm.cjs",
+        npmExecPath:
+          "/home/me/.cache/node/corepack/v1/pnpm/9.15.0/bin/pnpm.cjs",
       }),
     ).toEqual([
       "npm",
@@ -583,10 +764,18 @@ describe("scheduler commands", () => {
 
     const output = log.mock.calls[0]?.[0] as string;
     expect(output).toContain("<key>StartCalendarInterval</key>");
-    expect(output).toContain("<dict><key>Minute</key><integer>0</integer></dict>");
-    expect(output).toContain("<dict><key>Minute</key><integer>15</integer></dict>");
-    expect(output).toContain("<dict><key>Minute</key><integer>30</integer></dict>");
-    expect(output).toContain("<dict><key>Minute</key><integer>45</integer></dict>");
+    expect(output).toContain(
+      "<dict><key>Minute</key><integer>0</integer></dict>",
+    );
+    expect(output).toContain(
+      "<dict><key>Minute</key><integer>15</integer></dict>",
+    );
+    expect(output).toContain(
+      "<dict><key>Minute</key><integer>30</integer></dict>",
+    );
+    expect(output).toContain(
+      "<dict><key>Minute</key><integer>45</integer></dict>",
+    );
     expect(output).not.toContain("<key>StartInterval</key>");
     expect(output).toContain("<string>/usr/local/bin/node</string>");
     expect(output).toContain("<string>/repo/dist/index.js</string>");
@@ -599,12 +788,18 @@ describe("scheduler commands", () => {
     await runInstallScheduler({
       dryRun: true,
       platform: "win32",
-      syncCommandArgv: ["C:\\Program Files\\nodejs\\node.exe", "C:\\Users\\Me\\token burn\\dist\\index.js", "sync"],
+      syncCommandArgv: [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\Me\\token burn\\dist\\index.js",
+        "sync",
+      ],
       log,
     });
 
     const output = log.mock.calls[0]?.[0] as string;
-    expect(output).toContain("schtasks /Create /TN TokenBurnSync /SC MINUTE /MO 15 /ST 00:00");
+    expect(output).toContain(
+      "schtasks /Create /TN TokenBurnSync /SC MINUTE /MO 15 /ST 00:00",
+    );
     expect(output).toContain(
       '/TR "\\"C:\\Program Files\\nodejs\\node.exe\\" \\"C:\\Users\\Me\\token burn\\dist\\index.js\\" sync"',
     );
@@ -645,7 +840,11 @@ function createMockSchedulerRuntime(options: {
 }) {
   const files = new Map<string, string>();
   const commands: Array<[string, string[]]> = [];
-  const stdinCommands: Array<{ command: string; args: string[]; input: string }> = [];
+  const stdinCommands: Array<{
+    command: string;
+    args: string[];
+    input: string;
+  }> = [];
 
   return {
     platform: options.platform,
@@ -679,7 +878,10 @@ describe("doctor", () => {
     const log = vi.fn();
 
     await runDoctor({
-      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+      readConfig: async () => ({
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+      }),
       platform: "linux",
       readHealth: async () => ({
         requiredCliVersion: cliVersion,
@@ -689,8 +891,12 @@ describe("doctor", () => {
       log,
     });
 
-    expect(log).toHaveBeenCalledWith("Authenticated with https://token-burn.test.");
+    expect(log).toHaveBeenCalledWith(
+      "Authenticated with https://token-burn.test.",
+    );
     expect(log).toHaveBeenCalledWith("Platform: linux.");
-    expect(log).toHaveBeenCalledWith("Run token-burn sync to submit usage now.");
+    expect(log).toHaveBeenCalledWith(
+      "Run token-burn sync to submit usage now.",
+    );
   });
 });

@@ -35,10 +35,7 @@ async function main() {
   );
 
   const runtime = createNodeSchedulerRuntime(platform());
-  const commandArgv: SchedulerCommandArgv =
-    platform() === "darwin"
-      ? ["node", writerPath, sentinelPath]
-      : [process.execPath, writerPath, sentinelPath];
+  const commandArgv = buildSmokeCommandArgv();
 
   try {
     const installMessage = await installScheduler({
@@ -65,6 +62,14 @@ async function main() {
   }
 
   console.log(`Real ${platform()} scheduler smoke passed.`);
+}
+
+function buildSmokeCommandArgv(): SchedulerCommandArgv {
+  if (platform() === "darwin") return ["node", writerPath, sentinelPath];
+  if (platform() === "linux")
+    return ["/usr/bin/env", "node", writerPath, sentinelPath];
+
+  return [process.execPath, writerPath, sentinelPath];
 }
 
 function assertExpectedInstallPath(installMessage: string) {
