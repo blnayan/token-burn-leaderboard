@@ -59,10 +59,10 @@ describe("resolveOutputMode", () => {
     });
   });
 
-  it("honors TOKEN_BURN_OUTPUT=rich for TTY output", () => {
-    expect(resolveOutputMode({ stdoutIsTTY: true, env: { TOKEN_BURN_OUTPUT: "rich" }, flags: {} })).toEqual({
-      color: true,
-      mode: "rich",
+  it("ignores unsupported TOKEN_BURN_OUTPUT values", () => {
+    expect(resolveOutputMode({ stdoutIsTTY: false, env: { TOKEN_BURN_OUTPUT: "rich" }, flags: {} })).toEqual({
+      color: false,
+      mode: "plain",
       quiet: false,
     });
   });

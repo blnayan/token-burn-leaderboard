@@ -88,13 +88,13 @@ async function runPreflightChecks() {
   installedCliVersion = version.stdout.trim();
 
   const status = await runCli(["status"], { env: baseEnv });
-  assertIncludes(status.stdout, "CLI:", "status should include CLI version");
-  assertIncludes(status.stdout, "Warning: Not authenticated", "status should show unauthenticated state");
+  assertMatches(status.stdout, /^CLI: [0-9]+\.[0-9]+\.[0-9]+\r?$/m, "status should include CLI version");
+  assertMatches(status.stdout, /^Warning: Not authenticated\r?$/m, "status should show unauthenticated state");
 
   const doctor = await runCli(["doctor"], { env: baseEnv });
-  assertIncludes(doctor.stdout, "CLI:", "doctor should include CLI version");
-  assertIncludes(doctor.stdout, "Platform:", "doctor should include platform");
-  assertIncludes(doctor.stdout, "Warning: Not authenticated", "doctor should show unauthenticated state");
+  assertMatches(doctor.stdout, /^CLI: [0-9]+\.[0-9]+\.[0-9]+\r?$/m, "doctor should include CLI version");
+  assertMatches(doctor.stdout, /^Platform: .+\r?$/m, "doctor should include platform");
+  assertMatches(doctor.stdout, /^Warning: Not authenticated\r?$/m, "doctor should show unauthenticated state");
 
   const scheduler = await runCli(["install-scheduler", "--dry-run"], { env: baseEnv });
   assertSchedulerOutput(scheduler.stdout);

@@ -1,11 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { Command } from "commander";
 
 import { resolveOutputMode } from "../ui/mode.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
-import { createLoginCommand, runLogin, shouldEmitPendingApprovalResult } from "./login.js";
+import { createLoginCommand, runLogin } from "./login.js";
+
+const originalFetch = globalThis.fetch;
 
 afterEach(() => {
+  globalThis.fetch = originalFetch;
+  vi.doUnmock("node:child_process");
+  vi.doUnmock("../config.js");
+  vi.restoreAllMocks();
   vi.unstubAllEnvs();
 });
 
@@ -203,9 +210,64 @@ describe("createLoginCommand", () => {
     expect(help).toContain("--server <url>");
   });
 
-  it("emits the pending approval payload when JSON mode comes from the environment", () => {
+  it("emits pending approval JSON from the command when JSON mode comes from the environment", async () => {
+    vi.resetModules();
     vi.stubEnv("TOKEN_BURN_OUTPUT", "json");
+    vi.doMock("node:child_process", () => ({
+      execFile: (_command: string, _args: string[], callback: (error: Error | null) => void) => {
+        callback(null);
+      },
+    }));
+    vi.doMock("../config.js", () => ({
+      readConfig: vi.fn(async () => null),
+      writeConfig: vi.fn(async () => undefined),
+    }));
 
-    expect(shouldEmitPendingApprovalResult({})).toBe(true);
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2027-06-01T00:01:00.000Z",
+      }))
+      .mockResolvedValueOnce(jsonResponse({
+        status: "approved",
+        token: "tb_secret",
+        member: { displayName: "Ada", username: "blnayan" },
+      }));
+    globalThis.fetch = fetch;
+
+    const lines: string[] = [];
+    vi.spyOn(console, "log").mockImplementation((line: string) => {
+      lines.push(line);
+    });
+    const { createLoginCommand: createLoginCommandWithEnv } = await import("./login.js");
+    const program = new Command()
+      .name("token-burn")
+      .option("--plain")
+      .option("--json")
+      .exitOverride();
+
+    program.addCommand(createLoginCommandWithEnv());
+
+    await program.parseAsync(["login", "--server-url", "https://token-burn.test"], { from: "user" });
+
+    expect(lines).toEqual([
+      JSON.stringify({
+        ok: true,
+        status: "pending_approval",
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        serverUrl: "https://token-burn.test",
+        expiresAt: "2027-06-01T00:01:00.000Z",
+      }),
+      JSON.stringify({ ok: true, authenticatedAs: "blnayan", serverUrl: "https://token-burn.test" }),
+    ]);
   });
 });
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    headers: { "content-type": "application/json" },
+    status: 200,
+  });
+}

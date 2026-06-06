@@ -130,15 +130,11 @@ export function createLoginCommand(): Command {
       await runLogin({
         serverUrl: options.serverUrl ?? options.server ?? defaultServerUrl(),
         ui: createRenderer(outputMode),
-        emitPendingApprovalResult: shouldEmitPendingApprovalResult(flags),
+        emitPendingApprovalResult: outputMode.mode === "json",
       });
     });
 
   return command;
-}
-
-export function shouldEmitPendingApprovalResult(flags: OutputFlags): boolean {
-  return resolveOutputMode({ flags }).mode === "json";
 }
 
 function normalizeServerUrl(serverUrl: string): string {
