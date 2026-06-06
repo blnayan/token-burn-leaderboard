@@ -8,7 +8,11 @@ type SyncIngestTransaction = {
     upsert(args: Prisma.DeviceUpsertArgs): Promise<{ id: string }>;
   };
   dailyProviderUsage: {
-    upsert(args: Prisma.DailyProviderUsageUpsertArgs): Promise<{ id: string }>;
+    updateMany(args: Prisma.DailyProviderUsageUpdateManyArgs): Promise<Prisma.BatchPayload>;
+    findUnique(
+      args: Prisma.DailyProviderUsageFindUniqueArgs,
+    ): Promise<{ id: string; totalTokens?: bigint } | null>;
+    create(args: Prisma.DailyProviderUsageCreateArgs): Promise<{ id: string }>;
   };
   dailyModelUsage: {
     deleteMany(args: Prisma.DailyModelUsageDeleteManyArgs): Promise<unknown>;
@@ -64,71 +68,48 @@ export async function persistSyncPayload({
       select: { id: true },
     });
 
-    const usage = await tx.dailyProviderUsage.upsert({
-      where: {
-        deviceId_provider_date: {
+    const usageKey = {
+      deviceId_provider_date: {
+        deviceId: device.id,
+        provider: payload.provider,
+        date,
+      },
+    };
+    const incomingTotalTokens = BigInt(payload.totalTokens);
+    const usageData = providerUsageData({ memberId, deviceId: device.id, payload, date, syncedAt });
+    const usage = await persistProviderUsage({
+      tx,
+      usageKey,
+      usageData,
+      incomingTotalTokens,
+    });
+
+    if (usage) {
+      await tx.dailyModelUsage.deleteMany({
+        where: {
           deviceId: device.id,
           provider: payload.provider,
           date,
         },
-      },
-      create: {
-        memberId,
-        deviceId: device.id,
-        provider: payload.provider,
-        date,
-        tokenCategories: payload.tokenCategories,
-        tokenDetails: nullableJson(payload.tokenDetails),
-        totalTokens: BigInt(payload.totalTokens),
-        costUsd: decimalInput(payload.costUsd),
-        costSource: payload.costSource ?? null,
-        costMetadata: nullableJson(payload.costMetadata),
-        sourceSnapshot: nullableJson(payload.sourceSnapshot),
-        cliVersion: payload.cliVersion,
-        ccusageVersion: payload.ccusageVersion,
-        os: payload.os,
-        syncedAt,
-      },
-      update: {
-        tokenCategories: payload.tokenCategories,
-        tokenDetails: nullableJson(payload.tokenDetails),
-        totalTokens: BigInt(payload.totalTokens),
-        costUsd: decimalInput(payload.costUsd),
-        costSource: payload.costSource ?? null,
-        costMetadata: nullableJson(payload.costMetadata),
-        sourceSnapshot: nullableJson(payload.sourceSnapshot),
-        cliVersion: payload.cliVersion,
-        ccusageVersion: payload.ccusageVersion,
-        os: payload.os,
-        syncedAt,
-      },
-      select: { id: true },
-    });
-
-    await tx.dailyModelUsage.deleteMany({
-      where: {
-        deviceId: device.id,
-        provider: payload.provider,
-        date,
-      },
-    });
-
-    if (payload.models?.length) {
-      await tx.dailyModelUsage.createMany({
-        data: payload.models.map((model) => ({
-          dailyProviderUsageId: usage.id,
-          memberId,
-          deviceId: device.id,
-          provider: payload.provider,
-          date,
-          modelName: model.modelName,
-          tokenCategories: model.tokenCategories,
-          tokenDetails: nullableJson(model.tokenDetails),
-          totalTokens: BigInt(model.totalTokens),
-          costUsd: decimalInput(model.costUsd),
-          metadata: nullableJson(model.metadata),
-        })),
       });
+
+      if (payload.models?.length) {
+        await tx.dailyModelUsage.createMany({
+          data: payload.models.map((model) => ({
+            dailyProviderUsageId: usage.id,
+            memberId,
+            deviceId: device.id,
+            provider: payload.provider,
+            date,
+            modelName: model.modelName,
+            tokenCategories: model.tokenCategories,
+            tokenDetails: nullableJson(model.tokenDetails),
+            totalTokens: BigInt(model.totalTokens),
+            costUsd: decimalInput(model.costUsd),
+            metadata: nullableJson(model.metadata),
+          })),
+        });
+      }
     }
 
     await tx.cliToken.update({
@@ -166,4 +147,140 @@ function decimalInput(value: number | undefined): string | null {
 
 function nullableJson(value: Record<string, unknown> | undefined): NullableJsonInput {
   return value === undefined ? Prisma.DbNull : (value as Prisma.InputJsonValue);
+}
+
+function providerUsageData({
+  memberId,
+  deviceId,
+  payload,
+  date,
+  syncedAt,
+}: {
+  memberId: string;
+  deviceId: string;
+  payload: SyncPayload;
+  date: Date;
+  syncedAt: Date;
+}) {
+  return {
+    memberId,
+    deviceId,
+    provider: payload.provider,
+    date,
+    tokenCategories: payload.tokenCategories,
+    tokenDetails: nullableJson(payload.tokenDetails),
+    totalTokens: BigInt(payload.totalTokens),
+    costUsd: decimalInput(payload.costUsd),
+    costSource: payload.costSource ?? null,
+    costMetadata: nullableJson(payload.costMetadata),
+    sourceSnapshot: nullableJson(payload.sourceSnapshot),
+    cliVersion: payload.cliVersion,
+    ccusageVersion: payload.ccusageVersion,
+    os: payload.os,
+    syncedAt,
+  };
+}
+
+async function persistProviderUsage({
+  tx,
+  usageKey,
+  usageData,
+  incomingTotalTokens,
+}: {
+  tx: SyncIngestTransaction;
+  usageKey: {
+    deviceId_provider_date: {
+      deviceId: string;
+      provider: string;
+      date: Date;
+    };
+  };
+  usageData: ReturnType<typeof providerUsageData>;
+  incomingTotalTokens: bigint;
+}): Promise<{ id: string } | null> {
+  const updated = await tx.dailyProviderUsage.updateMany({
+    where: {
+      ...usageKey,
+      totalTokens: { lte: incomingTotalTokens },
+    },
+    data: usageData,
+  });
+
+  if (updated.count > 0) {
+    return await requireProviderUsageId(tx, usageKey);
+  }
+
+  const existingUsage = await tx.dailyProviderUsage.findUnique({
+    where: usageKey,
+    select: { id: true, totalTokens: true },
+  });
+
+  if (existingUsage) {
+    return null;
+  }
+
+  try {
+    return await tx.dailyProviderUsage.create({
+      data: usageData,
+      select: { id: true },
+    });
+  } catch (error) {
+    if (!isUniqueConstraintError(error)) {
+      throw error;
+    }
+  }
+
+  const retriedUpdate = await tx.dailyProviderUsage.updateMany({
+    where: {
+      ...usageKey,
+      totalTokens: { lte: incomingTotalTokens },
+    },
+    data: usageData,
+  });
+
+  if (retriedUpdate.count > 0) {
+    return await requireProviderUsageId(tx, usageKey);
+  }
+
+  const concurrentUsage = await tx.dailyProviderUsage.findUnique({
+    where: usageKey,
+    select: { id: true, totalTokens: true },
+  });
+
+  if (concurrentUsage) {
+    return null;
+  }
+
+  throw new Error("Daily provider usage row disappeared during ingest");
+}
+
+async function requireProviderUsageId(
+  tx: SyncIngestTransaction,
+  usageKey: {
+    deviceId_provider_date: {
+      deviceId: string;
+      provider: string;
+      date: Date;
+    };
+  },
+): Promise<{ id: string }> {
+  const usage = await tx.dailyProviderUsage.findUnique({
+    where: usageKey,
+    select: { id: true },
+  });
+
+  if (!usage) {
+    throw new Error("Missing daily provider usage after accepted snapshot update");
+  }
+
+  return usage;
+}
+
+function isUniqueConstraintError(error: unknown): error is { code: string } {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    error.code === "P2002"
+  );
 }
