@@ -300,6 +300,101 @@ describe("syncUsage", () => {
     expect(providers).toEqual(["claude_code", "codex"]);
   });
 
+  it("records failed lastSync when sync-window lookup fails before provider collection", async () => {
+    const writes: CliConfig[] = [];
+
+    await expect(
+      syncUsage({
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+        writeConfig: async (config) => {
+          writes.push(config);
+        },
+        getJson: async () => {
+          throw new Error("sync windows unavailable");
+        },
+        readHealth: matchingHealth,
+        readProviderUsage: async () => {
+          throw new Error("should not collect providers");
+        },
+        readCcusageVersion: async () => "16.2.5",
+        now: () => new Date("2026-06-06T12:30:00.000Z"),
+        platform: "linux",
+        cliVersion: "0.1.0",
+        createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        readDeviceName: () => "nayan-vps",
+        log: () => {},
+      }),
+    ).rejects.toThrow("sync windows unavailable");
+
+    expect(writes).toEqual([
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+      },
+      {
+        serverUrl: "https://token-burn.test",
+        token: "secret",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+        lastSync: {
+          ok: false,
+          message: "Submitted 0 usage rows. Failed before provider collection: sync windows unavailable.",
+          at: "2026-06-06T12:30:00.000Z",
+        },
+      },
+    ]);
+  });
+
+  it("records failed lastSync when sync-window response parsing fails", async () => {
+    const writes: CliConfig[] = [];
+
+    await expect(
+      syncUsage({
+        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
+        writeConfig: async (config) => {
+          writes.push(config);
+        },
+        getJson: async () => ({
+          serverTime: "not-a-datetime",
+          until: "2026-06-06",
+          providers: [{ provider: "claude_code" }],
+        }),
+        readHealth: matchingHealth,
+        readProviderUsage: async () => {
+          throw new Error("should not collect providers");
+        },
+        readCcusageVersion: async () => "16.2.5",
+        now: () => new Date("2026-06-06T12:30:00.000Z"),
+        platform: "linux",
+        cliVersion: "0.1.0",
+        createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        readDeviceName: () => "nayan-vps",
+        log: () => {},
+      }),
+    ).rejects.toThrow();
+
+    expect(writes).toHaveLength(2);
+    expect(writes[0]).toEqual({
+      serverUrl: "https://token-burn.test",
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+    });
+    expect(writes[1]).toMatchObject({
+      serverUrl: "https://token-burn.test",
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      lastSync: {
+        ok: false,
+        at: "2026-06-06T12:30:00.000Z",
+      },
+    });
+    expect(writes[1]?.lastSync?.message).toContain("Submitted 0 usage rows. Failed before provider collection:");
+  });
+
   it("refuses to sync when the server requires a different CLI version", async () => {
     let readProviderUsageCalled = false;
     let postJsonCalled = false;

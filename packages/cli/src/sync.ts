@@ -86,8 +86,23 @@ export async function syncUsage({
   const configWithDevice = { ...config, deviceId, deviceName };
   await writeConfig(configWithDevice);
 
-  const ccusageVersion = await readCcusageVersion();
-  const syncWindows = await readSyncWindows({ getJson, serverUrl: config.serverUrl, token: config.token, deviceId });
+  let ccusageVersion: string;
+  let syncWindows: Awaited<ReturnType<typeof readSyncWindows>>;
+
+  try {
+    ccusageVersion = await readCcusageVersion();
+    syncWindows = await readSyncWindows({ getJson, serverUrl: config.serverUrl, token: config.token, deviceId });
+  } catch (error) {
+    const normalizedError = normalizeProviderError(error);
+    const lastSync = {
+      ok: false,
+      message: `Submitted 0 usage rows. Failed before provider collection: ${trimTrailingPeriod(normalizedError.message)}.`,
+      at: syncedAt,
+    } satisfies NonNullable<CliConfig["lastSync"]>;
+    await writeConfig({ ...configWithDevice, lastSync });
+    throw normalizedError;
+  }
+
   const providerWindows = new Map(syncWindows.providers.map((window) => [window.provider, window]));
   const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const failures: Array<{ provider: Provider; error: Error }> = [];
