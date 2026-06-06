@@ -47,6 +47,7 @@ async function main() {
     });
     console.log(installMessage);
 
+    assertExpectedInstallPath(installMessage);
     await assertSchedulerRegistered(installMessage);
     await forceRunScheduler(installMessage);
     await waitForSentinel();
@@ -64,6 +65,20 @@ async function main() {
   }
 
   console.log(`Real ${platform()} scheduler smoke passed.`);
+}
+
+function assertExpectedInstallPath(installMessage: string) {
+  if (
+    platform() !== "linux" ||
+    process.env.TOKEN_BURN_SCHEDULER_SMOKE_REQUIRE_SYSTEMD !== "1"
+  )
+    return;
+
+  assertIncludes(
+    installMessage,
+    "systemd user timer",
+    "Linux scheduler smoke should exercise the preferred systemd user timer path",
+  );
 }
 
 async function assertSchedulerRegistered(installMessage: string) {
