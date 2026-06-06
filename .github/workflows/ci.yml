@@ -101,10 +101,6 @@ jobs:
       - name: Run packaged CLI E2E
         run: node scripts/e2e-cli-cross-platform.mjs
 
-      - name: Ensure cron is available on Linux
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cron
-
       - name: Run real scheduler smoke
         shell: bash
         run: pnpm --filter @blnayan/token-burn exec tsx ../../scripts/smoke-real-scheduler.ts
