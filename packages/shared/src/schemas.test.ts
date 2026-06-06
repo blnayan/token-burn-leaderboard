@@ -4,6 +4,7 @@ import {
   periodSchema,
   providerSchema,
   syncPayloadSchema,
+  syncWindowsResponseSchema,
   tokenCategoriesSchema,
 } from "./schemas";
 
@@ -265,6 +266,43 @@ describe("syncPayloadSchema", () => {
 
     expect(payload.totalTokens).toBe(30);
     expect(payload.tokenDetails).toEqual({ reasoningOutput: 7 });
+  });
+});
+
+describe("syncWindowsResponseSchema", () => {
+  it("accepts provider-specific UTC sync windows", () => {
+    const payload = syncWindowsResponseSchema.parse({
+      serverTime: "2026-06-06T12:00:00.000Z",
+      until: "2026-06-06",
+      providers: [
+        { provider: "claude_code", since: "2026-06-05" },
+        { provider: "codex" },
+      ],
+    });
+
+    expect(payload.until).toBe("2026-06-06");
+    expect(payload.providers[0]?.since).toBe("2026-06-05");
+    expect(payload.providers[1]?.since).toBeUndefined();
+  });
+
+  it("allows future provider names so older CLIs can ignore them", () => {
+    const payload = syncWindowsResponseSchema.parse({
+      serverTime: "2026-06-06T12:00:00.000Z",
+      until: "2026-06-06",
+      providers: [{ provider: "future_provider", since: "2026-06-05" }],
+    });
+
+    expect(payload.providers[0]?.provider).toBe("future_provider");
+  });
+
+  it("rejects malformed dates", () => {
+    expect(() =>
+      syncWindowsResponseSchema.parse({
+        serverTime: "2026-06-06T12:00:00.000Z",
+        until: "20260606",
+        providers: [{ provider: "codex", since: "2026-06-05" }],
+      }),
+    ).toThrow();
   });
 });
 

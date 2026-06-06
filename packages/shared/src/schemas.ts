@@ -2,6 +2,7 @@ import { z } from "zod";
 import { sumTokenCategories } from "./tokens.js";
 
 export const providerSchema = z.enum(["claude_code", "codex"]);
+export const providers = providerSchema.options;
 export type Provider = z.infer<typeof providerSchema>;
 
 export const periodSchema = z.enum(["daily", "weekly", "monthly", "all-time"]);
@@ -57,6 +58,21 @@ export const syncPayloadSchema = z
   });
 
 export type SyncPayload = z.infer<typeof syncPayloadSchema>;
+
+export const syncWindowProviderSchema = z.object({
+  provider: z.string().trim().min(1),
+  since: isoDateSchema.optional(),
+});
+
+export type SyncWindowProvider = z.infer<typeof syncWindowProviderSchema>;
+
+export const syncWindowsResponseSchema = z.object({
+  serverTime: z.string().datetime(),
+  until: isoDateSchema,
+  providers: z.array(syncWindowProviderSchema),
+});
+
+export type SyncWindowsResponse = z.infer<typeof syncWindowsResponseSchema>;
 
 export const leaderboardRowSchema = z.object({
   rank: z.number().int().positive(),
