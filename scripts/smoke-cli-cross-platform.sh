@@ -30,14 +30,14 @@ if [[ ! "$version_output" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
 fi
 
 status_output="$(token-burn status)"
-assert_contains "$status_output" "CLI version:"
-assert_contains "$status_output" "Not authenticated."
+assert_contains "$status_output" "CLI:"
+assert_contains "$status_output" "Warning: Not authenticated"
 
 doctor_output="$(token-burn doctor)"
-assert_contains "$doctor_output" "CLI version:"
-assert_contains "$doctor_output" "Not authenticated."
+assert_contains "$doctor_output" "CLI:"
+assert_contains "$doctor_output" "Warning: Not authenticated"
 assert_contains "$doctor_output" "Platform:"
-assert_contains "$doctor_output" "Run token-burn sync to submit usage now."
+assert_contains "$doctor_output" "Next: Run token-burn sync to submit usage now."
 
 scheduler_output="$(token-burn install-scheduler --dry-run)"
 case "$runner_os" in
