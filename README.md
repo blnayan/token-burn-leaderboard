@@ -1,16 +1,12 @@
 # Token Burn
 
-Token Burn is a leaderboard for aggregate Claude Code and Codex token usage. The web app shows invited members on a public leaderboard, and the `token-burn` CLI syncs local daily usage totals from your machine.
+Token Burn is a private-invite leaderboard for aggregate Claude Code and Codex usage. The web app shows member totals, and the `token-burn` CLI syncs local daily usage totals from each member's machine.
 
-The production server is currently:
-
-```text
-https://tokenburn.nayanbhut.dev
-```
+Production: <https://tokenburn.nayanbhut.dev>
 
 ## Quick Start
 
-You need Node.js 24 LTS or newer.
+Requires Node.js 24 LTS or newer.
 
 ```bash
 npx @blnayan/token-burn@latest setup
@@ -18,15 +14,7 @@ npx @blnayan/token-burn@latest setup
 
 `setup` prints a browser approval URL, waits for login approval, runs the first sync, and installs automatic sync. You must have accepted a Token Burn invite before the CLI can connect.
 
-The scheduler installed by `setup` runs the latest published CLI each time:
-
-```bash
-npm exec --yes --package @blnayan/token-burn@latest -- token-burn sync
-```
-
-You do not need a global `token-burn` install for normal usage.
-
-Optional troubleshooting commands:
+Useful follow-up commands:
 
 ```bash
 npx @blnayan/token-burn@latest status
@@ -35,19 +23,17 @@ npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
 npx @blnayan/token-burn@latest scheduler uninstall
 ```
 
-For more CLI details, see [packages/cli/README.md](packages/cli/README.md) and [docs/cli-install.md](docs/cli-install.md).
+The installed scheduler runs the latest published CLI each time, so a global install is not required. For CLI details, see [packages/cli/README.md](packages/cli/README.md).
 
-## What Gets Synced
+## Privacy
 
-Token Burn stores aggregate daily usage, not your prompt content.
+Token Burn syncs aggregate daily usage only.
 
 Stored:
 
-- Daily token totals by provider
-- Model names when reported
+- Daily token totals by provider and model
 - Token categories such as input, output, cache creation, and cache read
-- Reasoning output token details when reported
-- Cost estimates when reported
+- Cost estimates and reasoning token details when reported
 - Device name, OS, CLI version, `ccusage` version, and sync timestamp
 
 Not stored:
@@ -56,34 +42,9 @@ Not stored:
 - Project paths or file paths
 - Session IDs
 - Raw `ccusage` rows
-- GitHub OAuth tokens
-- Raw CLI tokens
+- GitHub OAuth tokens or raw CLI tokens
 
 Leaderboard periods use UTC boundaries.
-
-## Device Recovery
-
-The CLI keeps a random per-install device ID in your local Token Burn config. Normal npm uninstall/reinstall keeps that config, so your device identity should stay the same.
-
-If the config is deleted or a duplicate device appears:
-
-```bash
-npx @blnayan/token-burn@latest setup
-npx @blnayan/token-burn@latest devices
-npx @blnayan/token-burn@latest devices merge <old-device-id> <new-device-id>
-```
-
-Merges automatically keep the higher total for overlapping provider/date rows.
-
-## Repository Layout
-
-```text
-apps/web/        Next.js web app, API routes, Prisma schema
-packages/cli/    npm CLI package
-packages/shared/ shared TypeScript utilities
-docs/            deployment notes and implementation docs
-scripts/         release and cross-platform test helpers
-```
 
 ## Development
 
@@ -98,9 +59,25 @@ pnpm lint
 pnpm build
 ```
 
-Environment variables are documented in [.env.example](.env.example). Production deployment uses Docker Compose with `.env.prod`.
+Required web environment variables are listed in [.env.example](.env.example). For the public dev Docker stack, create `.env.dev` from that example and run:
 
-Common production commands:
+```bash
+pnpm dev:public
+```
+
+## Repository Layout
+
+```text
+apps/web/         Next.js app, API routes, Prisma schema, shadcn UI
+packages/cli/     npm CLI package published as @blnayan/token-burn
+packages/shared/  shared schemas and formatting utilities
+docs/             deployment notes and implementation specs
+scripts/          release and cross-platform test helpers
+```
+
+## Deployment
+
+Production runs the web app and Postgres through Docker Compose behind a host-level reverse proxy.
 
 ```bash
 pnpm prod:config
@@ -109,21 +86,14 @@ pnpm prod:migrate
 pnpm prod:up
 ```
 
-See [docs/deploy-vps.md](docs/deploy-vps.md) for VPS deployment and backup notes.
+See [docs/deploy-vps.md](docs/deploy-vps.md) for VPS setup, Caddy routing, backup, and restore notes.
 
-## Releasing The CLI
+## CLI Releases
 
-The npm package is `@blnayan/token-burn`.
-
-Before publishing:
+The CLI package is `@blnayan/token-burn`.
 
 ```bash
 pnpm --filter @blnayan/token-burn prepublishOnly
-```
-
-Publish from the CLI package:
-
-```bash
 cd packages/cli
 npm publish
 ```
@@ -132,9 +102,4 @@ After publishing a new required CLI version, rebuild and redeploy the web app so
 
 ## CI
 
-GitHub Actions runs:
-
-- Unit tests, typecheck, and builds
-- Packaged CLI E2E on Linux, macOS, and Windows
-- Linux root global-install smoke test
-- Sync E2E against the web app and Postgres
+GitHub Actions runs unit tests, typecheck, web and CLI builds, packaged CLI E2E on Linux/macOS/Windows, a Linux root global-install smoke test, and setup/sync E2E against Postgres.

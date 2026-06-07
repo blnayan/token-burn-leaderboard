@@ -498,21 +498,6 @@ async function readGlobalCounts() {
   return { devices, providerRows, modelRows, cliTokens };
 }
 
-async function postJson(path, body) {
-  const response = await fetch(`${serverUrl}${path}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const json = await response.json();
-
-  if (!response.ok) {
-    throw new Error(`POST ${path} failed with ${response.status}: ${JSON.stringify(json)}`);
-  }
-
-  return json;
-}
-
 function run(command, args, env, timeoutMs = syncTimeoutMs) {
   return new Promise((resolve) => {
     const child = spawn(command, args, {
