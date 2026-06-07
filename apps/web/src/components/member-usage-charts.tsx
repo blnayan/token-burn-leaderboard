@@ -174,15 +174,21 @@ function Breakdown({
               variant="outline"
               data-selected={item.selected}
               className={cn(
-                "h-auto w-full justify-between p-3 text-left shadow-none",
+                "h-auto w-full justify-between whitespace-normal p-3 text-left shadow-none",
                 item.selected && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
               )}
               aria-pressed={item.selected}
               onClick={item.onToggle}
             >
-              <span className="flex min-w-0 flex-col items-start">
-                <span className="truncate text-sm font-medium">{item.label}</span>
-                {item.meta ? <span className="text-xs text-muted-foreground">{item.meta}</span> : null}
+              <span className="flex min-w-0 flex-1 flex-col items-start overflow-hidden">
+                <span className="max-w-full truncate text-sm font-medium" title={item.label}>
+                  {item.label}
+                </span>
+                {item.meta ? (
+                  <span className="max-w-full truncate text-xs text-muted-foreground" title={item.meta}>
+                    {item.meta}
+                  </span>
+                ) : null}
               </span>
               <span className="shrink-0 text-right">
                 <span className="block font-mono text-sm">{formatTokens(item.tokens)}</span>

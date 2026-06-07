@@ -99,6 +99,36 @@ describe("MemberUsageCharts", () => {
     expect(unselectedProvider.className).toContain("border");
   });
 
+  it("truncates long breakdown labels inside a bounded row", () => {
+    const longModelName = "claude-haiku-4-5-20251001-extra-long-model-name-that-should-not-overlap";
+
+    render(
+      <MemberUsageCharts
+        detail={{
+          ...detail,
+          models: [
+            {
+              provider: "claude_code",
+              modelName: longModelName,
+              totalTokens: 8400,
+              totalCostUsd: 8.4,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const modelButton = within(sectionForHeading("Models")).getByRole("button", { name: new RegExp(longModelName) });
+    const modelLabel = screen.getByText(longModelName);
+    const labelColumn = modelLabel.parentElement;
+
+    expect(modelButton.className).toContain("whitespace-normal");
+    expect(labelColumn?.className).toContain("flex-1");
+    expect(labelColumn?.className).toContain("overflow-hidden");
+    expect(modelLabel.className).toContain("max-w-full");
+    expect(modelLabel.className).toContain("truncate");
+  });
+
   it("renders unselected breakdown rows as unpressed buttons", () => {
     render(<MemberUsageCharts detail={detail} />);
 
