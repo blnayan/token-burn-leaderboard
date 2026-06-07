@@ -197,25 +197,7 @@ export async function getMemberUsageDetail(
         providers: filters.providers,
         devices: filters.devices,
       });
-  const providerBreakdownWhere = hasModelFilters
-    ? usageWhere(member.id, summaryDateFilter, {
-        models: filters.models,
-        devices: filters.devices,
-      })
-    : usageWhere(member.id, summaryDateFilter, {
-        devices: filters.devices,
-      });
-  const modelBreakdownWhere = usageWhere(member.id, summaryDateFilter, {
-    providers: filters.providers,
-    devices: filters.devices,
-  });
-  const deviceBreakdownWhere = hasModelFilters
-    ? usageWhere(member.id, summaryDateFilter, {
-        models: filters.models,
-      })
-    : usageWhere(member.id, summaryDateFilter, {
-        providers: filters.providers,
-      });
+  const breakdownWhere = usageWhere(member.id, summaryDateFilter);
 
   const [
     summary,
@@ -224,7 +206,6 @@ export async function getMemberUsageDetail(
     modelRows,
     providerCostRows,
     providerTrendCostRows,
-    providerDeviceCostRows,
     deviceRows,
   ] = await Promise.all([
     hasModelFilters
@@ -250,23 +231,16 @@ export async function getMemberUsageDetail(
           where: trendWhere,
           orderBy: { date: "asc" },
         }),
-    hasModelFilters
-      ? prisma.dailyModelUsage.groupBy({
-          by: ["provider"],
-          _sum: { totalTokens: true, costUsd: true },
-          where: providerBreakdownWhere,
-          orderBy: { _sum: { totalTokens: "desc" } },
-        })
-      : prisma.dailyProviderUsage.groupBy({
-          by: ["provider"],
-          _sum: { totalTokens: true, costUsd: true },
-          where: providerBreakdownWhere,
-          orderBy: { _sum: { totalTokens: "desc" } },
-        }),
+    prisma.dailyProviderUsage.groupBy({
+      by: ["provider"],
+      _sum: { totalTokens: true, costUsd: true },
+      where: breakdownWhere,
+      orderBy: { _sum: { totalTokens: "desc" } },
+    }),
     prisma.dailyModelUsage.groupBy({
       by: ["provider", "modelName"],
       _sum: { totalTokens: true, costUsd: true },
-      where: modelBreakdownWhere,
+      where: breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
       take: 5,
     }),
@@ -274,7 +248,10 @@ export async function getMemberUsageDetail(
       ? prisma.dailyProviderUsage.groupBy({
           by: ["provider"],
           _sum: { totalTokens: true, costUsd: true },
-          where: modelBreakdownWhere,
+          where: usageWhere(member.id, summaryDateFilter, {
+            providers: uniqueProvidersForModels(filters.models),
+            devices: filters.devices,
+          }),
           orderBy: { _sum: { totalTokens: "desc" } },
         })
       : Promise.resolve(null),
@@ -289,33 +266,22 @@ export async function getMemberUsageDetail(
           orderBy: { date: "asc" },
         })
       : Promise.resolve(null),
-    hasModelFilters
-      ? prisma.dailyProviderUsage.groupBy({
-          by: ["deviceId", "provider"],
-          _sum: { totalTokens: true, costUsd: true },
-          where: usageWhere(member.id, summaryDateFilter, {
-            providers: uniqueProvidersForModels(filters.models),
-          }),
-          orderBy: { _sum: { totalTokens: "desc" } },
-        })
-      : Promise.resolve(null),
-    hasModelFilters
-      ? prisma.dailyModelUsage.groupBy({
-          by: ["deviceId", "provider", "modelName"],
-          _sum: { totalTokens: true, costUsd: true },
-          where: deviceBreakdownWhere,
-          orderBy: { _sum: { totalTokens: "desc" } },
-        })
-      : prisma.dailyProviderUsage.groupBy({
-          by: ["deviceId"],
-          _sum: { totalTokens: true, costUsd: true },
-          where: deviceBreakdownWhere,
-          orderBy: { _sum: { totalTokens: "desc" } },
-          take: 5,
-        }),
+    prisma.dailyProviderUsage.groupBy({
+      by: ["deviceId"],
+      _sum: { totalTokens: true, costUsd: true },
+      where: breakdownWhere,
+      orderBy: { _sum: { totalTokens: "desc" } },
+      take: 5,
+    }),
   ]);
 
-  const providerTotalsByProvider = new Map(
+  const breakdownProviderTotalsByProvider = new Map(
+    providerRows.map((row) => [
+      row.provider,
+      sumToTotals(row),
+    ]),
+  );
+  const summaryProviderTotalsByProvider = new Map(
     (providerCostRows ?? providerRows).map((row) => [
       row.provider,
       sumToTotals(row),
@@ -327,21 +293,10 @@ export async function getMemberUsageDetail(
       sumToTotals(row),
     ]),
   );
-  const providerDeviceTotalsByDeviceProvider = new Map(
-    (providerDeviceCostRows ?? []).map((row) => [
-      deviceProviderKey(row.deviceId, row.provider),
-      sumToTotals(row),
-    ]),
-  );
-  const deviceTotals = hasModelFilters
-    ? modelDeviceRowsToTotals(
-        deviceRows as Array<SumRow & { deviceId: string; provider: string }>,
-        providerDeviceTotalsByDeviceProvider,
-      )
-    : (deviceRows as Array<SumRow & { deviceId: string }>).map((row) => ({
-        deviceId: row.deviceId,
-        ...sumToTotals(row),
-      }));
+  const deviceTotals = (deviceRows as Array<SumRow & { deviceId: string }>).map((row) => ({
+    deviceId: row.deviceId,
+    ...sumToTotals(row),
+  }));
 
   const devices = await prisma.device.findMany({
     where: {
@@ -359,7 +314,7 @@ export async function getMemberUsageDetail(
   const summaryTotals = hasModelFilters
     ? modelRowsToTotals(
         summary as Array<SumRow & { provider: string }>,
-        providerTotalsByProvider,
+        summaryProviderTotalsByProvider,
       )
     : sumToTotals(summary as SumRow);
   const trend = hasModelFilters
@@ -393,7 +348,7 @@ export async function getMemberUsageDetail(
       return [
         {
           provider,
-          ...(hasModelFilters ? modelToTotals(row, providerTotalsByProvider) : sumToTotals(row)),
+          ...sumToTotals(row),
         },
       ];
     }),
@@ -405,7 +360,7 @@ export async function getMemberUsageDetail(
         {
           provider,
           modelName: row.modelName,
-          ...modelToTotals(row, providerTotalsByProvider),
+          ...modelToTotals(row, breakdownProviderTotalsByProvider),
         },
       ];
     }),
@@ -489,30 +444,6 @@ function modelTrendRowsToTrend(
     .map(([date, totals]) => ({ date, ...totals }));
 }
 
-function modelDeviceRowsToTotals(
-  rows: Array<SumRow & { deviceId: string; provider: string }>,
-  providerTotalsByDeviceProvider: Map<string, UsageTotals>,
-): Array<{ deviceId: string } & UsageTotals> {
-  const totalsByDevice = new Map<string, UsageTotals>();
-
-  for (const row of rows) {
-    const rowTotals = modelToTotalsForProvider(
-      row,
-      providerTotalsByDeviceProvider.get(deviceProviderKey(row.deviceId, row.provider)),
-    );
-    const current = totalsByDevice.get(row.deviceId) ?? { totalTokens: 0, totalCostUsd: 0 };
-    totalsByDevice.set(row.deviceId, {
-      totalTokens: current.totalTokens + rowTotals.totalTokens,
-      totalCostUsd: current.totalCostUsd + rowTotals.totalCostUsd,
-    });
-  }
-
-  return [...totalsByDevice.entries()]
-    .map(([deviceId, totals]) => ({ deviceId, ...totals }))
-    .sort((left, right) => right.totalTokens - left.totalTokens)
-    .slice(0, 5);
-}
-
 function modelToTotalsForProvider(
   row: SumRow,
   providerTotals: UsageTotals | undefined,
@@ -556,10 +487,6 @@ function uniqueProvidersForModels(
 
 function dateProviderKey(date: Date, provider: string): string {
   return `${toIsoDate(date)}:${provider}`;
-}
-
-function deviceProviderKey(deviceId: string, provider: string): string {
-  return `${deviceId}:${provider}`;
 }
 
 function usageWhere(
