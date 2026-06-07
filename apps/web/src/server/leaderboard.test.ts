@@ -378,6 +378,62 @@ describe("getMemberUsageDetail", () => {
     });
   });
 
+  it("allocates provider cost across models when model costs are missing", async () => {
+    prismaMock.member.findUnique.mockResolvedValue({
+      id: "member-1",
+      username: "ada",
+      displayName: "Ada",
+    });
+    prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
+      _sum: { totalTokens: 1000n, costUsd: 10 },
+    });
+    prismaMock.dailyProviderUsage.groupBy
+      .mockResolvedValueOnce([
+        {
+          date: new Date("2026-06-07T00:00:00.000Z"),
+          _sum: { totalTokens: 1000n, costUsd: 10 },
+        },
+      ])
+      .mockResolvedValueOnce([
+        { provider: "codex", _sum: { totalTokens: 1000n, costUsd: 10 } },
+      ])
+      .mockResolvedValueOnce([]);
+    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([
+      {
+        provider: "codex",
+        modelName: "gpt-5-codex",
+        _sum: { totalTokens: 250n, costUsd: null },
+      },
+      {
+        provider: "codex",
+        modelName: "gpt-5-mini",
+        _sum: { totalTokens: 750n, costUsd: null },
+      },
+    ]);
+    prismaMock.device.findMany.mockResolvedValue([]);
+
+    const detail = await getMemberUsageDetail(
+      "ada",
+      "7d",
+      new Date("2026-06-07T12:00:00.000Z"),
+    );
+
+    expect(detail?.models).toEqual([
+      {
+        provider: "codex",
+        modelName: "gpt-5-codex",
+        totalTokens: 250,
+        totalCostUsd: 2.5,
+      },
+      {
+        provider: "codex",
+        modelName: "gpt-5-mini",
+        totalTokens: 750,
+        totalCostUsd: 7.5,
+      },
+    ]);
+  });
+
   it("returns null for an unknown member", async () => {
     prismaMock.member.findUnique.mockResolvedValue(null);
 

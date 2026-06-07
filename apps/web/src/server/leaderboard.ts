@@ -204,6 +204,9 @@ export async function getMemberUsageDetail(
     },
   });
   const devicesById = new Map(devices.map((device) => [device.id, device]));
+  const providerTotalsByProvider = new Map(
+    providerRows.map((row) => [row.provider, sumToTotals(row)]),
+  );
 
   return {
     member: {
@@ -231,7 +234,13 @@ export async function getMemberUsageDetail(
       const provider = parseProvider(row.provider);
       if (!provider) return [];
 
-      return [{ provider, modelName: row.modelName, ...sumToTotals(row) }];
+      return [
+        {
+          provider,
+          modelName: row.modelName,
+          ...modelToTotals(row, providerTotalsByProvider),
+        },
+      ];
     }),
     devices: deviceRows.flatMap((row) => {
       const device = devicesById.get(row.deviceId);
@@ -240,6 +249,27 @@ export async function getMemberUsageDetail(
 
       return [{ deviceName: device.name, os, ...sumToTotals(row) }];
     }),
+  };
+}
+
+function modelToTotals(
+  row: SumRow & { provider: string },
+  providerTotalsByProvider: Map<string, { totalTokens: number; totalCostUsd: number }>,
+): {
+  totalTokens: number;
+  totalCostUsd: number;
+} {
+  const totals = sumToTotals(row);
+  if (row._sum.costUsd != null) return totals;
+
+  const providerTotals = providerTotalsByProvider.get(row.provider);
+  if (!providerTotals || providerTotals.totalTokens === 0 || totals.totalTokens === 0) {
+    return totals;
+  }
+
+  return {
+    totalTokens: totals.totalTokens,
+    totalCostUsd: providerTotals.totalCostUsd * (totals.totalTokens / providerTotals.totalTokens),
   };
 }
 
