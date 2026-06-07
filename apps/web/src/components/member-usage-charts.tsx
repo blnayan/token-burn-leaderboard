@@ -11,6 +11,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const memberUsageChartConfig = {
   totalTokens: {
@@ -170,8 +171,12 @@ function Breakdown({
             <Button
               key={item.key}
               type="button"
-              variant={item.selected ? "secondary" : "outline"}
-              className="h-auto w-full justify-between p-3 text-left shadow-none"
+              variant="outline"
+              data-selected={item.selected}
+              className={cn(
+                "h-auto w-full justify-between p-3 text-left shadow-none",
+                item.selected && "bg-secondary text-secondary-foreground hover:bg-secondary/80",
+              )}
               aria-pressed={item.selected}
               onClick={item.onToggle}
             >

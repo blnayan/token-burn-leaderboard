@@ -71,6 +71,34 @@ describe("MemberUsageCharts", () => {
     expect(within(devices).getByRole("button", { name: /Workstation/ }).getAttribute("aria-pressed")).toBe("true");
   });
 
+  it("keeps breakdown row box styling stable when selected", () => {
+    render(
+      <MemberUsageCharts
+        detail={{
+          ...detail,
+          providers: [
+            { provider: "codex", totalTokens: 12400, totalCostUsd: 12.34 },
+            { provider: "claude_code", totalTokens: 6200, totalCostUsd: 6.2 },
+          ],
+        }}
+        selectedFilters={{
+          providers: ["codex"],
+          models: [],
+          devices: [],
+        }}
+      />,
+    );
+
+    const providers = sectionForHeading("Providers");
+    const selectedProvider = within(providers).getByRole("button", { name: /Codex/ });
+    const unselectedProvider = within(providers).getByRole("button", { name: /Claude Code/ });
+
+    expect(selectedProvider.getAttribute("data-selected")).toBe("true");
+    expect(unselectedProvider.getAttribute("data-selected")).toBe("false");
+    expect(selectedProvider.className).toContain("border");
+    expect(unselectedProvider.className).toContain("border");
+  });
+
   it("renders unselected breakdown rows as unpressed buttons", () => {
     render(<MemberUsageCharts detail={detail} />);
 
