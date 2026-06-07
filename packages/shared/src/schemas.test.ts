@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   leaderboardRowSchema,
+  memberUsageDetailSchema,
   periodSchema,
   providerSchema,
   syncPayloadSchema,
@@ -311,12 +312,14 @@ describe("leaderboardRowSchema", () => {
     expect(
       leaderboardRowSchema.parse({
         rank: 1,
+        username: "ada",
         displayName: "A".repeat(80),
         totalTokens: 12345,
         totalCostUsd: 1234.5,
       }),
     ).toEqual({
       rank: 1,
+      username: "ada",
       displayName: "A".repeat(80),
       totalTokens: 12345,
       totalCostUsd: 1234.5,
@@ -338,6 +341,100 @@ describe("leaderboardRowSchema", () => {
     ).toThrow();
     expect(() =>
       leaderboardRowSchema.parse({ rank: 1, displayName: "Ada", totalTokens: 1, totalCostUsd: -1 }),
+    ).toThrow();
+  });
+});
+
+describe("leaderboardRowSchema", () => {
+  it("requires a public member username", () => {
+    expect(
+      leaderboardRowSchema.parse({
+        rank: 1,
+        username: "ada",
+        displayName: "Ada",
+        totalTokens: 100,
+        totalCostUsd: 1.25,
+      }),
+    ).toEqual({
+      rank: 1,
+      username: "ada",
+      displayName: "Ada",
+      totalTokens: 100,
+      totalCostUsd: 1.25,
+    });
+  });
+});
+
+describe("memberUsageDetailSchema", () => {
+  it("accepts public aggregate member usage detail", () => {
+    expect(
+      memberUsageDetailSchema.parse({
+        member: {
+          username: "ada",
+          displayName: "Ada",
+        },
+        period: "weekly",
+        summary: {
+          rank: 1,
+          totalTokens: 300,
+          totalCostUsd: 3.5,
+        },
+        trend: [
+          {
+            date: "2026-06-01",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+        providers: [
+          {
+            provider: "codex",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+        models: [
+          {
+            modelName: "gpt-5-codex",
+            provider: "codex",
+            totalTokens: 80,
+            totalCostUsd: 1,
+          },
+        ],
+        devices: [
+          {
+            deviceName: "Ada MacBook",
+            os: "darwin",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+      }),
+    ).toMatchObject({
+      member: { username: "ada" },
+      period: "weekly",
+      summary: { rank: 1 },
+    });
+  });
+
+  it("rejects unsafe aggregate totals", () => {
+    expect(() =>
+      memberUsageDetailSchema.parse({
+        member: {
+          username: "ada",
+          displayName: "Ada",
+        },
+        period: "daily",
+        summary: {
+          rank: null,
+          totalTokens: Number.MAX_SAFE_INTEGER + 1,
+          totalCostUsd: 0,
+        },
+        trend: [],
+        providers: [],
+        models: [],
+        devices: [],
+      }),
     ).toThrow();
   });
 });

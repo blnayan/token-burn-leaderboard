@@ -76,9 +76,55 @@ export type SyncWindowsResponse = z.infer<typeof syncWindowsResponseSchema>;
 
 export const leaderboardRowSchema = z.object({
   rank: z.number().int().positive(),
+  username: z.string().trim().min(1).max(80),
   displayName: z.string().min(1).max(80),
-  totalTokens: z.number().int().nonnegative(),
+  totalTokens: z.number().int().nonnegative().safe(),
   totalCostUsd: costUsdSchema,
 });
 
 export type LeaderboardRow = z.infer<typeof leaderboardRowSchema>;
+
+export const memberUsageTrendPointSchema = z.object({
+  date: isoDateSchema,
+  totalTokens: z.number().int().nonnegative().safe(),
+  totalCostUsd: costUsdSchema,
+});
+
+export const memberUsageProviderBreakdownSchema = z.object({
+  provider: z.string().trim().min(1).max(80),
+  totalTokens: z.number().int().nonnegative().safe(),
+  totalCostUsd: costUsdSchema,
+});
+
+export const memberUsageModelBreakdownSchema = z.object({
+  modelName: z.string().trim().min(1).max(160),
+  provider: z.string().trim().min(1).max(80),
+  totalTokens: z.number().int().nonnegative().safe(),
+  totalCostUsd: costUsdSchema,
+});
+
+export const memberUsageDeviceBreakdownSchema = z.object({
+  deviceName: z.string().trim().min(1).max(80),
+  os: z.string().trim().min(1).max(40),
+  totalTokens: z.number().int().nonnegative().safe(),
+  totalCostUsd: costUsdSchema,
+});
+
+export const memberUsageDetailSchema = z.object({
+  member: z.object({
+    username: z.string().trim().min(1).max(80),
+    displayName: z.string().min(1).max(80),
+  }),
+  period: periodSchema,
+  summary: z.object({
+    rank: z.number().int().positive().nullable(),
+    totalTokens: z.number().int().nonnegative().safe(),
+    totalCostUsd: costUsdSchema,
+  }),
+  trend: z.array(memberUsageTrendPointSchema),
+  providers: z.array(memberUsageProviderBreakdownSchema),
+  models: z.array(memberUsageModelBreakdownSchema),
+  devices: z.array(memberUsageDeviceBreakdownSchema),
+});
+
+export type MemberUsageDetail = z.infer<typeof memberUsageDetailSchema>;
