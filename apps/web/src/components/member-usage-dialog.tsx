@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  type LeaderboardPeriod,
+  type MemberUsageRange,
   type MemberUsageDetail,
   formatTokens,
   formatUsd,
@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type MemberSummary = { username: string; displayName: string; rank: number };
 
@@ -27,19 +28,27 @@ type LoadState =
   | { status: "idle" | "loading" | "error"; detail: null }
   | { status: "success"; detail: MemberUsageDetail };
 
+const usageRanges: { label: string; value: MemberUsageRange }[] = [
+  { label: "Past 7 days", value: "7d" },
+  { label: "Past 30 days", value: "30d" },
+];
+
 export function MemberUsageDialog({
   member,
-  period,
   open,
   onOpenChange,
 }: {
   member: MemberSummary | null;
-  period: LeaderboardPeriod;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [state, setState] = React.useState<LoadState>({ status: "idle", detail: null });
   const [retryNonce, setRetryNonce] = React.useState(0);
+  const [rangeState, setRangeState] = React.useState<{ username: string; range: MemberUsageRange }>({
+    username: "",
+    range: "7d",
+  });
+  const selectedRange = member && rangeState.username === member.username ? rangeState.range : "7d";
 
   React.useEffect(() => {
     if (!open || !member) return;
@@ -52,7 +61,7 @@ export function MemberUsageDialog({
 
       try {
         const response = await fetch(
-          `/api/leaderboard/members/${encodeURIComponent(username)}?period=${period}`,
+          `/api/leaderboard/members/${encodeURIComponent(username)}?range=${selectedRange}`,
         );
 
         if (!response.ok) {
@@ -77,7 +86,7 @@ export function MemberUsageDialog({
     return () => {
       ignore = true;
     };
-  }, [open, member, period, retryNonce]);
+  }, [open, member, selectedRange, retryNonce]);
 
   const title = state.status === "success" ? state.detail.member.displayName : member?.displayName ?? "Member";
 
@@ -86,8 +95,26 @@ export function MemberUsageDialog({
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>Usage details for the selected leaderboard period.</DialogDescription>
+          <DialogDescription>Usage details for the selected range.</DialogDescription>
         </DialogHeader>
+
+        {member ? (
+          <Tabs
+            value={selectedRange}
+            onValueChange={(value) => {
+              if (!member || (value !== "7d" && value !== "30d")) return;
+              setRangeState({ username: member.username, range: value });
+            }}
+          >
+            <TabsList>
+              {usageRanges.map((range) => (
+                <TabsTrigger key={range.value} value={range.value}>
+                  {range.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        ) : null}
 
         {state.status === "loading" ? <MemberUsageLoading /> : null}
 
@@ -103,7 +130,7 @@ export function MemberUsageDialog({
         {state.status === "success" ? (
           <div className="flex flex-col gap-6">
             <div className="grid gap-3 sm:grid-cols-3">
-              <SummaryCard label="Rank" value={`#${state.detail.summary.rank ?? member?.rank ?? "-"}`} />
+              <SummaryCard label="Leaderboard Rank" value={`#${state.detail.summary.rank ?? member?.rank ?? "-"}`} />
               <SummaryCard label="Tokens" value={formatTokens(state.detail.summary.totalTokens)} />
               <SummaryCard label="Cost" value={formatUsd(state.detail.summary.totalCostUsd)} />
             </div>

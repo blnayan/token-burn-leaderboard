@@ -9,12 +9,10 @@ const memberUsageDialogMock = vi.hoisted(() =>
   vi.fn(
     ({
       member,
-      period,
       open,
       onOpenChange,
     }: {
       member: { username: string; displayName: string; rank: number } | null;
-      period: string;
       open: boolean;
       onOpenChange: (open: boolean) => void;
     }) =>
@@ -23,7 +21,6 @@ const memberUsageDialogMock = vi.hoisted(() =>
           data-testid="member-usage-dialog"
           data-display-name={member.displayName}
           data-open={String(open)}
-          data-period={period}
           data-rank={String(member.rank)}
           data-username={member.username}
         >
@@ -96,7 +93,6 @@ describe("LeaderboardTable", () => {
 
     const dialog = screen.getByTestId("member-usage-dialog");
     expect(dialog.getAttribute("data-open")).toBe("true");
-    expect(dialog.getAttribute("data-period")).toBe("weekly");
     expect(dialog.getAttribute("data-username")).toBe("ada");
     expect(dialog.getAttribute("data-display-name")).toBe("Ada");
     expect(dialog.getAttribute("data-rank")).toBe("1");

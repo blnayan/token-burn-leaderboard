@@ -16,7 +16,7 @@ const detail = {
     username: "ada",
     displayName: "Ada",
   },
-  period: "weekly",
+  period: "7d",
   summary: {
     rank: 1,
     totalTokens: 12400,
@@ -44,14 +44,14 @@ describe("MemberUsageDialog", () => {
     render(
       <MemberUsageDialog
         member={{ username: "ada", displayName: "Ada", rank: 1 }}
-        period="weekly"
         open
         onOpenChange={() => {}}
       />,
     );
 
     expect(screen.getByText("Loading member usage...")).toBeTruthy();
-    expect(fetchMock).toHaveBeenCalledWith("/api/leaderboard/members/ada?period=weekly");
+    expect(fetchMock).toHaveBeenCalledWith("/api/leaderboard/members/ada?range=7d");
+    expect(screen.getByRole("tab", { name: "Past 7 days" }).getAttribute("data-state")).toBe("active");
 
     expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
 
@@ -76,7 +76,6 @@ describe("MemberUsageDialog", () => {
     render(
       <MemberUsageDialog
         member={{ username: "ada", displayName: "Ada", rank: 1 }}
-        period="weekly"
         open
         onOpenChange={() => {}}
       />,
@@ -88,5 +87,29 @@ describe("MemberUsageDialog", () => {
 
     expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets the dialog switch from Past 7 days to Past 30 days", async () => {
+    const user = userEvent.setup();
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...detail, period: "30d" }),
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemberUsageDialog
+        member={{ username: "ada", displayName: "Ada", rank: 1 }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole("heading", { name: "Ada" })).toBeTruthy();
+
+    await user.click(screen.getByRole("tab", { name: "Past 30 days" }));
+
+    expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=30d");
+    expect(screen.getByRole("tab", { name: "Past 30 days" }).getAttribute("data-state")).toBe("active");
   });
 });

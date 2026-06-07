@@ -15,7 +15,7 @@ import {
 
 type SelectedMember = { username: string; displayName: string; rank: number };
 
-export function LeaderboardTable({ period, rows }: { period: LeaderboardPeriod; rows: LeaderboardRow[] }) {
+export function LeaderboardTable({ rows }: { period: LeaderboardPeriod; rows: LeaderboardRow[] }) {
   const [selectedMember, setSelectedMember] = React.useState<SelectedMember | null>(null);
 
   if (rows.length === 0) {
@@ -67,7 +67,6 @@ export function LeaderboardTable({ period, rows }: { period: LeaderboardPeriod; 
       </div>
       <MemberUsageDialog
         member={selectedMember}
-        period={period}
         open={selectedMember !== null}
         onOpenChange={(open) => {
           if (!open) {
