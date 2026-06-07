@@ -307,6 +307,77 @@ describe("getMemberUsageDetail", () => {
     });
   });
 
+  it("uses a zero-filled trailing 7-day range for member usage detail", async () => {
+    prismaMock.member.findUnique.mockResolvedValue({
+      id: "member-1",
+      username: "ada",
+      displayName: "Ada",
+    });
+    prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
+      _sum: { totalTokens: 70n, costUsd: 0.7 },
+    });
+    prismaMock.dailyProviderUsage.groupBy
+      .mockResolvedValueOnce([
+        {
+          date: new Date("2026-06-07T00:00:00.000Z"),
+          _sum: { totalTokens: 70n, costUsd: 0.7 },
+        },
+      ])
+      .mockResolvedValueOnce([
+        { provider: "codex", _sum: { totalTokens: 70n, costUsd: 0.7 } },
+      ])
+      .mockResolvedValueOnce([]);
+    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([]);
+    prismaMock.device.findMany.mockResolvedValue([]);
+
+    const detail = await getMemberUsageDetail(
+      "ada",
+      "7d",
+      new Date("2026-06-07T12:00:00.000Z"),
+    );
+
+    expect(detail?.period).toBe("7d");
+    expect(detail?.summary).toEqual({
+      rank: null,
+      totalTokens: 70,
+      totalCostUsd: 0.7,
+    });
+    expect(detail?.trend).toHaveLength(7);
+    expect(detail?.trend[0]).toEqual({
+      date: "2026-06-01",
+      totalTokens: 0,
+      totalCostUsd: 0,
+    });
+    expect(detail?.trend.at(-1)).toEqual({
+      date: "2026-06-07",
+      totalTokens: 70,
+      totalCostUsd: 0.7,
+    });
+    expect(prismaMock.dailyProviderUsage.aggregate).toHaveBeenCalledWith({
+      _sum: { totalTokens: true, costUsd: true },
+      where: {
+        memberId: "member-1",
+        date: {
+          gte: new Date("2026-06-01T00:00:00.000Z"),
+          lt: new Date("2026-06-08T00:00:00.000Z"),
+        },
+      },
+    });
+    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith({
+      by: ["provider", "modelName"],
+      _sum: { totalTokens: true, costUsd: true },
+      where: {
+        memberId: "member-1",
+        date: {
+          gte: new Date("2026-06-01T00:00:00.000Z"),
+          lt: new Date("2026-06-08T00:00:00.000Z"),
+        },
+      },
+      orderBy: { _sum: { totalTokens: "desc" } },
+      take: 5,
+    });
+  });
+
   it("returns null for an unknown member", async () => {
     prismaMock.member.findUnique.mockResolvedValue(null);
 

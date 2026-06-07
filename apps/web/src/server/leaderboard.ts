@@ -2,6 +2,7 @@ import {
   providerSchema,
   type LeaderboardPeriod,
   type LeaderboardRow,
+  type MemberUsageRange,
   type MemberUsageDetail,
 } from "@token-burn/shared";
 
@@ -116,10 +117,11 @@ type SumRow = {
 
 const publicOperatingSystems = ["darwin", "linux", "win32"] as const;
 type PublicOperatingSystem = (typeof publicOperatingSystems)[number];
+export type MemberUsageRequestPeriod = LeaderboardPeriod | MemberUsageRange;
 
 export async function getMemberUsageDetail(
   username: string,
-  period: LeaderboardPeriod,
+  period: MemberUsageRequestPeriod,
   now = new Date(),
 ): Promise<MemberUsageDetail | null> {
   const member = await prisma.member.findUnique({
@@ -133,10 +135,15 @@ export async function getMemberUsageDetail(
 
   if (!member) return null;
 
-  const summaryDateFilter = getPeriodDateFilter(period, now);
+  const rangeDates = isMemberUsageRange(period)
+    ? getRecentUtcDateWindow(getMemberUsageRangeDays(period), now)
+    : null;
+  const summaryDateFilter = rangeDates
+    ? dateWindowFilter(rangeDates[0] as string, rangeDates[rangeDates.length - 1] as string)
+    : getPeriodDateFilter(period, now);
   const summaryWhere = usageWhere(member.id, summaryDateFilter);
   const trendDates =
-    period === "all-time" ? getRecentUtcDateWindow(30, now) : null;
+    rangeDates ?? (period === "all-time" ? getRecentUtcDateWindow(30, now) : null);
   const trendDateFilter = trendDates
     ? dateWindowFilter(
         trendDates[0] as string,
@@ -238,6 +245,14 @@ function getPeriodDateFilter(
   return range.start && range.end
     ? { gte: range.start, lt: range.end }
     : undefined;
+}
+
+function isMemberUsageRange(period: MemberUsageRequestPeriod): period is MemberUsageRange {
+  return period === "7d" || period === "30d";
+}
+
+function getMemberUsageRangeDays(range: MemberUsageRange): number {
+  return range === "7d" ? 7 : 30;
 }
 
 function usageWhere(memberId: string, dateFilter?: DateFilter) {
