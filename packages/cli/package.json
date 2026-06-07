@@ -1,8 +1,17 @@
 {
   "name": "@blnayan/token-burn",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "CLI for syncing Claude Code and Codex usage to Token Burn.",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/blnayan/token-burn-leaderboard.git",
+    "directory": "packages/cli"
+  },
+  "homepage": "https://github.com/blnayan/token-burn-leaderboard/tree/main/packages/cli#readme",
+  "bugs": {
+    "url": "https://github.com/blnayan/token-burn-leaderboard/issues"
+  },
   "bin": {
     "token-burn": "dist/index.js"
   },
