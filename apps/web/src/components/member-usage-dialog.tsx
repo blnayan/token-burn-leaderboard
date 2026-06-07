@@ -36,8 +36,9 @@ type MemberUsageDialogProps = {
 };
 
 type LoadState =
-  | { status: "idle" | "loading" | "error"; detail: null }
-  | { status: "success"; detail: MemberUsageDetail };
+  | { status: "idle" | "loading"; detail: null }
+  | { status: "error"; detail: MemberUsageDetail | null }
+  | { status: "success"; detail: MemberUsageDetail; isRefreshing: boolean };
 
 const usageRanges: { label: string; value: MemberUsageRange }[] = [
   { label: "Past 7 days", value: "7d" },
@@ -173,7 +174,11 @@ function MemberUsageDialogInner({
     const username = member.username;
 
     async function loadUsage() {
-      setState({ status: "loading", detail: null });
+      setState((current) =>
+        current.detail
+          ? { status: "success", detail: current.detail, isRefreshing: true }
+          : { status: "loading", detail: null },
+      );
 
       try {
         const response = await fetch(buildMemberUsageUrl(username, selectedRange, selectedFilters));
@@ -186,11 +191,13 @@ function MemberUsageDialogInner({
         const detail = memberUsageDetailSchema.parse(json);
 
         if (!ignore) {
-          setState({ status: "success", detail });
+          setState({ status: "success", detail, isRefreshing: false });
         }
       } catch {
         if (!ignore) {
-          setState({ status: "error", detail: null });
+          setState((current) =>
+            current.detail ? { status: "error", detail: current.detail } : { status: "error", detail: null },
+          );
         }
       }
     }
@@ -202,7 +209,8 @@ function MemberUsageDialogInner({
     };
   }, [open, member, selectedRange, selectedFilters, retryNonce]);
 
-  const title = state.status === "success" ? state.detail.member.displayName : member?.displayName ?? "Member";
+  const title = state.detail?.member.displayName ?? member?.displayName ?? "Member";
+  const isRefreshing = state.status === "success" && state.isRefreshing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -235,6 +243,12 @@ function MemberUsageDialogInner({
           </Tabs>
         ) : null}
 
+        {isRefreshing ? (
+          <p className="text-xs text-muted-foreground" aria-live="polite">
+            Updating usage...
+          </p>
+        ) : null}
+
         {state.status === "loading" ? <MemberUsageLoading /> : null}
 
         {state.status === "error" ? (
@@ -246,7 +260,7 @@ function MemberUsageDialogInner({
           </div>
         ) : null}
 
-        {state.status === "success" ? (
+        {state.detail ? (
           <div className="flex flex-col gap-6">
             <div className="grid gap-3 sm:grid-cols-3">
               <SummaryCard label="Leaderboard Rank" value={`#${state.detail.summary.rank ?? member?.rank ?? "-"}`} />

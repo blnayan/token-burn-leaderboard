@@ -67,6 +67,22 @@ function mockSuccessfulFetch(responseDetail: MemberUsageDetail = detail) {
   return fetchMock;
 }
 
+function deferredFetchResponse(responseDetail: MemberUsageDetail = detail) {
+  let resolve!: (value: { ok: true; json: () => Promise<MemberUsageDetail> }) => void;
+  const promise = new Promise<{ ok: true; json: () => Promise<MemberUsageDetail> }>((resolver) => {
+    resolve = resolver;
+  });
+
+  return {
+    promise,
+    resolve: () =>
+      resolve({
+        ok: true,
+        json: async () => responseDetail,
+      }),
+  };
+}
+
 async function renderOpenDialog(fetchMock = mockSuccessfulFetch()) {
   render(
     <MemberUsageDialog
@@ -203,6 +219,47 @@ describe("MemberUsageDialog", () => {
         "/api/leaderboard/members/ada?range=7d&model=codex%3Agpt-5&device=device-1",
       );
     });
+  });
+
+  it("keeps the existing chart visible while a filter request refreshes", async () => {
+    const user = userEvent.setup();
+    const pendingProviderResponse = deferredFetchResponse({
+      ...detail,
+      summary: {
+        ...detail.summary,
+        totalTokens: 24000,
+      },
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => detail,
+      })
+      .mockReturnValueOnce(pendingProviderResponse.promise);
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <MemberUsageDialog
+        member={{ username: "ada", displayName: "Ada", rank: 1 }}
+        open
+        onOpenChange={() => {}}
+      />,
+    );
+
+    expect(await screen.findByText("12.4K")).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Mock provider Codex" }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=7d&provider=codex");
+    });
+    expect(screen.getByText("12.4K")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Mock provider Codex" })).toBeTruthy();
+
+    pendingProviderResponse.resolve();
+
+    expect(await screen.findByText("24K")).toBeTruthy();
   });
 
   it("clears model selections when provider filters are selected and clears providers when models are selected", async () => {
