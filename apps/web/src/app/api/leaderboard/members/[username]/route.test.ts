@@ -40,6 +40,41 @@ describe("GET /api/leaderboard/members/[username]", () => {
     });
   });
 
+  it("passes dialog usage ranges to the member usage detail loader", async () => {
+    getMemberUsageDetailMock.mockResolvedValue({
+      member: { username: "ada", displayName: "Ada" },
+      period: "30d",
+      summary: { rank: null, totalTokens: 100, totalCostUsd: 1.25 },
+      trend: [],
+      providers: [],
+      models: [],
+      devices: [],
+    });
+
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?range=30d"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "30d");
+    await expect(response.json()).resolves.toMatchObject({
+      member: { username: "ada" },
+      period: "30d",
+    });
+  });
+
+  it("rejects invalid dialog usage ranges", async () => {
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?range=daily"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(getMemberUsageDetailMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({ error: "Invalid usage range" });
+  });
+
   it("defaults invalid periods to daily", async () => {
     getMemberUsageDetailMock.mockResolvedValue({
       member: { username: "ada", displayName: "Ada" },

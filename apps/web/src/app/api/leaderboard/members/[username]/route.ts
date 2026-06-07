@@ -1,4 +1,4 @@
-import { memberUsageDetailSchema, periodSchema } from "@token-burn/shared";
+import { memberUsageDetailSchema, memberUsageRangeSchema, periodSchema } from "@token-burn/shared";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getMemberUsageDetail } from "@/server/leaderboard";
@@ -8,7 +8,16 @@ export async function GET(
   { params }: { params: Promise<{ username: string }> },
 ) {
   const { username } = await params;
-  const period = periodSchema.catch("daily").parse(request.nextUrl.searchParams.get("period") ?? undefined);
+  const rangeParam = request.nextUrl.searchParams.get("range");
+  const parsedRange = rangeParam ? memberUsageRangeSchema.safeParse(rangeParam) : null;
+
+  if (parsedRange && !parsedRange.success) {
+    return NextResponse.json({ error: "Invalid usage range" }, { status: 400 });
+  }
+
+  const period =
+    parsedRange?.data ??
+    periodSchema.catch("daily").parse(request.nextUrl.searchParams.get("period") ?? undefined);
   const detail = await getMemberUsageDetail(username, period);
 
   if (!detail) {
