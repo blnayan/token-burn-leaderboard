@@ -156,6 +156,12 @@ describe("MemberUsageCharts", () => {
     expect(screen.getByText("No usage for these filters.")).toBeTruthy();
   });
 
+  it("does not duplicate total cost in the trend heading", () => {
+    render(<MemberUsageCharts detail={detail} />);
+
+    expect(within(sectionForHeading("Token trend")).queryByText("$12.34")).toBeNull();
+  });
+
   it("calls filter toggle callbacks with provider, model, and device identifiers", async () => {
     const user = userEvent.setup();
     const onToggleDevice = vi.fn();

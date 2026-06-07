@@ -123,6 +123,8 @@ describe("MemberUsageDialog", () => {
 
     expect(screen.getByText("Tokens")).toBeTruthy();
     expect(screen.getByText("12.4K")).toBeTruthy();
+    expect(screen.getByText("#1")).toBeTruthy();
+    expect(screen.queryByText("Leaderboard Rank")).toBeNull();
   });
 
   it("falls back to the leaderboard rank from the selected member", async () => {

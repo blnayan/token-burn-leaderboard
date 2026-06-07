@@ -14,6 +14,7 @@ import {
   type MemberUsageModelFilter,
   MemberUsageCharts,
 } from "@/components/member-usage-charts";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -204,12 +205,20 @@ function MemberUsageDialogInner({
   }, [open, member, selectedRange, selectedFilters, retryNonce]);
 
   const title = state.detail?.member.displayName ?? member?.displayName ?? "Member";
+  const rank = state.detail?.summary.rank ?? member?.rank ?? null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
+          <DialogTitle className="flex items-center gap-2">
+            <span>{title}</span>
+            {rank ? (
+              <Badge variant="secondary" aria-hidden="true">
+                #{rank}
+              </Badge>
+            ) : null}
+          </DialogTitle>
           <DialogDescription>Usage details for the selected range.</DialogDescription>
         </DialogHeader>
 
@@ -249,8 +258,7 @@ function MemberUsageDialogInner({
 
         {state.detail ? (
           <div className="flex flex-col gap-6">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <SummaryCard label="Leaderboard Rank" value={`#${state.detail.summary.rank ?? member?.rank ?? "-"}`} />
+            <div className="grid gap-3 sm:grid-cols-2">
               <SummaryCard label="Tokens" value={formatTokens(state.detail.summary.totalTokens)} />
               <SummaryCard label="Cost" value={formatUsd(state.detail.summary.totalCostUsd)} />
             </div>
@@ -301,8 +309,7 @@ function MemberUsageLoading() {
   return (
     <div className="flex flex-col gap-4" aria-label="Loading member usage...">
       <p className="text-sm text-muted-foreground">Loading member usage...</p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Skeleton className="h-24" />
+      <div className="grid gap-3 sm:grid-cols-2">
         <Skeleton className="h-24" />
         <Skeleton className="h-24" />
       </div>

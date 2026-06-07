@@ -60,12 +60,9 @@ export function MemberUsageCharts({
   return (
     <div className="flex flex-col gap-6">
       <section className="flex flex-col gap-3" aria-labelledby="member-usage-trend">
-        <div className="flex items-center justify-between gap-3">
-          <h3 id="member-usage-trend" className="text-sm font-medium">
-            Token trend
-          </h3>
-          <p className="text-xs text-muted-foreground">{formatUsd(detail.summary.totalCostUsd)}</p>
-        </div>
+        <h3 id="member-usage-trend" className="text-sm font-medium">
+          Token trend
+        </h3>
         {detail.trend.length === 0 ? (
           <div className="flex h-[220px] items-center justify-center rounded-md border bg-muted/20 text-sm text-muted-foreground">
             {hasActiveFilters ? "No usage for these filters." : "No usage in this period."}
