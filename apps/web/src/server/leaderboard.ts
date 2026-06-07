@@ -3,7 +3,12 @@ import type { LeaderboardPeriod, LeaderboardRow } from "@token-burn/shared";
 import { prisma } from "../lib/prisma";
 import { getPeriodRange } from "../lib/time";
 
-export type RawRow = { displayName: string; totalTokens: bigint; totalCostUsd: number };
+export type RawRow = {
+  username: string;
+  displayName: string;
+  totalTokens: bigint;
+  totalCostUsd: number;
+};
 
 export function bigIntToSafeNumber(total: bigint): number {
   if (total > BigInt(Number.MAX_SAFE_INTEGER)) {
@@ -21,6 +26,7 @@ export function rankRows(rows: RawRow[]): LeaderboardRow[] {
     })
     .map((row, index) => ({
       rank: index + 1,
+      username: row.username,
       displayName: row.displayName,
       totalTokens: bigIntToSafeNumber(row.totalTokens),
       totalCostUsd: row.totalCostUsd,
@@ -57,20 +63,28 @@ export async function getLeaderboard(period: LeaderboardPeriod): Promise<Leaderb
     },
     select: {
       id: true,
+      username: true,
       displayName: true,
     },
   });
-  const displayNamesByMemberId = new Map(members.map((member) => [member.id, member.displayName]));
+  const membersByMemberId = new Map(members.map((member) => [member.id, member]));
 
   return rankRows(
     positiveTotals.flatMap((total) => {
-      const displayName = displayNamesByMemberId.get(total.memberId);
+      const member = membersByMemberId.get(total.memberId);
       const totalTokens = total._sum.totalTokens;
       const totalCostUsd = total._sum.costUsd === null ? 0 : Number(total._sum.costUsd);
 
-      if (!displayName || totalTokens === null) return [];
+      if (!member || totalTokens === null) return [];
 
-      return [{ displayName, totalTokens, totalCostUsd }];
+      return [
+        {
+          username: member.username,
+          displayName: member.displayName,
+          totalTokens,
+          totalCostUsd,
+        },
+      ];
     }),
   );
 }

@@ -17,6 +17,7 @@ describe("LeaderboardTable", () => {
         rows={[
           {
             rank: 1,
+            username: "ada",
             displayName: "Ada",
             totalTokens: 12400,
             totalCostUsd: 1234.5,
