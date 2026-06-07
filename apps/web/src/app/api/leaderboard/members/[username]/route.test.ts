@@ -33,7 +33,11 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "weekly");
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "weekly", expect.any(Date), {
+      providers: [],
+      models: [],
+      devices: [],
+    });
     await expect(response.json()).resolves.toMatchObject({
       member: { username: "ada" },
       period: "weekly",
@@ -57,7 +61,11 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "30d");
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "30d", expect.any(Date), {
+      providers: [],
+      models: [],
+      devices: [],
+    });
     await expect(response.json()).resolves.toMatchObject({
       member: { username: "ada" },
       period: "30d",
@@ -90,7 +98,101 @@ describe("GET /api/leaderboard/members/[username]", () => {
       params: Promise.resolve({ username: "ada" }),
     });
 
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "daily");
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "daily", expect.any(Date), {
+      providers: [],
+      models: [],
+      devices: [],
+    });
+  });
+
+  it("passes valid repeated provider, model, and device filters", async () => {
+    getMemberUsageDetailMock.mockResolvedValue({
+      member: { username: "ada", displayName: "Ada" },
+      period: "7d",
+      summary: { rank: null, totalTokens: 0, totalCostUsd: 0 },
+      trend: [],
+      providers: [],
+      models: [],
+      devices: [],
+    });
+
+    const response = await GET(
+      new NextRequest(
+        "https://token-burn.test/api/leaderboard/members/ada?range=7d&provider=codex&provider=claude_code&device=device-1&device=device-2",
+      ),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(200);
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "7d", expect.any(Date), {
+      providers: ["codex", "claude_code"],
+      models: [],
+      devices: ["device-1", "device-2"],
+    });
+
+    getMemberUsageDetailMock.mockClear();
+    const modelResponse = await GET(
+      new NextRequest(
+        "https://token-burn.test/api/leaderboard/members/ada?range=7d&model=codex:gpt-5-codex&model=claude_code:opus&device=device-1",
+      ),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(modelResponse.status).toBe(200);
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "7d", expect.any(Date), {
+      providers: [],
+      models: [
+        { provider: "codex", modelName: "gpt-5-codex" },
+        { provider: "claude_code", modelName: "opus" },
+      ],
+      devices: ["device-1"],
+    });
+  });
+
+  it("rejects invalid provider filters", async () => {
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?provider=other"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(getMemberUsageDetailMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({ error: "Invalid provider filter" });
+  });
+
+  it("rejects invalid model filter formats", async () => {
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?model=codex"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(getMemberUsageDetailMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({ error: "Invalid model filter" });
+  });
+
+  it("rejects blank device filters", async () => {
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?device=%20"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(getMemberUsageDetailMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({ error: "Invalid device filter" });
+  });
+
+  it("rejects provider and model filters together", async () => {
+    const response = await GET(
+      new NextRequest("https://token-burn.test/api/leaderboard/members/ada?provider=codex&model=codex:gpt-5-codex"),
+      { params: Promise.resolve({ username: "ada" }) },
+    );
+
+    expect(response.status).toBe(400);
+    expect(getMemberUsageDetailMock).not.toHaveBeenCalled();
+    await expect(response.json()).resolves.toEqual({
+      error: "Provider and model filters cannot be combined",
+    });
   });
 
   it("returns 404 when the member is missing", async () => {

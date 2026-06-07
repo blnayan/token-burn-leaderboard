@@ -110,6 +110,7 @@ export const memberUsageModelBreakdownSchema = z.object({
 });
 
 export const memberUsageDeviceBreakdownSchema = z.object({
+  deviceId: z.string().trim().min(1).max(120),
   deviceName: z.string().trim().min(1).max(80),
   os: z.enum(["darwin", "linux", "win32"]),
   totalTokens: z.number().int().nonnegative().safe(),

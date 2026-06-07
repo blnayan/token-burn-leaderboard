@@ -419,6 +419,7 @@ describe("memberUsageDetailSchema", () => {
         ],
         devices: [
           {
+            deviceId: "device-1",
             deviceName: "Ada MacBook",
             os: "darwin",
             totalTokens: 100,
@@ -432,6 +433,35 @@ describe("memberUsageDetailSchema", () => {
       period: "7d",
       summary: { rank: 1 },
     });
+    expect(parsed.devices[0]?.deviceId).toBe("device-1");
+  });
+
+  it("rejects public device breakdown rows missing a device id", () => {
+    expect(() =>
+      memberUsageDetailSchema.parse({
+        member: {
+          username: "ada",
+          displayName: "Ada",
+        },
+        period: "7d",
+        summary: {
+          rank: null,
+          totalTokens: 0,
+          totalCostUsd: 0,
+        },
+        trend: [],
+        providers: [],
+        models: [],
+        devices: [
+          {
+            deviceName: "Ada MacBook",
+            os: "darwin",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("rejects unknown public providers and operating systems", () => {
@@ -477,6 +507,7 @@ describe("memberUsageDetailSchema", () => {
         models: [],
         devices: [
           {
+            deviceId: "device-1",
             deviceName: "Ada Laptop",
             os: "freebsd",
             totalTokens: 100,
