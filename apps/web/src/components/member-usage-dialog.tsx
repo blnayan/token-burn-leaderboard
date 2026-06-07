@@ -42,10 +42,7 @@ export function MemberUsageDialog({
   const [retryNonce, setRetryNonce] = React.useState(0);
 
   React.useEffect(() => {
-    if (!open || !member) {
-      setState({ status: "idle", detail: null });
-      return;
-    }
+    if (!open || !member) return;
 
     let ignore = false;
     const username = member.username;
