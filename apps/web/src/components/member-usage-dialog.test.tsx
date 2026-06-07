@@ -348,7 +348,7 @@ describe("MemberUsageDialog", () => {
     });
   });
 
-  it("removes individual chips and clears all active filters", async () => {
+  it("does not render duplicate active filter chips above the chart", async () => {
     const user = userEvent.setup();
     const fetchMock = await renderOpenDialog();
 
@@ -357,19 +357,7 @@ describe("MemberUsageDialog", () => {
       expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=7d&provider=codex");
     });
 
-    await user.click(await screen.findByRole("button", { name: "Remove provider filter Codex" }));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=7d");
-    });
-
-    await user.click(screen.getByRole("button", { name: "Mock device Workstation" }));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=7d&device=device-1");
-    });
-
-    await user.click(screen.getByRole("button", { name: "Clear all" }));
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenLastCalledWith("/api/leaderboard/members/ada?range=7d");
-    });
+    expect(screen.queryByRole("button", { name: "Remove provider filter Codex" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
   });
 });
