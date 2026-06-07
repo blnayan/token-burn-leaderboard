@@ -36,7 +36,9 @@ vi.mock("@/lib/env", () => ({
 }));
 
 vi.mock("@/components/leaderboard-table", () => ({
-  LeaderboardTable: () => <div data-testid="leaderboard-table" />,
+  LeaderboardTable: ({ period }: { period: string }) => (
+    <div data-testid="leaderboard-table" data-period={period} />
+  ),
 }));
 
 vi.mock("@/components/period-tabs", () => ({
@@ -119,7 +121,7 @@ describe("HomePage", () => {
     expect(screen.queryByRole("heading", { name: "Token Burn" })).toBeNull();
     expect(screen.queryByText("Public leaderboard. Private submissions.")).toBeNull();
     expect(screen.getByTestId("period-tabs")).toBeTruthy();
-    expect(screen.getByTestId("leaderboard-table")).toBeTruthy();
+    expect(screen.getByTestId("leaderboard-table").getAttribute("data-period")).toBe("daily");
     expect(screen.getByRole("link", { name: "GitHub" }).getAttribute("href")).toBe(
       "https://github.com/blnayan/token-burn-leaderboard",
     );

@@ -37,7 +37,7 @@ export default async function HomePage({
           </div>
           <PeriodTabs value={period} />
         </header>
-        <LeaderboardTable rows={rows} />
+        <LeaderboardTable period={period} rows={rows} />
       </main>
     </>
   );
