@@ -91,21 +91,21 @@ export const memberUsageTrendPointSchema = z.object({
 });
 
 export const memberUsageProviderBreakdownSchema = z.object({
-  provider: z.string().trim().min(1).max(80),
+  provider: providerSchema,
   totalTokens: z.number().int().nonnegative().safe(),
   totalCostUsd: costUsdSchema,
 });
 
 export const memberUsageModelBreakdownSchema = z.object({
   modelName: z.string().trim().min(1).max(160),
-  provider: z.string().trim().min(1).max(80),
+  provider: providerSchema,
   totalTokens: z.number().int().nonnegative().safe(),
   totalCostUsd: costUsdSchema,
 });
 
 export const memberUsageDeviceBreakdownSchema = z.object({
   deviceName: z.string().trim().min(1).max(80),
-  os: z.string().trim().min(1).max(40),
+  os: z.enum(["darwin", "linux", "win32"]),
   totalTokens: z.number().int().nonnegative().safe(),
   totalCostUsd: costUsdSchema,
 });

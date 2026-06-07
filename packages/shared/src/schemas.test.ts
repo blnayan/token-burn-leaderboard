@@ -328,24 +328,28 @@ describe("leaderboardRowSchema", () => {
 
   it("rejects invalid leaderboard rows", () => {
     expect(() =>
-      leaderboardRowSchema.parse({ rank: 0, displayName: "Ada", totalTokens: 1, totalCostUsd: 0 }),
+      leaderboardRowSchema.parse({ rank: 0, username: "ada", displayName: "Ada", totalTokens: 1, totalCostUsd: 0 }),
     ).toThrow();
     expect(() =>
-      leaderboardRowSchema.parse({ rank: 1, displayName: "", totalTokens: 1, totalCostUsd: 0 }),
+      leaderboardRowSchema.parse({ rank: 1, username: "ada", displayName: "", totalTokens: 1, totalCostUsd: 0 }),
     ).toThrow();
     expect(() =>
-      leaderboardRowSchema.parse({ rank: 1, displayName: "A".repeat(81), totalTokens: 1, totalCostUsd: 0 }),
+      leaderboardRowSchema.parse({
+        rank: 1,
+        username: "ada",
+        displayName: "A".repeat(81),
+        totalTokens: 1,
+        totalCostUsd: 0,
+      }),
     ).toThrow();
     expect(() =>
-      leaderboardRowSchema.parse({ rank: 1, displayName: "Ada", totalTokens: -1, totalCostUsd: 0 }),
+      leaderboardRowSchema.parse({ rank: 1, username: "ada", displayName: "Ada", totalTokens: -1, totalCostUsd: 0 }),
     ).toThrow();
     expect(() =>
-      leaderboardRowSchema.parse({ rank: 1, displayName: "Ada", totalTokens: 1, totalCostUsd: -1 }),
+      leaderboardRowSchema.parse({ rank: 1, username: "ada", displayName: "Ada", totalTokens: 1, totalCostUsd: -1 }),
     ).toThrow();
   });
-});
 
-describe("leaderboardRowSchema", () => {
   it("requires a public member username", () => {
     expect(
       leaderboardRowSchema.parse({
@@ -415,6 +419,59 @@ describe("memberUsageDetailSchema", () => {
       period: "weekly",
       summary: { rank: 1 },
     });
+  });
+
+  it("rejects unknown public providers and operating systems", () => {
+    expect(() =>
+      memberUsageDetailSchema.parse({
+        member: {
+          username: "ada",
+          displayName: "Ada",
+        },
+        period: "weekly",
+        summary: {
+          rank: 1,
+          totalTokens: 300,
+          totalCostUsd: 3.5,
+        },
+        trend: [],
+        providers: [
+          {
+            provider: "future_provider",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+        models: [],
+        devices: [],
+      }),
+    ).toThrow();
+
+    expect(() =>
+      memberUsageDetailSchema.parse({
+        member: {
+          username: "ada",
+          displayName: "Ada",
+        },
+        period: "weekly",
+        summary: {
+          rank: 1,
+          totalTokens: 300,
+          totalCostUsd: 3.5,
+        },
+        trend: [],
+        providers: [],
+        models: [],
+        devices: [
+          {
+            deviceName: "Ada Laptop",
+            os: "freebsd",
+            totalTokens: 100,
+            totalCostUsd: 1.25,
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("rejects unsafe aggregate totals", () => {
