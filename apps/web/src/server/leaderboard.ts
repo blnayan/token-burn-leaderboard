@@ -135,15 +135,21 @@ export async function getMemberUsageDetail(
 
   if (!member) return null;
 
-  const rangeDates = isMemberUsageRange(period)
-    ? getRecentUtcDateWindow(getMemberUsageRangeDays(period), now)
-    : null;
-  const summaryDateFilter = rangeDates
-    ? dateWindowFilter(rangeDates[0] as string, rangeDates[rangeDates.length - 1] as string)
-    : getPeriodDateFilter(period, now);
+  let summaryDateFilter: DateFilter | undefined;
+  let trendDates: string[] | null = null;
+
+  if (isMemberUsageRange(period)) {
+    trendDates = getRecentUtcDateWindow(getMemberUsageRangeDays(period), now);
+    summaryDateFilter = dateWindowFilter(
+      trendDates[0] as string,
+      trendDates[trendDates.length - 1] as string,
+    );
+  } else {
+    summaryDateFilter = getPeriodDateFilter(period, now);
+    trendDates = period === "all-time" ? getRecentUtcDateWindow(30, now) : null;
+  }
+
   const summaryWhere = usageWhere(member.id, summaryDateFilter);
-  const trendDates =
-    rangeDates ?? (period === "all-time" ? getRecentUtcDateWindow(30, now) : null);
   const trendDateFilter = trendDates
     ? dateWindowFilter(
         trendDates[0] as string,
