@@ -40,7 +40,7 @@ export function LeaderboardTable({ period, rows }: { period: LeaderboardPeriod; 
           </TableHeader>
           <TableBody>
             {rows.map((row) => (
-              <TableRow key={row.rank}>
+              <TableRow key={row.username}>
                 <TableCell className="font-mono text-muted-foreground">#{row.rank}</TableCell>
                 <TableCell className="font-medium">
                   <button
