@@ -8,6 +8,12 @@ export type Provider = z.infer<typeof providerSchema>;
 export const periodSchema = z.enum(["daily", "weekly", "monthly", "all-time"]);
 export type LeaderboardPeriod = z.infer<typeof periodSchema>;
 
+export const memberUsageRangeSchema = z.enum(["7d", "30d"]);
+export type MemberUsageRange = z.infer<typeof memberUsageRangeSchema>;
+
+export const memberUsageDetailPeriodSchema = z.union([periodSchema, memberUsageRangeSchema]);
+export type MemberUsageDetailPeriod = z.infer<typeof memberUsageDetailPeriodSchema>;
+
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const tokenCategoriesSchema = z.record(z.string(), z.number().int().nonnegative().safe());
@@ -115,7 +121,7 @@ export const memberUsageDetailSchema = z.object({
     username: z.string().trim().min(1).max(80),
     displayName: z.string().min(1).max(80),
   }),
-  period: periodSchema,
+  period: memberUsageDetailPeriodSchema,
   summary: z.object({
     rank: z.number().int().positive().nullable(),
     totalTokens: z.number().int().nonnegative().safe(),

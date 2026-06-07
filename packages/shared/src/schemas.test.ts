@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   leaderboardRowSchema,
   memberUsageDetailSchema,
+  memberUsageRangeSchema,
   periodSchema,
   providerSchema,
   syncPayloadSchema,
@@ -22,6 +23,18 @@ describe("periodSchema", () => {
     expect(periodSchema.parse("weekly")).toBe("weekly");
     expect(periodSchema.parse("monthly")).toBe("monthly");
     expect(periodSchema.parse("all-time")).toBe("all-time");
+  });
+});
+
+describe("memberUsageRangeSchema", () => {
+  it("accepts dialog usage ranges", () => {
+    expect(memberUsageRangeSchema.parse("7d")).toBe("7d");
+    expect(memberUsageRangeSchema.parse("30d")).toBe("30d");
+  });
+
+  it("rejects unsupported dialog usage ranges", () => {
+    expect(() => memberUsageRangeSchema.parse("daily")).toThrow();
+    expect(() => memberUsageRangeSchema.parse("all-time")).toThrow();
   });
 });
 
@@ -371,13 +384,12 @@ describe("leaderboardRowSchema", () => {
 
 describe("memberUsageDetailSchema", () => {
   it("accepts public aggregate member usage detail", () => {
-    expect(
-      memberUsageDetailSchema.parse({
+    const parsed = memberUsageDetailSchema.parse({
         member: {
           username: "ada",
           displayName: "Ada",
         },
-        period: "weekly",
+        period: "7d",
         summary: {
           rank: 1,
           totalTokens: 300,
@@ -413,10 +425,11 @@ describe("memberUsageDetailSchema", () => {
             totalCostUsd: 1.25,
           },
         ],
-      }),
-    ).toMatchObject({
+    });
+
+    expect(parsed).toMatchObject({
       member: { username: "ada" },
-      period: "weekly",
+      period: "7d",
       summary: { rank: 1 },
     });
   });
