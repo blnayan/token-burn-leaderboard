@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getPeriodRange } from "./time";
+import { getPeriodRange, getRecentUtcDateWindow } from "./time";
 
 describe("getPeriodRange", () => {
   it("uses UTC day boundaries", () => {
@@ -27,5 +27,21 @@ describe("getPeriodRange", () => {
       start: null,
       end: null,
     });
+  });
+});
+
+describe("getRecentUtcDateWindow", () => {
+  it("returns inclusive UTC dates ending on the current UTC date", () => {
+    expect(getRecentUtcDateWindow(3, new Date("2026-06-07T15:30:00.000Z"))).toEqual([
+      "2026-06-05",
+      "2026-06-06",
+      "2026-06-07",
+    ]);
+  });
+
+  it("rejects non-positive window sizes", () => {
+    expect(() => getRecentUtcDateWindow(0, new Date("2026-06-07T00:00:00.000Z"))).toThrow(
+      "UTC date window must include at least one day",
+    );
   });
 });

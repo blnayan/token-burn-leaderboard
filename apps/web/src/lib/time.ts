@@ -34,3 +34,19 @@ export function getPeriodRange(period: LeaderboardPeriod, now = new Date()): Per
 function addUtcDays(date: Date, days: number): Date {
   return new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
 }
+
+export function getRecentUtcDateWindow(days: number, now = new Date()): string[] {
+  if (!Number.isInteger(days) || days < 1) {
+    throw new Error("UTC date window must include at least one day");
+  }
+
+  const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const start = addUtcDays(end, -(days - 1));
+  const dates: string[] = [];
+
+  for (let date = start; date <= end; date = addUtcDays(date, 1)) {
+    dates.push(date.toISOString().slice(0, 10));
+  }
+
+  return dates;
+}
