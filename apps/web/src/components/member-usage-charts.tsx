@@ -47,9 +47,12 @@ export function MemberUsageCharts({ detail }: { detail: MemberUsageDetail }) {
                 content={
                   <ChartTooltipContent
                     labelFormatter={(value) => String(value)}
-                    formatter={(value) =>
-                      typeof value === "number" ? formatTokens(value) : String(value)
-                    }
+                    formatter={(value, _name, item) => (
+                      <TrendTooltipValue
+                        costUsd={getTrendPointCost(item.payload)}
+                        tokens={typeof value === "number" ? value : 0}
+                      />
+                    )}
                   />
                 }
               />
@@ -107,8 +110,8 @@ function Breakdown({
         <p className="rounded-md border bg-muted/20 p-3 text-sm text-muted-foreground">No data.</p>
       ) : (
         <div className="flex flex-col gap-2">
-          {items.map((item) => (
-            <div key={`${item.label}-${item.meta ?? ""}`} className="rounded-md border p-3">
+          {items.map((item, index) => (
+            <div key={`${item.label}-${item.meta ?? ""}-${index}`} className="rounded-md border p-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium">{item.label}</p>
@@ -125,6 +128,34 @@ function Breakdown({
       )}
     </section>
   );
+}
+
+function TrendTooltipValue({ tokens, costUsd }: { tokens: number; costUsd: number }) {
+  return (
+    <div className="flex min-w-24 flex-col gap-1">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-muted-foreground">Tokens</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {formatTokens(tokens)}
+        </span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-muted-foreground">Cost</span>
+        <span className="font-mono font-medium tabular-nums text-foreground">
+          {formatUsd(costUsd)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function getTrendPointCost(payload: unknown): number {
+  if (typeof payload === "object" && payload !== null && "totalCostUsd" in payload) {
+    const cost = payload.totalCostUsd;
+    return typeof cost === "number" ? cost : 0;
+  }
+
+  return 0;
 }
 
 function formatDateTick(value: string): string {

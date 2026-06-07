@@ -11,10 +11,6 @@ vi.mock("./member-usage-charts", () => ({
   MemberUsageCharts: () => <div>Usage charts</div>,
 }));
 
-vi.mock("@/components/ui/skeleton", () => ({
-  Skeleton: ({ className }: { className?: string }) => <div className={className} />,
-}));
-
 const detail = {
   member: {
     username: "ada",
