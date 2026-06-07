@@ -19,5 +19,5 @@ test("member usage details open from a leaderboard row when data exists", async 
   await usageDetailTriggers.first().click();
 
   await expect(page.getByRole("dialog")).toBeVisible();
-  await expect(page.getByText("Usage trend")).toBeVisible();
+  await expect(page.getByText("Token trend")).toBeVisible();
 });
