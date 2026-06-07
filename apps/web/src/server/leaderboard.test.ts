@@ -239,7 +239,6 @@ describe("getMemberUsageDetail", () => {
       _sum: { totalTokens: true, costUsd: true },
       where: { memberId: "member-1", date: weeklyDateFilter },
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     });
   });
 
@@ -376,7 +375,6 @@ describe("getMemberUsageDetail", () => {
         },
       },
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     });
   });
 
@@ -585,7 +583,6 @@ describe("getMemberUsageDetail", () => {
         },
       },
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     });
     expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenNthCalledWith(4, {
       by: ["deviceId"],
@@ -598,7 +595,6 @@ describe("getMemberUsageDetail", () => {
         },
       },
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     });
   });
 

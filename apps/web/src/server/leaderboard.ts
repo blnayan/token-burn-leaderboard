@@ -242,7 +242,6 @@ export async function getMemberUsageDetail(
       _sum: { totalTokens: true, costUsd: true },
       where: breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     }),
     hasModelFilters
       ? prisma.dailyProviderUsage.groupBy({
@@ -271,7 +270,6 @@ export async function getMemberUsageDetail(
       _sum: { totalTokens: true, costUsd: true },
       where: breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
-      take: 5,
     }),
   ]);
 
