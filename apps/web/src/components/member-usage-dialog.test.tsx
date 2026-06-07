@@ -256,6 +256,7 @@ describe("MemberUsageDialog", () => {
     });
     expect(screen.getByText("12.4K")).toBeTruthy();
     expect(screen.getByRole("button", { name: "Mock provider Codex" })).toBeTruthy();
+    expect(screen.queryByText("Updating usage...")).toBeNull();
 
     pendingProviderResponse.resolve();
 

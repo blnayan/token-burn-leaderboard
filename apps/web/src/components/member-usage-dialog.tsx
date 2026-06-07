@@ -210,7 +210,6 @@ function MemberUsageDialogInner({
   }, [open, member, selectedRange, selectedFilters, retryNonce]);
 
   const title = state.detail?.member.displayName ?? member?.displayName ?? "Member";
-  const isRefreshing = state.status === "success" && state.isRefreshing;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -241,12 +240,6 @@ function MemberUsageDialogInner({
               ))}
             </TabsList>
           </Tabs>
-        ) : null}
-
-        {isRefreshing ? (
-          <p className="text-xs text-muted-foreground" aria-live="polite">
-            Updating usage...
-          </p>
         ) : null}
 
         {state.status === "loading" ? <MemberUsageLoading /> : null}
