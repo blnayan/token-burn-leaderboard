@@ -10,10 +10,13 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 
-const chartConfig = {
+export const memberUsageChartConfig = {
   totalTokens: {
     label: "Tokens",
-    color: "var(--chart-1)",
+    theme: {
+      light: "var(--color-blue-500)",
+      dark: "var(--color-blue-400)",
+    },
   },
 } satisfies ChartConfig;
 
@@ -32,7 +35,7 @@ export function MemberUsageCharts({ detail }: { detail: MemberUsageDetail }) {
             No usage in this period.
           </div>
         ) : (
-          <ChartContainer config={chartConfig} className="h-[220px] w-full">
+          <ChartContainer config={memberUsageChartConfig} className="h-[220px] w-full">
             <BarChart accessibilityLayer data={detail.trend}>
               <CartesianGrid vertical={false} />
               <XAxis
