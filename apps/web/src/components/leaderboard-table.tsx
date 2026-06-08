@@ -1,6 +1,6 @@
 "use client";
 
-import { formatTokens, formatUsd, type LeaderboardPeriod, type LeaderboardRow } from "@token-burn/shared";
+import { formatTokens, formatUsd, type LeaderboardRow } from "@token-burn/shared";
 import React from "react";
 
 import { MemberUsageDialog } from "@/components/member-usage-dialog";
@@ -15,7 +15,7 @@ import {
 
 type SelectedMember = { username: string; displayName: string; rank: number };
 
-export function LeaderboardTable({ rows }: { period: LeaderboardPeriod; rows: LeaderboardRow[] }) {
+export function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
   const [selectedMember, setSelectedMember] = React.useState<SelectedMember | null>(null);
 
   if (rows.length === 0) {

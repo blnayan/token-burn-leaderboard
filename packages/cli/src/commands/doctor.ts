@@ -85,19 +85,17 @@ export async function runDoctor({
   let deviceCheckError: string | undefined;
   let serverHealthError: string | undefined;
 
-  if (config?.token) {
-    try {
-      await readHealth(config.serverUrl);
-    } catch (error) {
-      serverHealthError = error instanceof Error ? error.message : String(error);
-    }
+  try {
+    await readHealth(config.serverUrl);
+  } catch (error) {
+    serverHealthError = error instanceof Error ? error.message : String(error);
+  }
 
-    try {
-      const devices = await readDevices(config.serverUrl, config.token);
-      duplicateDeviceGroups = devices.duplicateGroups;
-    } catch (error) {
-      deviceCheckError = error instanceof Error ? error.message : String(error);
-    }
+  try {
+    const devices = await readDevices(config.serverUrl, config.token);
+    duplicateDeviceGroups = devices.duplicateGroups;
+  } catch (error) {
+    deviceCheckError = error instanceof Error ? error.message : String(error);
   }
 
   const result = {

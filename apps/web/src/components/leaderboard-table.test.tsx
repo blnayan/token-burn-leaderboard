@@ -45,7 +45,6 @@ describe("LeaderboardTable", () => {
   it("shows cost as a USD-formatted leaderboard column", () => {
     render(
       <LeaderboardTable
-        period="daily"
         rows={[
           {
             rank: 1,
@@ -69,7 +68,6 @@ describe("LeaderboardTable", () => {
 
     render(
       <LeaderboardTable
-        period="weekly"
         rows={[
           {
             rank: 1,

@@ -63,13 +63,11 @@ export async function runStatus({
   let requiredCliVersion: string | undefined;
   let serverHealthError: string | undefined;
 
-  if (config.token) {
-    try {
-      const health = await readHealth(config.serverUrl);
-      requiredCliVersion = health.requiredCliVersion;
-    } catch (error) {
-      serverHealthError = error instanceof Error ? error.message : String(error);
-    }
+  try {
+    const health = await readHealth(config.serverUrl);
+    requiredCliVersion = health.requiredCliVersion;
+  } catch (error) {
+    serverHealthError = error instanceof Error ? error.message : String(error);
   }
 
   const result = {

@@ -123,7 +123,6 @@ export function SessionControls({
 }: {
   session: Session | null;
   redirectTo?: string;
-  layout?: "stack" | "inline";
 }) {
   if (!session?.user) return <SignInWithGitHubButton redirectTo={redirectTo} />;
 

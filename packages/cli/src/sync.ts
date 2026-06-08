@@ -53,7 +53,6 @@ export type SyncResult = {
 
 const providers: Provider[] = ["claude_code", "codex"];
 
-export function syncUsage(dependencies?: SyncDependencies): Promise<SyncResult>;
 export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,

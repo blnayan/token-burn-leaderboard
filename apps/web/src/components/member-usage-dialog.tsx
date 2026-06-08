@@ -38,7 +38,7 @@ type MemberUsageDialogProps = {
 type LoadState =
   | { status: "idle" | "loading"; detail: null }
   | { status: "error"; detail: MemberUsageDetail | null }
-  | { status: "success"; detail: MemberUsageDetail; isRefreshing: boolean };
+  | { status: "success"; detail: MemberUsageDetail };
 
 const usageRanges: { label: string; value: MemberUsageRange }[] = [
   { label: "Past 7 days", value: "7d" },
@@ -171,7 +171,7 @@ function MemberUsageDialogInner({
     async function loadUsage() {
       setState((current) =>
         current.detail
-          ? { status: "success", detail: current.detail, isRefreshing: true }
+          ? { status: "success", detail: current.detail }
           : { status: "loading", detail: null },
       );
 
@@ -186,7 +186,7 @@ function MemberUsageDialogInner({
         const detail = memberUsageDetailSchema.parse(json);
 
         if (!ignore) {
-          setState({ status: "success", detail, isRefreshing: false });
+          setState({ status: "success", detail });
         }
       } catch {
         if (!ignore) {

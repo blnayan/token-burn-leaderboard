@@ -52,7 +52,7 @@ export async function AppNav({ session, currentPath = "/" }: AppNavProps) {
         </div>
         <div className="flex flex-wrap items-center gap-1">
           <ThemeSwitcher />
-          <SessionControls session={navSession} redirectTo={currentPath} layout="inline" />
+          <SessionControls session={navSession} redirectTo={currentPath} />
         </div>
       </div>
     </header>
