@@ -36,9 +36,7 @@ vi.mock("@/lib/env", () => ({
 }));
 
 vi.mock("@/components/leaderboard-table", () => ({
-  LeaderboardTable: ({ period }: { period: string }) => (
-    <div data-testid="leaderboard-table" data-period={period} />
-  ),
+  LeaderboardTable: vi.fn(() => <div data-testid="leaderboard-table" />),
 }));
 
 vi.mock("@/components/period-tabs", () => ({
@@ -69,6 +67,8 @@ vi.mock("@/server/leaderboard", () => ({
 
 import { auth } from "@/auth";
 import { AppNav } from "@/components/app-nav";
+import { LeaderboardTable } from "@/components/leaderboard-table";
+import { getLeaderboard } from "@/server/leaderboard";
 
 import HomePage from "./page";
 
@@ -91,6 +91,17 @@ const appNavMock = AppNav as unknown as {
   mock: { calls: Array<[unknown]> };
 };
 
+const leaderboardTableMock = LeaderboardTable as unknown as {
+  mockClear: () => void;
+  mock: { calls: Array<[unknown]> };
+};
+
+const getLeaderboardMock = getLeaderboard as unknown as {
+  mockClear: () => void;
+  mockResolvedValue: (value: unknown[]) => void;
+  mock: { calls: Array<[unknown]> };
+};
+
 async function renderHomePage() {
   render(await HomePage({ searchParams: Promise.resolve({}) }));
 }
@@ -100,6 +111,9 @@ describe("HomePage", () => {
     authMock.mockReset();
     appNavMock.mockClear();
     appNavMock.mockResolvedValue(<nav data-testid="app-nav" />);
+    leaderboardTableMock.mockClear();
+    getLeaderboardMock.mockClear();
+    getLeaderboardMock.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -121,7 +135,9 @@ describe("HomePage", () => {
     expect(screen.queryByRole("heading", { name: "Token Burn" })).toBeNull();
     expect(screen.queryByText("Public leaderboard. Private submissions.")).toBeNull();
     expect(screen.getByTestId("period-tabs")).toBeTruthy();
-    expect(screen.getByTestId("leaderboard-table").getAttribute("data-period")).toBe("daily");
+    expect(screen.getByTestId("leaderboard-table")).toBeTruthy();
+    expect(getLeaderboardMock.mock.calls.at(-1)?.[0]).toBe("daily");
+    expect(leaderboardTableMock.mock.calls.at(-1)?.[0]).toMatchObject({ rows: [] });
     expect(screen.getByRole("link", { name: "GitHub" }).getAttribute("href")).toBe(
       "https://github.com/blnayan/token-burn-leaderboard",
     );
