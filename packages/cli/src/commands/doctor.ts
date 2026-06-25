@@ -6,7 +6,6 @@ import type { SchedulerPlatform } from "../scheduler.js";
 import {
   createTokenBurnServerClient,
   type CliHealth,
-  type DeviceListResponse,
   type TokenBurnServerClient,
 } from "../server-client.js";
 import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
@@ -15,7 +14,12 @@ import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
 
-type DuplicateDeviceGroup = DeviceListResponse["duplicateGroups"][number];
+type DuplicateDeviceGroup = {
+  name: string;
+  os: string;
+  duplicateRows: number;
+  conflictRows: number;
+};
 
 export type DoctorDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
@@ -85,7 +89,12 @@ export async function runDoctor({
 
   try {
     const devices = await client.listDevices({ token: config.token });
-    duplicateDeviceGroups = devices.duplicateGroups;
+    duplicateDeviceGroups = devices.duplicateGroups.map(({ name, os, duplicateRows, conflictRows }) => ({
+      name,
+      os,
+      duplicateRows,
+      conflictRows,
+    }));
   } catch (error) {
     deviceCheckError = error instanceof Error ? error.message : String(error);
   }

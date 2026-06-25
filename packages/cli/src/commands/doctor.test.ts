@@ -50,7 +50,7 @@ describe("runDoctor", () => {
       ok: true,
       authenticated: true,
       cliVersion,
-      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
       platform: "linux",
       serverUrl: "https://token-burn.test",
     });
@@ -141,7 +141,6 @@ describe("runDoctor", () => {
         os: "linux",
         duplicateRows: 2,
         conflictRows: 0,
-        devices: [],
       },
     ]);
     expect(calls).toContain("intro:Token Burn doctor:2");
@@ -276,7 +275,7 @@ describe("runDoctor", () => {
       authenticated: true,
       cliVersion,
       device: { id: "device-1", name: "nayan-vps" },
-      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
       platform: "linux",
       serverUrl: "https://token-burn.test",
     });
