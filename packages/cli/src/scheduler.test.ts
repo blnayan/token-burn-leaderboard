@@ -909,11 +909,13 @@ describe("doctor", () => {
         token: "secret",
       }),
       platform: "linux",
-      readHealth: async () => ({
-        requiredCliVersion: cliVersion,
-        serverTime: "2026-06-03T00:00:00.000Z",
-      }),
-      readDevices: async () => ({ duplicateGroups: [] }),
+      serverClient: {
+        readHealth: async () => ({
+          requiredCliVersion: cliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+        listDevices: async () => ({ duplicateGroups: [] }),
+      },
       log,
     });
 
