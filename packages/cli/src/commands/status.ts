@@ -2,22 +2,16 @@ import { Command } from "commander";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
+import { createTokenBurnServerClient, type CliHealth, type TokenBurnServerClient } from "../server-client.js";
 import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
 import { createPlainRenderer } from "../ui/plain-renderer.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 import { cliVersion } from "../version.js";
 
-type CliHealth = {
-  requiredCliVersion: string;
-  serverTime: string;
-};
-
-type HealthReader = (serverUrl: string) => Promise<CliHealth>;
-
 export type StatusDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
-  readHealth?: HealthReader;
+  serverClient?: Pick<TokenBurnServerClient, "readHealth">;
   log?: (message: string) => void;
   ui?: UiRenderer;
 };
@@ -35,7 +29,7 @@ export type StatusResult = {
 
 export async function runStatus({
   readConfig = readConfigFile,
-  readHealth = readHealthFromServer,
+  serverClient,
   log,
   ui,
 }: StatusDependencies = {}): Promise<StatusResult> {
@@ -64,7 +58,8 @@ export async function runStatus({
   let serverHealthError: string | undefined;
 
   try {
-    const health = await readHealth(config.serverUrl);
+    const client = serverClient ?? createTokenBurnServerClient({ serverUrl: config.serverUrl });
+    const health: CliHealth = await client.readHealth();
     requiredCliVersion = health.requiredCliVersion;
   } catch (error) {
     serverHealthError = error instanceof Error ? error.message : String(error);
@@ -141,36 +136,6 @@ function withTrailingPeriod(message: string): string {
   return message.endsWith(".") ? message : `${message}.`;
 }
 
-async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
-  const normalizedServerUrl = serverUrl.replace(/\/+$/, "");
-  const response = await fetch(`${normalizedServerUrl}/api/cli/health`);
-
-  if (!response.ok) {
-    throw new Error(`HTTP ${response.status}`);
-  }
-
-  const body: unknown = await response.json();
-
-  if (!isRecord(body)) {
-    throw new Error("Invalid health response");
-  }
-
-  const { requiredCliVersion, serverTime } = body;
-
-  if (
-    typeof requiredCliVersion !== "string" ||
-    typeof serverTime !== "string"
-  ) {
-    throw new Error("Invalid health response");
-  }
-
-  return { requiredCliVersion, serverTime };
-}
-
 function formatRequiredCliVersionError(actualVersion: string, requiredVersion: string): string {
   return `Token Burn requires token-burn ${requiredVersion}. You have ${actualVersion}. Run npm install -g @blnayan/token-burn@latest.`;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

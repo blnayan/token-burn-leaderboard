@@ -14,7 +14,7 @@ describe("runListDevices", () => {
 
   it("prints devices and likely duplicate groups", async () => {
     const calls: string[] = [];
-    const getJson = vi.fn().mockResolvedValue({
+    const listDevices = vi.fn().mockResolvedValue({
       devices: [
         {
           id: "old-device",
@@ -67,11 +67,11 @@ describe("runListDevices", () => {
 
     const result = await runListDevices({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-      getJson,
+      serverClient: { listDevices, mergeDevices: vi.fn() },
       ui: createRecordingUi(calls),
     });
 
-    expect(getJson).toHaveBeenCalledWith("https://token-burn.test/api/cli/devices", "tb_secret");
+    expect(listDevices).toHaveBeenCalledWith({ token: "tb_secret" });
     expect(result.devices).toHaveLength(2);
     expect(result.duplicateGroups).toHaveLength(1);
     expect(calls).toContain("table:Devices:[[\"old-device\",\"Nayans-MacBook-Air.local\",\"darwin\",\"21\",\"471033315\"],[\"new-device\",\"Nayans-MacBook-Air.local\",\"darwin\",\"32\",\"2162169624\"]]");
@@ -82,7 +82,7 @@ describe("runListDevices", () => {
 
   it("prints automatic conflict resolution messaging and merge suggestions for conflicted duplicate groups", async () => {
     const log = vi.fn();
-    const getJson = vi.fn().mockResolvedValue({
+    const listDevices = vi.fn().mockResolvedValue({
       devices: [
         {
           id: "old-device",
@@ -135,7 +135,7 @@ describe("runListDevices", () => {
 
     await runListDevices({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-      getJson,
+      serverClient: { listDevices, mergeDevices: vi.fn() },
       log,
     });
 
@@ -153,7 +153,7 @@ describe("runListDevices", () => {
 
     const result = await runListDevices({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-      getJson: vi.fn().mockResolvedValue(response),
+      serverClient: { listDevices: vi.fn().mockResolvedValue(response), mergeDevices: vi.fn() },
       ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
     });
 
@@ -164,7 +164,7 @@ describe("runListDevices", () => {
 
 describe("runMergeDevices", () => {
   it("posts the source and target device ids", async () => {
-    const postJson = vi.fn().mockResolvedValue({
+    const mergeDevices = vi.fn().mockResolvedValue({
       sourceDeviceId: "old-device",
       targetDeviceId: "new-device",
       deletedDuplicateRows: 21,
@@ -180,15 +180,15 @@ describe("runMergeDevices", () => {
       sourceDeviceId: "old-device",
       targetDeviceId: "new-device",
       readConfig: async () => ({ serverUrl: "https://token-burn.test/", token: "tb_secret" }),
-      postJson,
+      serverClient: { listDevices: vi.fn(), mergeDevices },
       ui: createRecordingUi(calls),
     });
 
-    expect(postJson).toHaveBeenCalledWith(
-      "https://token-burn.test/api/cli/devices/merge",
-      { sourceDeviceId: "old-device", targetDeviceId: "new-device" },
-      "tb_secret",
-    );
+    expect(mergeDevices).toHaveBeenCalledWith({
+      token: "tb_secret",
+      sourceDeviceId: "old-device",
+      targetDeviceId: "new-device",
+    });
     expect(result).toEqual({
       sourceDeviceId: "old-device",
       targetDeviceId: "new-device",
@@ -208,8 +208,11 @@ describe("runMergeDevices", () => {
         sourceDeviceId: "old-device",
         targetDeviceId: "new-device",
         readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-        postJson: async () => {
-          throw new Error("Cannot merge devices with conflicting usage rows.");
+        serverClient: {
+          listDevices: vi.fn(),
+          mergeDevices: async () => {
+            throw new Error("Cannot merge devices with conflicting usage rows.");
+          },
         },
         log: vi.fn(),
       }),

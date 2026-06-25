@@ -21,10 +21,13 @@ describe("runDoctor", () => {
     await runDoctor({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
       platform: "linux",
-      readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
-      readDevices: async () => ({
-        duplicateGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
-      }),
+      serverClient: {
+        readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
+        listDevices: async () => ({
+          devices: [],
+          duplicateGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
+        }),
+      },
       ui: {
         intro: (title, details = []) => calls.push(`intro:${title}:${details.length}`),
         step: () => undefined,
@@ -47,7 +50,7 @@ describe("runDoctor", () => {
       ok: true,
       authenticated: true,
       cliVersion,
-      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
       platform: "linux",
       serverUrl: "https://token-burn.test",
     });
@@ -95,13 +98,15 @@ describe("runDoctor", () => {
 
   it("renders local setup and duplicate-device warnings", async () => {
     const calls: string[] = [];
-    const readDevices = vi.fn(async () => ({
+    const listDevices = vi.fn(async () => ({
+      devices: [],
       duplicateGroups: [
         {
           name: "nayan-vps",
           os: "linux",
           duplicateRows: 2,
           conflictRows: 0,
+          devices: [],
         },
       ],
     }));
@@ -119,11 +124,13 @@ describe("runDoctor", () => {
         },
       }),
       platform: "linux",
-      readHealth: async () => ({
-        requiredCliVersion: cliVersion,
-        serverTime: "2026-06-03T00:00:00.000Z",
-      }),
-      readDevices,
+      serverClient: {
+        readHealth: async () => ({
+          requiredCliVersion: cliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+        listDevices,
+      },
       ui: createRecordingUi(calls),
     });
 
@@ -134,6 +141,7 @@ describe("runDoctor", () => {
         os: "linux",
         duplicateRows: 2,
         conflictRows: 0,
+        devices: [],
       },
     ]);
     expect(calls).toContain("intro:Token Burn doctor:2");
@@ -142,37 +150,35 @@ describe("runDoctor", () => {
     expect(calls).toContain("info:Last sync: Failed - Failed providers: claude_code at 2026-06-01T00:00:00.000Z");
     expect(calls).toContain("warning:devices:Likely duplicate devices found. Run token-burn devices to inspect and merge.");
     expect(calls).toContain("next:Run token-burn sync to submit usage now.");
-    expect(readDevices).toHaveBeenCalledWith("https://token-burn.test", "tb_secret");
+    expect(listDevices).toHaveBeenCalledWith({ token: "tb_secret" });
   });
 
   it("does not call server readers without config", async () => {
     const readHealth = vi.fn();
-    const readDevices = vi.fn();
+    const listDevices = vi.fn();
 
     await runDoctor({
       readConfig: async () => null,
-      readHealth,
-      readDevices,
+      serverClient: { readHealth, listDevices },
       ui: createRecordingUi([]),
     });
 
     expect(readHealth).not.toHaveBeenCalled();
-    expect(readDevices).not.toHaveBeenCalled();
+    expect(listDevices).not.toHaveBeenCalled();
   });
 
   it("does not call server readers when unauthenticated", async () => {
     const readHealth = vi.fn();
-    const readDevices = vi.fn();
+    const listDevices = vi.fn();
 
     await runDoctor({
       readConfig: async () => ({ serverUrl: "https://token-burn.test" }),
-      readHealth,
-      readDevices,
+      serverClient: { readHealth, listDevices },
       ui: createRecordingUi([]),
     });
 
     expect(readHealth).not.toHaveBeenCalled();
-    expect(readDevices).not.toHaveBeenCalled();
+    expect(listDevices).not.toHaveBeenCalled();
   });
 
   it("reports tokenless last sync and returns it for renderers", async () => {
@@ -208,10 +214,12 @@ describe("runDoctor", () => {
     const result = await runDoctor({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
       platform: "linux",
-      readHealth: async () => {
-        throw new Error("offline");
+      serverClient: {
+        readHealth: async () => {
+          throw new Error("offline");
+        },
+        listDevices: async () => ({ devices: [], duplicateGroups: [] }),
       },
-      readDevices: async () => ({ duplicateGroups: [] }),
       ui: createRecordingUi(calls),
     });
 
@@ -227,12 +235,14 @@ describe("runDoctor", () => {
     const result = await runDoctor({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
       platform: "linux",
-      readHealth: async () => ({
-        requiredCliVersion: cliVersion,
-        serverTime: "2026-06-03T00:00:00.000Z",
-      }),
-      readDevices: async () => {
-        throw new Error("bad response");
+      serverClient: {
+        readHealth: async () => ({
+          requiredCliVersion: cliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+        listDevices: async () => {
+          throw new Error("bad response");
+        },
       },
       ui: createRecordingUi(calls),
     });
@@ -252,10 +262,13 @@ describe("runDoctor", () => {
         deviceName: "nayan-vps",
       }),
       platform: "linux",
-      readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
-      readDevices: async () => ({
-        duplicateGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
-      }),
+      serverClient: {
+        readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
+        listDevices: async () => ({
+          devices: [],
+          duplicateGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
+        }),
+      },
       ui: createRecordingUi([]),
     });
 
@@ -263,7 +276,7 @@ describe("runDoctor", () => {
       authenticated: true,
       cliVersion,
       device: { id: "device-1", name: "nayan-vps" },
-      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0 }],
+      duplicateDeviceGroups: [{ name: "nayan-vps", os: "linux", duplicateRows: 2, conflictRows: 0, devices: [] }],
       platform: "linux",
       serverUrl: "https://token-burn.test",
     });

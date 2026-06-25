@@ -20,7 +20,9 @@ describe("runStatus", () => {
 
     await runStatus({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-      readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
+      serverClient: {
+        readHealth: async () => ({ requiredCliVersion: cliVersion, serverTime: "2026-06-03T00:00:00.000Z" }),
+      },
       ui: {
         intro: (title, details = []) => calls.push(`intro:${title}:${details.length}`),
         step: () => undefined,
@@ -97,10 +99,12 @@ describe("runStatus", () => {
           at: "2026-06-01T00:00:00.000Z",
         },
       }),
-      readHealth: async () => ({
-        requiredCliVersion: serverRequiredCliVersion,
-        serverTime: "2026-06-03T00:00:00.000Z",
-      }),
+      serverClient: {
+        readHealth: async () => ({
+          requiredCliVersion: serverRequiredCliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+      },
       ui: createRecordingUi(calls),
     });
 
@@ -125,8 +129,10 @@ describe("runStatus", () => {
 
     const result = await runStatus({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "tb_secret" }),
-      readHealth: async () => {
-        throw new Error("network down");
+      serverClient: {
+        readHealth: async () => {
+          throw new Error("network down");
+        },
       },
       ui: createRecordingUi(calls),
     });
@@ -181,10 +187,12 @@ describe("runStatus", () => {
         deviceName: "nayan-vps",
         lastSync: { ok: true, message: "Submitted 42 usage rows.", at: "2026-06-01T00:00:00.000Z" },
       }),
-      readHealth: async () => ({
-        requiredCliVersion: cliVersion,
-        serverTime: "2026-06-03T00:00:00.000Z",
-      }),
+      serverClient: {
+        readHealth: async () => ({
+          requiredCliVersion: cliVersion,
+          serverTime: "2026-06-03T00:00:00.000Z",
+        }),
+      },
       ui: createRecordingUi([]),
     });
 

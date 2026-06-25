@@ -1,72 +1,38 @@
 import { Command } from "commander";
-import { z } from "zod";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
-import { postJson as postJsonRequest } from "../http.js";
+import {
+  createTokenBurnServerClient,
+  type DeviceListResponse as DeviceListResult,
+  type DeviceMergeResponse as DeviceMergeResult,
+  type TokenBurnServerClient,
+} from "../server-client.js";
 import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
 import { createPlainRenderer } from "../ui/plain-renderer.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 
-const deviceSummarySchema = z.object({
-  id: z.string().min(1),
-  name: z.string().min(1),
-  os: z.string().min(1),
-  firstSeenAt: z.string().datetime(),
-  lastSeenAt: z.string().datetime(),
-  dailyRows: z.number().int().nonnegative(),
-  totalTokens: z.string().regex(/^\d+$/),
-});
-
-const duplicateGroupSchema = z.object({
-  name: z.string().min(1),
-  os: z.string().min(1),
-  duplicateRows: z.number().int().nonnegative(),
-  conflictRows: z.number().int().nonnegative(),
-  devices: z.array(deviceSummarySchema),
-});
-
-const deviceListResponseSchema = z.object({
-  devices: z.array(deviceSummarySchema),
-  duplicateGroups: z.array(duplicateGroupSchema),
-});
-
-const deviceMergeResponseSchema = z.object({
-  sourceDeviceId: z.string().min(1),
-  targetDeviceId: z.string().min(1),
-  deletedDuplicateRows: z.number().int().nonnegative(),
-  movedRows: z.number().int().nonnegative(),
-  resolvedConflictRows: z.number().int().nonnegative(),
-  deletedSourceDevice: z.boolean(),
-});
-
-type DeviceListResponse = z.infer<typeof deviceListResponseSchema>;
-type DeviceMergeResponse = z.infer<typeof deviceMergeResponseSchema>;
-
-export type DeviceListResult = DeviceListResponse;
-export type DeviceMergeResult = DeviceMergeResponse;
+export type { DeviceListResponse as DeviceListResult, DeviceMergeResponse as DeviceMergeResult } from "../server-client.js";
 
 export type DevicesDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
-  getJson?: <T>(url: string, token?: string) => Promise<T>;
-  postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
+  serverClient?: Pick<TokenBurnServerClient, "listDevices" | "mergeDevices">;
   log?: (message: string) => void;
   ui?: UiRenderer;
 };
 
 export async function runListDevices({
   readConfig = readConfigFile,
-  getJson = getJsonRequest,
+  serverClient,
   log,
   ui,
 }: DevicesDependencies = {}): Promise<DeviceListResult> {
   const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
-  const response = deviceListResponseSchema.parse(
-    await getJson<DeviceListResponse>(`${normalizeServerUrl(config.serverUrl)}/api/cli/devices`, config.token),
-  );
+  const client = serverClient ?? createTokenBurnServerClient({ serverUrl: config.serverUrl });
+  const response = await client.listDevices({ token: config.token });
 
   if (response.devices.length === 0) {
     renderer.info("No devices found.");
@@ -123,7 +89,7 @@ export async function runMergeDevices({
   sourceDeviceId,
   targetDeviceId,
   readConfig = readConfigFile,
-  postJson = postJsonRequest,
+  serverClient,
   log,
   ui,
 }: DevicesDependencies & {
@@ -132,13 +98,8 @@ export async function runMergeDevices({
 }): Promise<DeviceMergeResult> {
   const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const config = await requireAuthenticatedConfig(readConfig);
-  const response = deviceMergeResponseSchema.parse(
-    await postJson<DeviceMergeResponse>(
-      `${normalizeServerUrl(config.serverUrl)}/api/cli/devices/merge`,
-      { sourceDeviceId, targetDeviceId },
-      config.token,
-    ),
-  );
+  const client = serverClient ?? createTokenBurnServerClient({ serverUrl: config.serverUrl });
+  const response = await client.mergeDevices({ token: config.token, sourceDeviceId, targetDeviceId });
 
   renderer.summary("Merge complete", [
     { label: "Merged", value: `${response.sourceDeviceId} into ${response.targetDeviceId}` },
@@ -191,45 +152,6 @@ async function requireAuthenticatedConfig(readConfig: () => Promise<CliConfig | 
   }
 
   return config as CliConfig & { token: string };
-}
-
-async function getJsonRequest<T>(url: string, token?: string): Promise<T> {
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-    },
-  });
-  const text = await response.text();
-  const data = parseJsonOrNull(text);
-
-  if (!response.ok) {
-    const message =
-      data && typeof data === "object" && "error" in data && typeof data.error === "string"
-        ? data.error
-        : `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
-    throw new Error(message);
-  }
-
-  if (text && data === null) {
-    throw new Error("Expected JSON response.");
-  }
-
-  return data as T;
-}
-
-function parseJsonOrNull(text: string): unknown {
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function normalizeServerUrl(serverUrl: string): string {
-  return serverUrl.replace(/\/+$/, "");
 }
 
 function createLegacyLogRenderer(log: (message: string) => void): UiRenderer {
