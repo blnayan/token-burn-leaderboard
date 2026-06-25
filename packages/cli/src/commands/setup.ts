@@ -1,10 +1,9 @@
 import { Command } from "commander";
-import { z } from "zod";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
-import { getJson, HttpError } from "../http.js";
+import { createTokenBurnServerClient, HttpError } from "../server-client.js";
 import { syncUsage } from "../sync.js";
 import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
 import { createPlainRenderer } from "../ui/plain-renderer.js";
@@ -17,14 +16,6 @@ type SetupLogin = (options: { serverUrl: string; ui?: UiRenderer }) => Promise<u
 type SetupInstallScheduler = (options: { dryRun: boolean; ui?: UiRenderer }) => Promise<unknown>;
 type SetupSync = () => Promise<unknown>;
 type SetupValidateAuth = (options: { serverUrl: string; token: string }) => Promise<boolean>;
-
-const authValidationResponseSchema = z.object({
-  authenticated: z.literal(true),
-  member: z.object({
-    displayName: z.string().min(1),
-    username: z.string().min(1).optional(),
-  }),
-});
 
 export type SetupOptions = {
   serverUrl: string;
@@ -143,7 +134,7 @@ async function validateAuthFromServer({
   token: string;
 }): Promise<boolean> {
   try {
-    authValidationResponseSchema.parse(await getJson(`${serverUrl}/api/cli/auth`, token));
+    await createTokenBurnServerClient({ serverUrl }).validateAuth({ token });
     return true;
   } catch (error) {
     if (error instanceof HttpError && error.status === 401) return false;

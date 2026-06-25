@@ -2,37 +2,18 @@ import { execFile as execFileCallback } from "node:child_process";
 import { promisify } from "node:util";
 
 import { Command } from "commander";
-import { z } from "zod";
 
 import type { CliConfig } from "../config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "../config.js";
 import { defaultServerUrl } from "../defaults.js";
-import { postJson as postJsonRequest } from "../http.js";
+import { createTokenBurnServerClient, type TokenBurnServerClient } from "../server-client.js";
 import { resolveOutputMode, type OutputFlags } from "../ui/mode.js";
 import { createPlainRenderer } from "../ui/plain-renderer.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
 
-const loginStartResponseSchema = z.object({
-  loginUrl: z.string().url(),
-  pollToken: z.string().min(1),
-  expiresAt: z.string().datetime(),
-});
-
-const loginPollResponseSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("pending") }),
-  z.object({
-    status: z.literal("approved"),
-    token: z.string().min(1),
-    member: z.object({
-      displayName: z.string().min(1),
-      username: z.string().min(1).optional(),
-    }),
-  }),
-]);
-
 export type LoginDependencies = {
-  postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
+  serverClient?: Pick<TokenBurnServerClient, "startLogin" | "pollLogin">;
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
   log?: (message: string) => void;
@@ -54,7 +35,7 @@ export type LoginOptions = LoginDependencies & {
 
 export async function runLogin({
   serverUrl,
-  postJson = postJsonRequest,
+  serverClient,
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
   log,
@@ -66,10 +47,9 @@ export async function runLogin({
 }: LoginOptions): Promise<LoginResult> {
   const renderer = ui ?? (log ? createLegacyLogRenderer(log) : createRenderer(resolveOutputMode({ flags: {} })));
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
+  const client = serverClient ?? createTokenBurnServerClient({ serverUrl: normalizedServerUrl });
   const existingConfig = await readConfig();
-  const startResponse = loginStartResponseSchema.parse(
-    await postJson(`${normalizedServerUrl}/api/cli/login/start`, {}),
-  );
+  const startResponse = await client.startLogin();
   const expiresAt = new Date(startResponse.expiresAt);
 
   if (emitPendingApprovalResult) {
@@ -92,9 +72,7 @@ export async function runLogin({
   }
 
   while (now().getTime() < expiresAt.getTime()) {
-    const pollResponse = loginPollResponseSchema.parse(
-      await postJson(`${normalizedServerUrl}/api/cli/login/poll`, { pollToken: startResponse.pollToken }),
-    );
+    const pollResponse = await client.pollLogin({ pollToken: startResponse.pollToken });
 
     if (pollResponse.status === "approved") {
       await writeConfig({

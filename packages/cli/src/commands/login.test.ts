@@ -4,7 +4,10 @@ import { Command } from "commander";
 import { resolveOutputMode } from "../ui/mode.js";
 import { createRenderer } from "../ui/renderer.js";
 import type { UiRenderer } from "../ui/types.js";
+import type { TokenBurnServerClient } from "../server-client.js";
 import { createLoginCommand, runLogin } from "./login.js";
+
+type LoginServerClient = Pick<TokenBurnServerClient, "startLogin" | "pollLogin">;
 
 const originalFetch = globalThis.fetch;
 
@@ -18,18 +21,18 @@ afterEach(() => {
 
 describe("runLogin", () => {
   it("prints the login URL and stores the approved token", async () => {
-    const postJson = vi
-      .fn()
-      .mockResolvedValueOnce({
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
         loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
         pollToken: "poll-token",
         expiresAt: "2026-06-01T00:01:00.000Z",
-      })
-      .mockResolvedValueOnce({
+      }),
+      pollLogin: vi.fn().mockResolvedValue({
         status: "approved",
         token: "tb_secret",
         member: { displayName: "Ada", username: "blnayan" },
-      });
+      }),
+    } satisfies LoginServerClient;
     const writeConfig = vi.fn().mockResolvedValue(undefined);
     const log = vi.fn();
     const openBrowser = vi.fn().mockResolvedValue(undefined);
@@ -38,7 +41,7 @@ describe("runLogin", () => {
 
     const result = await runLogin({
       serverUrl: "https://token-burn.test",
-      postJson,
+      serverClient,
       readConfig: async () => null,
       writeConfig,
       ui: createRecordingUi(calls),
@@ -58,24 +61,24 @@ describe("runLogin", () => {
   });
 
   it("prints the login URL when the default browser cannot be opened", async () => {
-    const postJson = vi
-      .fn()
-      .mockResolvedValueOnce({
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
         loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
         pollToken: "poll-token",
         expiresAt: "2026-06-01T00:01:00.000Z",
-      })
-      .mockResolvedValueOnce({
+      }),
+      pollLogin: vi.fn().mockResolvedValue({
         status: "approved",
         token: "tb_secret",
         member: { displayName: "Ada", username: "blnayan" },
-      });
+      }),
+    } satisfies LoginServerClient;
     const writeConfig = vi.fn().mockResolvedValue(undefined);
     const log = vi.fn();
 
     const result = await runLogin({
       serverUrl: "https://token-burn.test",
-      postJson,
+      serverClient,
       readConfig: async () => null,
       writeConfig,
       log,
@@ -97,22 +100,22 @@ describe("runLogin", () => {
 
   it("emits pending approval JSON before polling when requested", async () => {
     const lines: string[] = [];
-    const postJson = vi
-      .fn()
-      .mockResolvedValueOnce({
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
         loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
         pollToken: "poll-token",
         expiresAt: "2026-06-01T00:01:00.000Z",
-      })
-      .mockResolvedValueOnce({
+      }),
+      pollLogin: vi.fn().mockResolvedValue({
         status: "approved",
         token: "tb_secret",
         member: { displayName: "Ada", username: "blnayan" },
-      });
+      }),
+    } satisfies LoginServerClient;
 
     await runLogin({
       serverUrl: "https://token-burn.test",
-      postJson,
+      serverClient,
       readConfig: async () => null,
       writeConfig: vi.fn(),
       ui: createRenderer(resolveOutputMode({ flags: { json: true } }), { write: (line) => lines.push(line) }),
@@ -135,18 +138,18 @@ describe("runLogin", () => {
   });
 
   it("preserves the existing device identity when re-authenticating", async () => {
-    const postJson = vi
-      .fn()
-      .mockResolvedValueOnce({
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
         loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
         pollToken: "poll-token",
         expiresAt: "2026-06-01T00:01:00.000Z",
-      })
-      .mockResolvedValueOnce({
+      }),
+      pollLogin: vi.fn().mockResolvedValue({
         status: "approved",
         token: "tb_new_secret",
         member: { displayName: "Ada", username: "blnayan" },
-      });
+      }),
+    } satisfies LoginServerClient;
     const readConfig = vi.fn().mockResolvedValue({
       serverUrl: "https://old-token-burn.test",
       token: "tb_old_secret",
@@ -157,7 +160,7 @@ describe("runLogin", () => {
 
     await runLogin({
       serverUrl: "https://token-burn.test",
-      postJson,
+      serverClient,
       readConfig,
       writeConfig,
       log: vi.fn(),
@@ -171,6 +174,75 @@ describe("runLogin", () => {
       deviceId: "d5365b9a-0000-4000-8000-000000000000",
       deviceName: "Nayans-MacBook-Air.local",
     });
+  });
+
+  it("keeps polling pending logins until approved", async () => {
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2026-06-01T00:01:00.000Z",
+      }),
+      pollLogin: vi
+        .fn()
+        .mockResolvedValueOnce({ status: "pending" })
+        .mockResolvedValueOnce({
+          status: "approved",
+          token: "tb_secret",
+          member: { displayName: "Ada" },
+        }),
+    } satisfies LoginServerClient;
+    const sleep = vi.fn().mockResolvedValue(undefined);
+    const writeConfig = vi.fn().mockResolvedValue(undefined);
+
+    const result = await runLogin({
+      serverUrl: "https://token-burn.test",
+      serverClient,
+      readConfig: async () => null,
+      writeConfig,
+      log: vi.fn(),
+      openBrowser: vi.fn().mockResolvedValue(undefined),
+      sleep,
+      now: () => new Date("2026-06-01T00:00:00.000Z"),
+    });
+
+    expect(result).toEqual({ authenticatedAs: "Ada", serverUrl: "https://token-burn.test" });
+    expect(serverClient.pollLogin).toHaveBeenCalledTimes(2);
+    expect(serverClient.pollLogin).toHaveBeenCalledWith({ pollToken: "poll-token" });
+    expect(sleep).toHaveBeenCalledWith(3_000);
+    expect(writeConfig).toHaveBeenCalledWith({ serverUrl: "https://token-burn.test", token: "tb_secret" });
+  });
+
+  it("throws when the login session expires before approval", async () => {
+    let currentTime = new Date("2026-06-01T00:00:00.000Z");
+    const serverClient = {
+      startLogin: vi.fn().mockResolvedValue({
+        loginUrl: "https://token-burn.test/cli/approve/ABCD-2345",
+        pollToken: "poll-token",
+        expiresAt: "2026-06-01T00:00:01.000Z",
+      }),
+      pollLogin: vi.fn().mockResolvedValue({ status: "pending" }),
+    } satisfies LoginServerClient;
+    const writeConfig = vi.fn().mockResolvedValue(undefined);
+
+    await expect(
+      runLogin({
+        serverUrl: "https://token-burn.test",
+        serverClient,
+        readConfig: async () => null,
+        writeConfig,
+        log: vi.fn(),
+        openBrowser: vi.fn().mockResolvedValue(undefined),
+        sleep: async () => {
+          currentTime = new Date("2026-06-01T00:00:02.000Z");
+        },
+        now: () => currentTime,
+      }),
+    ).rejects.toThrow("Login session expired before approval.");
+
+    expect(serverClient.pollLogin).toHaveBeenCalledTimes(1);
+    expect(serverClient.pollLogin).toHaveBeenCalledWith({ pollToken: "poll-token" });
+    expect(writeConfig).not.toHaveBeenCalled();
   });
 });
 

@@ -1,9 +1,14 @@
 import { describe, expect, it } from "vitest";
 
+import type { SyncPayload, SyncWindowsResponse } from "@token-burn/shared";
+
 import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
+import type { TokenBurnServerClient } from "./server-client.js";
 import { syncUsage } from "./sync.js";
 import { cliVersion as currentCliVersion } from "./version.js";
+
+type SyncServerClient = Pick<TokenBurnServerClient, "readHealth" | "readSyncWindows" | "submitSyncPayload">;
 
 describe("syncUsage", () => {
   it("throws a helpful login message when no token is configured", async () => {
@@ -24,7 +29,7 @@ describe("syncUsage", () => {
 
   it("posts payloads and writes successful lastSync after a successful sync", async () => {
     const writes: CliConfig[] = [];
-    const posts: Array<{ url: string; body: unknown; token?: string }> = [];
+    const submissions: Array<{ payload: SyncPayload; token: string }> = [];
     const logs: string[] = [];
 
     await syncUsage({
@@ -32,12 +37,12 @@ describe("syncUsage", () => {
       writeConfig: async (config) => {
         writes.push(config);
       },
-      postJson: async (url, body, token) => {
-        posts.push({ url, body, token });
-        return { ok: true };
-      },
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient({
+        submitSyncPayload: async ({ token, payload }) => {
+          submissions.push({ token, payload });
+          return { accepted: true };
+        },
+      }),
       readProviderUsage: async (provider) => [
         {
           provider,
@@ -77,12 +82,9 @@ describe("syncUsage", () => {
       },
     });
 
-    expect(posts).toHaveLength(2);
-    expect(posts[0]).toMatchObject({
-      url: "https://token-burn.test/api/sync",
-      token: "secret",
-    });
-    expect(posts.map((post) => post.body)).toEqual([
+    expect(submissions).toHaveLength(2);
+    expect(submissions[0]).toMatchObject({ token: "secret" });
+    expect(submissions.map((submission) => submission.payload)).toEqual([
       {
         provider: "claude_code",
         date: "2026-05-31",
@@ -147,9 +149,7 @@ describe("syncUsage", () => {
     const result = await syncUsage({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       writeConfig: async () => {},
-      postJson: async () => ({ ok: true }),
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient(),
       readProviderUsage: async (provider) => {
         if (provider === "codex") return [];
 
@@ -186,8 +186,8 @@ describe("syncUsage", () => {
 
   it("fetches server sync windows and passes provider windows to ccusage", async () => {
     const readProviderUsageCalls: Array<{ provider: string; window: unknown }> = [];
-    const getCalls: Array<{ url: string; token?: string }> = [];
-    const posts: Array<{ url: string; body: unknown; token?: string }> = [];
+    const readSyncWindowsCalls: Array<{ token: string; deviceId: string }> = [];
+    const submissions: Array<{ payload: SyncPayload; token: string }> = [];
 
     await syncUsage({
       readConfig: async () => ({
@@ -196,22 +196,23 @@ describe("syncUsage", () => {
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
       }),
       writeConfig: async () => {},
-      getJson: async (url, token) => {
-        getCalls.push({ url, token });
-        return {
-          serverTime: "2026-06-06T12:00:00.000Z",
-          until: "2026-06-06",
-          providers: [
-            { provider: "claude_code", since: "2026-06-05" },
-            { provider: "codex", since: "2026-06-06" },
-          ],
-        };
-      },
-      postJson: async (url, body, token) => {
-        posts.push({ url, body, token });
-        return { ok: true };
-      },
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient({
+        readSyncWindows: async (options) => {
+          readSyncWindowsCalls.push(options);
+          return {
+            serverTime: "2026-06-06T12:00:00.000Z",
+            until: "2026-06-06",
+            providers: [
+              { provider: "claude_code", since: "2026-06-05" },
+              { provider: "codex", since: "2026-06-06" },
+            ],
+          };
+        },
+        submitSyncPayload: async ({ token, payload }) => {
+          submissions.push({ token, payload });
+          return { accepted: true };
+        },
+      }),
       readProviderUsage: async (provider, options) => {
         readProviderUsageCalls.push({ provider, window: options?.window });
         return [{ provider, date: "2026-06-06", tokenCategories: { input: 10 }, totalTokens: 10 }];
@@ -224,17 +225,14 @@ describe("syncUsage", () => {
       log: () => {},
     });
 
-    expect(getCalls).toEqual([
-      {
-        url: "https://token-burn.test/api/cli/sync-windows?deviceId=4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        token: "secret",
-      },
+    expect(readSyncWindowsCalls).toEqual([
+      { token: "secret", deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59" },
     ]);
     expect(readProviderUsageCalls).toEqual([
       { provider: "claude_code", window: { since: "2026-06-05", until: "2026-06-06" } },
       { provider: "codex", window: { since: "2026-06-06", until: "2026-06-06" } },
     ]);
-    expect(posts).toHaveLength(2);
+    expect(submissions).toHaveLength(2);
   });
 
   it("does full-history collection when the server omits provider since", async () => {
@@ -243,13 +241,13 @@ describe("syncUsage", () => {
     await syncUsage({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       writeConfig: async () => {},
-      getJson: async () => ({
-        serverTime: "2026-06-06T12:00:00.000Z",
-        until: "2026-06-06",
-        providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
+      serverClient: matchingServerClient({
+        readSyncWindows: async () => ({
+          serverTime: "2026-06-06T12:00:00.000Z",
+          until: "2026-06-06",
+          providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
+        }),
       }),
-      postJson: async () => ({ ok: true }),
-      readHealth: matchingHealth,
       readProviderUsage: async (provider, options) => {
         windows.push(options?.window);
         return provider === "claude_code"
@@ -274,16 +272,16 @@ describe("syncUsage", () => {
     await syncUsage({
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       writeConfig: async () => {},
-      getJson: async () => ({
-        serverTime: "2026-06-06T12:00:00.000Z",
-        until: "2026-06-06",
-        providers: [
-          { provider: "other_provider", since: "2026-06-06" },
-          { provider: "codex", since: "2026-06-06" },
-        ],
+      serverClient: matchingServerClient({
+        readSyncWindows: async () => ({
+          serverTime: "2026-06-06T12:00:00.000Z",
+          until: "2026-06-06",
+          providers: [
+            { provider: "other_provider", since: "2026-06-06" },
+            { provider: "codex", since: "2026-06-06" },
+          ],
+        }),
       }),
-      postJson: async () => ({ ok: true }),
-      readHealth: matchingHealth,
       readProviderUsage: async (provider) => {
         providers.push(provider);
         return [];
@@ -309,10 +307,11 @@ describe("syncUsage", () => {
         writeConfig: async (config) => {
           writes.push(config);
         },
-        getJson: async () => {
-          throw new Error("sync windows unavailable");
-        },
-        readHealth: matchingHealth,
+        serverClient: matchingServerClient({
+          readSyncWindows: async () => {
+            throw new Error("sync windows unavailable");
+          },
+        }),
         readProviderUsage: async () => {
           throw new Error("should not collect providers");
         },
@@ -347,7 +346,7 @@ describe("syncUsage", () => {
     ]);
   });
 
-  it("records failed lastSync when sync-window response parsing fails", async () => {
+  it("records failed lastSync when sync-window response parsing fails in the server client", async () => {
     const writes: CliConfig[] = [];
 
     await expect(
@@ -356,12 +355,11 @@ describe("syncUsage", () => {
         writeConfig: async (config) => {
           writes.push(config);
         },
-        getJson: async () => ({
-          serverTime: "not-a-datetime",
-          until: "2026-06-06",
-          providers: [{ provider: "claude_code" }],
+        serverClient: matchingServerClient({
+          readSyncWindows: async () => {
+            throw new Error("Invalid sync windows response");
+          },
         }),
-        readHealth: matchingHealth,
         readProviderUsage: async () => {
           throw new Error("should not collect providers");
         },
@@ -397,20 +395,22 @@ describe("syncUsage", () => {
 
   it("refuses to sync when the server requires a different CLI version", async () => {
     let readProviderUsageCalled = false;
-    let postJsonCalled = false;
+    let submitSyncPayloadCalled = false;
     const serverRequiredCliVersion = createDifferentVersion(currentCliVersion);
 
     await expect(
       syncUsage({
         readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
-        readHealth: async () => ({
-          requiredCliVersion: serverRequiredCliVersion,
-          serverTime: "2026-06-03T00:00:00.000Z",
+        serverClient: matchingServerClient({
+          readHealth: async () => ({
+            requiredCliVersion: serverRequiredCliVersion,
+            serverTime: "2026-06-03T00:00:00.000Z",
+          }),
+          submitSyncPayload: async () => {
+            submitSyncPayloadCalled = true;
+            return { accepted: true };
+          },
         }),
-        postJson: async () => {
-          postJsonCalled = true;
-          return { ok: true };
-        },
         readProviderUsage: async () => {
           readProviderUsageCalled = true;
           return [];
@@ -424,11 +424,11 @@ describe("syncUsage", () => {
     );
 
     expect(readProviderUsageCalled).toBe(false);
-    expect(postJsonCalled).toBe(false);
+    expect(submitSyncPayloadCalled).toBe(false);
   });
 
   it("reuses remembered device identity instead of creating a new one", async () => {
-    const posts: Array<{ body: unknown }> = [];
+    const submissions: Array<{ payload: SyncPayload }> = [];
 
     await syncUsage({
       readConfig: async () => ({
@@ -438,12 +438,12 @@ describe("syncUsage", () => {
         deviceName: "workstation",
       }),
       writeConfig: async () => {},
-      postJson: async (_url, body) => {
-        posts.push({ body });
-        return { ok: true };
-      },
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient({
+        submitSyncPayload: async ({ payload }) => {
+          submissions.push({ payload });
+          return { accepted: true };
+        },
+      }),
       readProviderUsage: async (provider) => [
         {
           provider,
@@ -463,7 +463,7 @@ describe("syncUsage", () => {
       log: () => {},
     });
 
-    expect(posts.map((post) => post.body)).toMatchObject([
+    expect(submissions.map((submission) => submission.payload)).toMatchObject([
       {
         deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
         deviceName: "renamed-workstation",
@@ -484,9 +484,7 @@ describe("syncUsage", () => {
       writeConfig: async (config) => {
         writes.push(config);
       },
-      postJson: async () => ({ ok: true }),
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient(),
       readProviderUsage: async (provider) => {
         if (provider === "codex") {
           throw new UnsupportedCcusageProviderError(provider);
@@ -546,9 +544,7 @@ describe("syncUsage", () => {
       writeConfig: async (config) => {
         writes.push(config);
       },
-      postJson: async () => ({ ok: true }),
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient(),
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
           throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
@@ -604,9 +600,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       writeConfig: async (config) => {
         writes.push(config);
       },
-      postJson: async () => ({ ok: true }),
-      getJson: fullSyncWindows,
-      readHealth: matchingHealth,
+      serverClient: matchingServerClient(),
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
           throw new Error("ccusage daily failed");
@@ -666,8 +660,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writeConfig: async (config) => {
           writes.push(config);
         },
-        getJson: fullSyncWindows,
-        readHealth: matchingHealth,
+        serverClient: matchingServerClient(),
         readProviderUsage: async () => {
           throw nativeBinaryError;
         },
@@ -697,9 +690,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writeConfig: async (config) => {
           writes.push(config);
         },
-        postJson: async () => ({ ok: true }),
-        getJson: fullSyncWindows,
-        readHealth: matchingHealth,
+        serverClient: matchingServerClient(),
         readProviderUsage: async (provider) => {
           if (provider === "codex") {
             throw new UnsupportedCcusageProviderError(provider);
@@ -740,6 +731,15 @@ Error: No valid Claude data directories found. Please ensure at least one of the
   });
 });
 
+function matchingServerClient(overrides: Partial<SyncServerClient> = {}): SyncServerClient {
+  return {
+    readHealth: matchingHealth,
+    readSyncWindows: fullSyncWindows,
+    submitSyncPayload: async () => ({ accepted: true }),
+    ...overrides,
+  };
+}
+
 async function matchingHealth() {
   return {
     requiredCliVersion: "0.1.0",
@@ -747,7 +747,7 @@ async function matchingHealth() {
   };
 }
 
-async function fullSyncWindows() {
+async function fullSyncWindows(): Promise<SyncWindowsResponse> {
   return {
     serverTime: "2026-06-06T12:00:00.000Z",
     until: "2026-06-06",

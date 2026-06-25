@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { hostname, platform as readPlatform } from "node:os";
 
-import { syncPayloadSchema, syncWindowsResponseSchema, type Provider, type SyncPayload } from "@token-burn/shared";
+import { syncPayloadSchema, type Provider, type SyncPayload, type SyncWindowsResponse } from "@token-burn/shared";
 
 import type { NormalizedUsageRow, ProviderUsageWindow } from "./ccusage.js";
 import {
@@ -12,22 +12,15 @@ import {
 import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
 import { defaultServerUrl } from "./defaults.js";
-import { getJson as getJsonRequest, postJson as postJsonRequest } from "./http.js";
+import { createTokenBurnServerClient, type TokenBurnServerClient } from "./server-client.js";
 import { cliVersion as packageCliVersion } from "./version.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
 
-type CliHealth = {
-  requiredCliVersion: string;
-  serverTime: string;
-};
-
 export type SyncDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
-  getJson?: <T>(url: string, token?: string) => Promise<T>;
-  postJson?: <T>(url: string, body: unknown, token?: string) => Promise<T>;
-  readHealth?: (serverUrl: string) => Promise<CliHealth>;
+  serverClient?: Pick<TokenBurnServerClient, "readHealth" | "readSyncWindows" | "submitSyncPayload">;
   readProviderUsage?: (provider: Provider, options?: { window?: ProviderUsageWindow }) => Promise<NormalizedUsageRow[]>;
   readCcusageVersion?: () => Promise<string>;
   now?: () => Date;
@@ -56,9 +49,7 @@ const providers: Provider[] = ["claude_code", "codex"];
 export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
-  getJson = getJsonRequest,
-  postJson = postJsonRequest,
-  readHealth = readHealthFromServer,
+  serverClient,
   readProviderUsage = readProviderUsageFromCcusage,
   readCcusageVersion = readCcusageVersionFromPackage,
   now = () => new Date(),
@@ -75,9 +66,10 @@ export async function syncUsage({
     throw new Error(`Run token-burn login --server-url ${serverUrl} to authenticate.`);
   }
 
+  const client = serverClient ?? createTokenBurnServerClient({ serverUrl: config.serverUrl });
   const syncedAt = now().toISOString();
   const version = cliVersion ?? packageCliVersion;
-  const health = await readHealth(config.serverUrl);
+  const health = await client.readHealth();
   ensureRequiredCliVersion(version, health.requiredCliVersion);
 
   const deviceId = config.deviceId ?? createDeviceId();
@@ -86,11 +78,11 @@ export async function syncUsage({
   await writeConfig(configWithDevice);
 
   let ccusageVersion: string;
-  let syncWindows: Awaited<ReturnType<typeof readSyncWindows>>;
+  let syncWindows: SyncWindowsResponse;
 
   try {
     ccusageVersion = await readCcusageVersion();
-    syncWindows = await readSyncWindows({ getJson, serverUrl: config.serverUrl, token: config.token, deviceId });
+    syncWindows = await client.readSyncWindows({ token: config.token, deviceId });
   } catch (error) {
     const normalizedError = normalizeProviderError(error);
     const lastSync = {
@@ -103,7 +95,6 @@ export async function syncUsage({
   }
 
   const providerWindows = new Map(syncWindows.providers.map((window) => [window.provider, window]));
-  const syncUrl = `${config.serverUrl.replace(/\/+$/, "")}/api/sync`;
   const failures: Array<{ provider: Provider; error: Error }> = [];
   const skipped: Array<{ provider: Provider; error: Error }> = [];
   let submitted = 0;
@@ -117,7 +108,7 @@ export async function syncUsage({
 
       for (const row of rows) {
         const payload = buildPayload(row, { cliVersion: version, ccusageVersion, deviceId, deviceName, platform, syncedAt });
-        await postJson(syncUrl, payload, config.token);
+        await client.submitSyncPayload({ token: config.token, payload });
         submitted += 1;
       }
     } catch (error) {
@@ -153,22 +144,6 @@ export async function syncUsage({
     submitted,
     syncedAt,
   };
-}
-
-async function readSyncWindows({
-  getJson,
-  serverUrl,
-  token,
-  deviceId,
-}: {
-  getJson: <T>(url: string, token?: string) => Promise<T>;
-  serverUrl: string;
-  token: string;
-  deviceId: string;
-}) {
-  const url = `${serverUrl.replace(/\/+$/, "")}/api/cli/sync-windows?deviceId=${encodeURIComponent(deviceId)}`;
-  const response = await getJson<unknown>(url, token);
-  return syncWindowsResponseSchema.parse(response);
 }
 
 function buildPayload(
@@ -207,59 +182,12 @@ function normalizeDeviceName(value: string): string {
   return trimmed || "Unknown device";
 }
 
-async function readHealthFromServer(serverUrl: string): Promise<CliHealth> {
-  const normalizedServerUrl = serverUrl.replace(/\/+$/, "");
-  const response = await fetch(`${normalizedServerUrl}/api/cli/health`);
-  const text = await response.text();
-  const data = parseJsonOrNull(text);
-
-  if (!response.ok) {
-    throw new Error(formatHttpError(response, text));
-  }
-
-  if (!isRecord(data)) {
-    throw new Error("Invalid health response");
-  }
-
-  const { requiredCliVersion, serverTime } = data;
-
-  if (
-    typeof requiredCliVersion !== "string" ||
-    typeof serverTime !== "string"
-  ) {
-    throw new Error("Invalid health response");
-  }
-
-  return { requiredCliVersion, serverTime };
-}
-
 function ensureRequiredCliVersion(actualVersion: string, requiredVersion: string): void {
   if (actualVersion === requiredVersion) return;
 
   throw new Error(
     `Token Burn requires token-burn ${requiredVersion}. You have ${actualVersion}. Run npm install -g @blnayan/token-burn@latest.`,
   );
-}
-
-function parseJsonOrNull(text: string): unknown {
-  if (!text) return null;
-
-  try {
-    return JSON.parse(text) as unknown;
-  } catch {
-    return null;
-  }
-}
-
-function formatHttpError(response: Response, text: string): string {
-  const status = `HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ""}`;
-  const body = text.trim();
-
-  return body ? `${status}: ${body}` : status;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function normalizePlatform(value: NodeJS.Platform): SyncPlatform {
