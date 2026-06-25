@@ -167,7 +167,7 @@ describe("parseMemberUsageQuery", () => {
 Run:
 
 ```bash
-pnpm --filter @token-burn/web test -- src/server/member-usage-query.test.ts
+cd apps/web && ./node_modules/.bin/vitest run src/server/member-usage-query.test.ts
 ```
 
 Expected: FAIL because `apps/web/src/server/member-usage-query.ts` does not exist.
@@ -286,7 +286,7 @@ export function parseMemberUsageQuery(searchParams: URLSearchParams): MemberUsag
 Run:
 
 ```bash
-pnpm --filter @token-burn/web test -- src/server/member-usage-query.test.ts
+cd apps/web && ./node_modules/.bin/vitest run src/server/member-usage-query.test.ts
 ```
 
 Expected: PASS.
@@ -395,7 +395,7 @@ For unfiltered calls, pass:
 Run:
 
 ```bash
-pnpm --filter @token-burn/web test -- src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
+cd apps/web && ./node_modules/.bin/vitest run src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
 ```
 
 Expected: FAIL because `getMemberUsageDetail` and the route still use the old interface.
@@ -479,7 +479,7 @@ export async function GET(
 Run:
 
 ```bash
-pnpm --filter @token-burn/web test -- src/server/member-usage-query.test.ts src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
+cd apps/web && ./node_modules/.bin/vitest run src/server/member-usage-query.test.ts src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
 ```
 
 Expected: PASS.
@@ -602,7 +602,7 @@ describe("TokenBurnServerClient", () => {
 Run:
 
 ```bash
-pnpm --filter @blnayan/token-burn test -- src/server-client.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/server-client.test.ts
 ```
 
 Expected: FAIL because `server-client.ts` does not exist.
@@ -888,7 +888,7 @@ export { HttpError, getJson, postJson } from "./server-client.js";
 Run:
 
 ```bash
-pnpm --filter @blnayan/token-burn test -- src/server-client.test.ts src/http.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/server-client.test.ts src/http.test.ts
 ```
 
 Expected: PASS. If `src/http.test.ts` expects implementation-local details, update it to assert the same public `getJson`, `postJson`, and `HttpError` behavior through the shim.
@@ -958,7 +958,7 @@ Keep existing assertions for provider windows, skipped providers, failed provide
 Run:
 
 ```bash
-pnpm --filter @blnayan/token-burn test -- src/sync.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/sync.test.ts
 ```
 
 Expected: FAIL because `syncUsage` does not accept `serverClient`.
@@ -1099,7 +1099,7 @@ In `packages/cli/src/commands/setup.test.ts`, keep `validateAuth` dependency tes
 Run:
 
 ```bash
-pnpm --filter @blnayan/token-burn test -- src/sync.test.ts src/commands/setup.test.ts src/commands/login.test.ts src/server-client.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/sync.test.ts src/commands/setup.test.ts src/commands/login.test.ts src/server-client.test.ts
 ```
 
 Expected: PASS.
@@ -1273,7 +1273,7 @@ Keep output assertions unchanged.
 Run:
 
 ```bash
-pnpm --filter @blnayan/token-burn test -- src/commands/status.test.ts src/commands/doctor.test.ts src/commands/devices.test.ts src/server-client.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/commands/status.test.ts src/commands/doctor.test.ts src/commands/devices.test.ts src/server-client.test.ts
 ```
 
 Expected: PASS.
@@ -1313,8 +1313,8 @@ Expected:
 Run:
 
 ```bash
-pnpm --filter @token-burn/web test -- src/server/member-usage-query.test.ts src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
-pnpm --filter @blnayan/token-burn test -- src/server-client.test.ts src/sync.test.ts src/commands/setup.test.ts src/commands/login.test.ts src/commands/status.test.ts src/commands/doctor.test.ts src/commands/devices.test.ts src/http.test.ts
+cd apps/web && ./node_modules/.bin/vitest run src/server/member-usage-query.test.ts src/server/leaderboard.test.ts src/app/api/leaderboard/members/[username]/route.test.ts
+cd packages/cli && ./node_modules/.bin/vitest run src/server-client.test.ts src/sync.test.ts src/commands/setup.test.ts src/commands/login.test.ts src/commands/status.test.ts src/commands/doctor.test.ts src/commands/devices.test.ts src/http.test.ts
 ```
 
 Expected: PASS.
