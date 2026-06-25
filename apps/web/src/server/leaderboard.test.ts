@@ -182,7 +182,14 @@ describe("getMemberUsageDetail", () => {
     await expect(
       getMemberUsageDetail(
         "ada",
-        "weekly",
+        {
+          period: "weekly",
+          filters: {
+            providers: [],
+            models: [],
+            devices: [],
+          },
+        },
         new Date("2026-06-07T12:00:00.000Z"),
       ),
     ).resolves.toEqual({
@@ -267,7 +274,14 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "all-time",
+      {
+        period: "all-time",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
       new Date("2026-06-07T12:00:00.000Z"),
     );
 
@@ -333,7 +347,14 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
+      {
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
       new Date("2026-06-07T12:00:00.000Z"),
     );
 
@@ -414,13 +435,15 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
-      new Date("2026-06-07T12:00:00.000Z"),
       {
-        providers: ["codex"],
-        models: [],
-        devices: ["device-1"],
+        period: "7d",
+        filters: {
+          providers: ["codex"],
+          models: [],
+          devices: ["device-1"],
+        },
       },
+      new Date("2026-06-07T12:00:00.000Z"),
     );
 
     expect(detail?.summary).toEqual({
@@ -514,13 +537,15 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "30d",
-      new Date("2026-06-07T12:00:00.000Z"),
       {
-        providers: [],
-        models: [{ provider: "codex", modelName: "gpt-5-codex" }],
-        devices: ["device-1"],
+        period: "30d",
+        filters: {
+          providers: [],
+          models: [{ provider: "codex", modelName: "gpt-5-codex" }],
+          devices: ["device-1"],
+        },
       },
+      new Date("2026-06-07T12:00:00.000Z"),
     );
 
     expect(detail?.summary).toEqual({
@@ -699,13 +724,15 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
-      new Date("2026-06-07T12:00:00.000Z"),
       {
-        providers: [],
-        models: [{ provider: "claude_code", modelName: "opus" }],
-        devices: ["device-2"],
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [{ provider: "claude_code", modelName: "opus" }],
+          devices: ["device-2"],
+        },
       },
+      new Date("2026-06-07T12:00:00.000Z"),
     );
 
     expect(detail?.summary).toEqual({
@@ -803,13 +830,15 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
-      new Date("2026-06-07T12:00:00.000Z"),
       {
-        providers: [],
-        models: [{ provider: "codex", modelName: "gpt-5-codex" }],
-        devices: [],
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [{ provider: "codex", modelName: "gpt-5-codex" }],
+          devices: [],
+        },
       },
+      new Date("2026-06-07T12:00:00.000Z"),
     );
 
     expect(detail?.summary).toEqual({
@@ -887,7 +916,14 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
+      {
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
       new Date("2026-06-07T12:00:00.000Z"),
     );
 
@@ -938,7 +974,14 @@ describe("getMemberUsageDetail", () => {
 
     const detail = await getMemberUsageDetail(
       "ada",
-      "7d",
+      {
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
       new Date("2026-06-07T12:00:00.000Z"),
     );
 
@@ -958,7 +1001,14 @@ describe("getMemberUsageDetail", () => {
     await expect(
       getMemberUsageDetail(
         "unknown",
-        "weekly",
+        {
+          period: "weekly",
+          filters: {
+            providers: [],
+            models: [],
+            devices: [],
+          },
+        },
         new Date("2026-06-07T12:00:00.000Z"),
       ),
     ).resolves.toBeNull();

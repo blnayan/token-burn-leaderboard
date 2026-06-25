@@ -33,11 +33,18 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "weekly", expect.any(Date), {
-      providers: [],
-      models: [],
-      devices: [],
-    });
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith(
+      "ada",
+      {
+        period: "weekly",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
+      expect.any(Date),
+    );
     await expect(response.json()).resolves.toMatchObject({
       member: { username: "ada" },
       period: "weekly",
@@ -61,11 +68,18 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "30d", expect.any(Date), {
-      providers: [],
-      models: [],
-      devices: [],
-    });
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith(
+      "ada",
+      {
+        period: "30d",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
+      expect.any(Date),
+    );
     await expect(response.json()).resolves.toMatchObject({
       member: { username: "ada" },
       period: "30d",
@@ -98,11 +112,18 @@ describe("GET /api/leaderboard/members/[username]", () => {
       params: Promise.resolve({ username: "ada" }),
     });
 
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "daily", expect.any(Date), {
-      providers: [],
-      models: [],
-      devices: [],
-    });
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith(
+      "ada",
+      {
+        period: "daily",
+        filters: {
+          providers: [],
+          models: [],
+          devices: [],
+        },
+      },
+      expect.any(Date),
+    );
   });
 
   it("passes valid repeated provider, model, and device filters", async () => {
@@ -124,11 +145,18 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(response.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "7d", expect.any(Date), {
-      providers: ["codex", "claude_code"],
-      models: [],
-      devices: ["device-1", "device-2"],
-    });
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith(
+      "ada",
+      {
+        period: "7d",
+        filters: {
+          providers: ["codex", "claude_code"],
+          models: [],
+          devices: ["device-1", "device-2"],
+        },
+      },
+      expect.any(Date),
+    );
 
     getMemberUsageDetailMock.mockClear();
     const modelResponse = await GET(
@@ -139,14 +167,21 @@ describe("GET /api/leaderboard/members/[username]", () => {
     );
 
     expect(modelResponse.status).toBe(200);
-    expect(getMemberUsageDetailMock).toHaveBeenCalledWith("ada", "7d", expect.any(Date), {
-      providers: [],
-      models: [
-        { provider: "codex", modelName: "gpt-5-codex" },
-        { provider: "claude_code", modelName: "opus" },
-      ],
-      devices: ["device-1"],
-    });
+    expect(getMemberUsageDetailMock).toHaveBeenCalledWith(
+      "ada",
+      {
+        period: "7d",
+        filters: {
+          providers: [],
+          models: [
+            { provider: "codex", modelName: "gpt-5-codex" },
+            { provider: "claude_code", modelName: "opus" },
+          ],
+          devices: ["device-1"],
+        },
+      },
+      expect.any(Date),
+    );
   });
 
   it("rejects invalid provider filters", async () => {

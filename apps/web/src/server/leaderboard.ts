@@ -2,12 +2,18 @@ import {
   providerSchema,
   type LeaderboardPeriod,
   type LeaderboardRow,
-  type MemberUsageRange,
   type MemberUsageDetail,
+  type MemberUsageRange,
 } from "@token-burn/shared";
 
 import { prisma } from "../lib/prisma";
 import { getPeriodRange, getRecentUtcDateWindow } from "../lib/time";
+import {
+  emptyMemberUsageFilters,
+  type MemberUsageFilters,
+  type MemberUsageQuery,
+  type MemberUsageRequestPeriod,
+} from "./member-usage-query";
 
 export type RawRow = {
   username: string;
@@ -122,31 +128,14 @@ type UsageTotals = {
 
 const publicOperatingSystems = ["darwin", "linux", "win32"] as const;
 type PublicOperatingSystem = (typeof publicOperatingSystems)[number];
-export type MemberUsageRequestPeriod = LeaderboardPeriod | MemberUsageRange;
-
-export type MemberUsageModelFilter = {
-  provider: MemberUsageDetail["models"][number]["provider"];
-  modelName: string;
-};
-
-export type MemberUsageFilters = {
-  providers: MemberUsageDetail["providers"][number]["provider"][];
-  models: MemberUsageModelFilter[];
-  devices: string[];
-};
-
-const emptyMemberUsageFilters: MemberUsageFilters = {
-  providers: [],
-  models: [],
-  devices: [],
-};
 
 export async function getMemberUsageDetail(
   username: string,
-  period: MemberUsageRequestPeriod,
+  query: MemberUsageQuery,
   now = new Date(),
-  filters: MemberUsageFilters = emptyMemberUsageFilters,
 ): Promise<MemberUsageDetail | null> {
+  const { period, filters = emptyMemberUsageFilters } = query;
+
   const member = await prisma.member.findUnique({
     where: { username },
     select: {
@@ -478,7 +467,7 @@ function getMemberUsageRangeDays(range: MemberUsageRange): number {
 }
 
 function uniqueProvidersForModels(
-  models: MemberUsageModelFilter[],
+  models: MemberUsageFilters["models"],
 ): MemberUsageFilters["providers"] {
   return [...new Set(models.map((model) => model.provider))];
 }
