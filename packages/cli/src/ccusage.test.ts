@@ -898,4 +898,11 @@ describe("readProviderUsage", () => {
       message: "ccusage does not support OpenCode usage in the installed version.",
     });
   });
+
+  it("does not classify generic provider failures as unsupported commands", async () => {
+    const error = new Error("OpenCode loader failed with unknown command in saved shell history");
+    const runCommand = vi.fn().mockRejectedValue(error);
+
+    await expect(readProviderUsage("opencode", { runCommand })).rejects.toBe(error);
+  });
 });

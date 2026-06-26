@@ -217,19 +217,21 @@ function isUnsupportedBreakdownError(error: unknown): boolean {
 
 function isUnsupportedProviderCommandError(error: unknown, provider: CcusageProvider): boolean {
   const message = error instanceof Error ? error.message : String(error);
-  const normalized = message.toLowerCase();
-  const command = providerMetadata[provider].ccusageCommand.toLowerCase();
+  const command = providerMetadata[provider].ccusageCommand;
+  const escapedCommand = escapeRegExp(command);
+  const patterns = [
+    new RegExp(`^\\s*unknown\\s+command\\s*:\\s*${escapedCommand}\\s*$`, "i"),
+    new RegExp(`^\\s*unknown\\s+command\\s+['"]${escapedCommand}['"]\\s*$`, "i"),
+    new RegExp(`^\\s*unrecognized\\s+command\\s*:\\s*${escapedCommand}\\s*$`, "i"),
+    new RegExp(`^\\s*invalid\\s+command\\s*:\\s*${escapedCommand}\\s*$`, "i"),
+  ];
+  const lines = message.split(/\r?\n/);
 
-  return (
-    normalized.includes(`unknown command: ${command}`) ||
-    normalized.includes(`unknown command '${command}'`) ||
-    normalized.includes(`unrecognized command: ${command}`) ||
-    normalized.includes(`invalid command: ${command}`) ||
-    (normalized.includes(command) &&
-      (normalized.includes("unknown command") ||
-        normalized.includes("unrecognized command") ||
-        normalized.includes("invalid command")))
-  );
+  return lines.some((line) => patterns.some((pattern) => pattern.test(line)));
+}
+
+function escapeRegExp(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 export async function readCcusageVersion(): Promise<string> {
