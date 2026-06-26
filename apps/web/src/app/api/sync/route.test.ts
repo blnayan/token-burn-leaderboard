@@ -15,6 +15,7 @@ vi.mock("@/server/sync-ingest", () => ({
 
 import { prisma } from "@/lib/prisma";
 import { requiredCliVersion } from "@/server/cli-version";
+import { resetRateLimitsForTests } from "@/server/rate-limit";
 import { persistSyncPayload } from "@/server/sync-ingest";
 
 import { POST } from "./route";
@@ -31,12 +32,27 @@ describe("POST /api/sync CLI version enforcement", () => {
   const nonRequiredCliVersion = createDifferentVersion(requiredCliVersion);
 
   beforeEach(() => {
+    resetRateLimitsForTests();
     prismaMock.cliToken.findFirst.mockReset();
     persistSyncPayloadMock.mockReset();
     prismaMock.cliToken.findFirst.mockResolvedValue({
       id: "cli-token-1",
       member: { id: "member-1" },
     });
+  });
+
+  it("token-rate-limits invalid bearer attempts before returning unauthorized", async () => {
+    prismaMock.cliToken.findFirst.mockResolvedValue(null);
+
+    let response = await POST(createSyncRequest());
+
+    for (let index = 1; index < 1_001; index += 1) {
+      response = await POST(createSyncRequest());
+    }
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toEqual({ error: "Too many requests" });
+    expect(prismaMock.cliToken.findFirst).toHaveBeenCalledTimes(1_000);
   });
 
   it("rejects sync payloads from non-required CLI versions", async () => {

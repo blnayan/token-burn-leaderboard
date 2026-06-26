@@ -2,7 +2,7 @@ import { syncPayloadSchema } from "@token-burn/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 
-import { authenticateCliRequest, unauthorizedCliResponse } from "@/server/cli-auth";
+import { authenticateCliRequest, hashSecret, unauthorizedCliResponse } from "@/server/cli-auth";
 import { formatRequiredCliVersionError, requiredCliVersion } from "@/server/cli-version";
 import { buildClientRateLimitKey, checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 import { persistSyncPayload } from "@/server/sync-ingest";
@@ -40,6 +40,12 @@ export async function POST(request: NextRequest) {
   });
   if (!clientRateLimit.ok) return rateLimitResponse(clientRateLimit);
 
+  const rateLimit = checkRateLimit({
+    key: `sync-token:${hashSecret(token)}`,
+    ...syncTokenLimit,
+  });
+  if (!rateLimit.ok) return rateLimitResponse(rateLimit);
+
   const auth = await authenticateCliRequest(request, {
     select: {
       cliToken: { id: true },
@@ -47,12 +53,6 @@ export async function POST(request: NextRequest) {
     },
   });
   if (!auth.ok) return auth.response;
-
-  const rateLimit = checkRateLimit({
-    key: `sync-token:${auth.context.tokenHash}`,
-    ...syncTokenLimit,
-  });
-  if (!rateLimit.ok) return rateLimitResponse(rateLimit);
 
   const body = await request.json().catch(() => null);
 
