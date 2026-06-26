@@ -201,7 +201,10 @@ describe("collectAndSubmitUsage", () => {
       readCcusageVersion: async () => "20.0.6",
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
-          throw new Error("No valid Claude data directories found");
+          throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
+Error: No valid Claude data directories found. Please ensure at least one of the following exists:
+- /home/me/.config/claude/projects
+- /home/me/.claude/projects`);
         }
 
         return [];
@@ -238,6 +241,33 @@ describe("collectAndSubmitUsage", () => {
     expect(result.skippedProviders).toContainEqual({
       provider: "opencode",
       message: "No valid OpenCode data directories found",
+    });
+    expect(result.failedProviders).toEqual([]);
+  });
+
+  it("classifies no provider usage data as skipped", async () => {
+    const result = await collectAndSubmitUsage({
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      platform: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+      syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
+      serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
+      readCcusageVersion: async () => "20.0.6",
+      readProviderUsage: async (provider) => {
+        if (provider === "opencode") {
+          throw new Error("No OpenCode usage data found");
+        }
+
+        return [];
+      },
+    });
+
+    expect(result.skippedProviders).toContainEqual({
+      provider: "opencode",
+      message: "No OpenCode usage data found",
     });
     expect(result.failedProviders).toEqual([]);
   });

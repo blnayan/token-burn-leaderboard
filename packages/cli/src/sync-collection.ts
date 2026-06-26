@@ -121,9 +121,10 @@ function buildPayload(
 
 function normalizeProviderError(error: unknown): Error {
   const normalizedError = toError(error);
+  const missingProviderDataMessage = readMissingProviderDataMessage(normalizedError.message);
 
-  if (isMissingProviderDataError(normalizedError)) {
-    return new Error(trimTrailingPeriod(normalizedError.message));
+  if (missingProviderDataMessage) {
+    return new Error(trimTrailingPeriod(missingProviderDataMessage));
   }
 
   if (isCcusageNativeBinaryPermissionError(normalizedError)) {
@@ -142,9 +143,23 @@ function isSkippableProviderError(error: unknown): boolean {
 }
 
 function isMissingProviderDataError(error: Error): boolean {
-  return (
-    /No valid .+ data directories found/i.test(error.message) || /No .+ usage data found/i.test(error.message)
-  );
+  return readMissingProviderDataMessage(error.message) !== null;
+}
+
+function readMissingProviderDataMessage(message: string): string | null {
+  const dataDirectoryMatch = message.match(/\bNo valid [^.\n]* data directories found/i);
+
+  if (dataDirectoryMatch) {
+    return dataDirectoryMatch[0];
+  }
+
+  const usageDataMatch = message.match(/\bNo [^.\n]* usage data found/i);
+
+  if (usageDataMatch) {
+    return usageDataMatch[0];
+  }
+
+  return null;
 }
 
 function isCcusageNativeBinaryPermissionError(error: Error): boolean {
