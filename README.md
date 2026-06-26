@@ -1,6 +1,6 @@
 # Token Burn
 
-Token Burn is a private-invite leaderboard for aggregate Claude Code and Codex usage. The web app shows member totals, and the `token-burn` CLI syncs local daily usage totals from each member's machine.
+Token Burn is a private-invite leaderboard for aggregate coding-agent token usage reported by `ccusage`. The web app shows member totals, and the `token-burn` CLI syncs local daily usage totals from each member's machine.
 
 Production: <https://tokenburn.nayanbhut.dev>
 
