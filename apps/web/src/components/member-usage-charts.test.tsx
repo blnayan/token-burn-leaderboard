@@ -99,6 +99,30 @@ describe("MemberUsageCharts", () => {
     expect(unselectedProvider.className).toContain("border");
   });
 
+  it("renders readable labels for expanded providers", () => {
+    render(
+      <MemberUsageCharts
+        detail={{
+          ...detail,
+          providers: [
+            { provider: "opencode", totalTokens: 4000, totalCostUsd: 4 },
+            { provider: "copilot", totalTokens: 3000, totalCostUsd: 3 },
+            { provider: "gemini", totalTokens: 2000, totalCostUsd: 2 },
+          ],
+          models: [
+            { provider: "opencode", modelName: "gpt-oss", totalTokens: 4000, totalCostUsd: 4 },
+          ],
+        }}
+      />,
+    );
+
+    const providersSection = sectionForHeading("Providers");
+
+    expect(within(providersSection).getByRole("button", { name: /OpenCode/ })).toBeTruthy();
+    expect(within(providersSection).getByRole("button", { name: /GitHub Copilot CLI/ })).toBeTruthy();
+    expect(within(providersSection).getByRole("button", { name: /Gemini CLI/ })).toBeTruthy();
+  });
+
   it("truncates long breakdown labels inside a bounded row", () => {
     const longModelName = "claude-haiku-4-5-20251001-extra-long-model-name-that-should-not-overlap";
 

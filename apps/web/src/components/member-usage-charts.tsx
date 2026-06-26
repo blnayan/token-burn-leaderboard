@@ -1,6 +1,11 @@
 "use client";
 
-import { type MemberUsageDetail, formatTokens, formatUsd } from "@token-burn/shared";
+import {
+  formatProvider,
+  formatTokens,
+  formatUsd,
+  type MemberUsageDetail,
+} from "@token-burn/shared";
 import React from "react";
 import { Bar, BarChart, CartesianGrid, XAxis } from "recharts";
 
@@ -231,11 +236,6 @@ function getTrendPointCost(payload: unknown): number {
 function formatDateTick(value: string): string {
   const [, month, day] = value.split("-");
   return month && day ? `${month}/${day}` : value;
-}
-
-function formatProvider(provider: MemberUsageDetail["providers"][number]["provider"]): string {
-  if (provider === "claude_code") return "Claude Code";
-  return "Codex";
 }
 
 function formatOs(os: MemberUsageDetail["devices"][number]["os"]): string {
