@@ -24,11 +24,23 @@ describe("parseMemberUsageQuery", () => {
     });
   });
 
+  it("defaults invalid periods to daily with empty filters", () => {
+    expect(parseMemberUsageQuery(new URLSearchParams([["period", "nope"]]))).toEqual({
+      period: "daily",
+      filters: {
+        providers: [],
+        models: [],
+        devices: [],
+      },
+    });
+  });
+
   it("parses range, provider, model, and device params", () => {
     const providerQuery = parseMemberUsageQuery(
       new URLSearchParams([
         ["range", "7d"],
         ["provider", "codex"],
+        ["provider", "claude_code"],
         ["device", "device-1"],
         ["device", "device-2"],
       ]),
@@ -37,7 +49,7 @@ describe("parseMemberUsageQuery", () => {
     expect(providerQuery).toEqual({
       period: "7d",
       filters: {
-        providers: ["codex"],
+        providers: ["codex", "claude_code"],
         models: [],
         devices: ["device-1", "device-2"],
       },
@@ -47,6 +59,7 @@ describe("parseMemberUsageQuery", () => {
       new URLSearchParams([
         ["range", "30d"],
         ["model", "codex:gpt-5.4"],
+        ["model", "claude_code:opus"],
       ]),
     );
 
@@ -54,7 +67,10 @@ describe("parseMemberUsageQuery", () => {
       period: "30d",
       filters: {
         providers: [],
-        models: [{ provider: "codex", modelName: "gpt-5.4" }],
+        models: [
+          { provider: "codex", modelName: "gpt-5.4" },
+          { provider: "claude_code", modelName: "opus" },
+        ],
         devices: [],
       },
     });
