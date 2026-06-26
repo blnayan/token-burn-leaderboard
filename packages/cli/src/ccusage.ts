@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 import { platform } from "node:os";
 import { dirname, join, resolve } from "node:path";
 
-import type { Provider } from "@token-burn/shared";
+import { formatProvider, providerMetadata, type Provider } from "@token-burn/shared";
 import { sumTokenCategories } from "@token-burn/shared";
 
 type NormalizedTokenCategories = {
@@ -59,7 +59,7 @@ export type NormalizedUsageRow = {
   models?: NormalizedModelUsage[];
 };
 
-type CcusageProvider = Extract<Provider, "claude_code" | "codex">;
+type CcusageProvider = Provider;
 
 export type ProviderUsageWindow = {
   since?: string;
@@ -81,7 +81,7 @@ export class UnsupportedCcusageProviderError extends Error {
   readonly provider: CcusageProvider;
 
   constructor(provider: CcusageProvider) {
-    super("ccusage does not support Codex usage in the installed version.");
+    super(`ccusage does not support ${formatProvider(provider)} usage in the installed version.`);
     this.name = "UnsupportedCcusageProviderError";
     this.provider = provider;
   }
@@ -165,6 +165,10 @@ export async function readProviderUsage(
   try {
     result = await runCommand("ccusage", buildCcusageArgs(provider, false, window));
   } catch (error) {
+    if (isUnsupportedProviderCommandError(error, provider)) {
+      throw new UnsupportedCcusageProviderError(provider);
+    }
+
     if (provider !== "claude_code" || !isUnsupportedBreakdownError(error)) {
       throw error;
     }
@@ -180,13 +184,13 @@ export async function readProviderUsage(
 
 export function buildCcusageArgs(provider: CcusageProvider, fallback = false, window?: ProviderUsageWindow): string[] {
   const windowArgs = buildWindowArgs(window);
+  const args = [providerMetadata[provider].ccusageCommand, "daily", "--json", "--timezone", "UTC", ...windowArgs];
 
   if (provider === "claude_code") {
-    const args = ["claude", "daily", "--json", "--timezone", "UTC", ...windowArgs];
     return fallback ? args : [...args, "--breakdown"];
   }
 
-  return ["codex", "daily", "--json", "--timezone", "UTC", ...windowArgs];
+  return args;
 }
 
 function buildWindowArgs(window: ProviderUsageWindow | undefined): string[] {
@@ -208,6 +212,23 @@ function isUnsupportedBreakdownError(error: unknown): boolean {
     (normalized.includes("--breakdown") &&
       (normalized.includes("unknown option") || normalized.includes("not supported"))) ||
     (normalized.includes("breakdown") && normalized.includes("not supported"))
+  );
+}
+
+function isUnsupportedProviderCommandError(error: unknown, provider: CcusageProvider): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  const normalized = message.toLowerCase();
+  const command = providerMetadata[provider].ccusageCommand.toLowerCase();
+
+  return (
+    normalized.includes(`unknown command: ${command}`) ||
+    normalized.includes(`unknown command '${command}'`) ||
+    normalized.includes(`unrecognized command: ${command}`) ||
+    normalized.includes(`invalid command: ${command}`) ||
+    (normalized.includes(command) &&
+      (normalized.includes("unknown command") ||
+        normalized.includes("unrecognized command") ||
+        normalized.includes("invalid command")))
   );
 }
 

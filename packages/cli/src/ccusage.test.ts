@@ -9,6 +9,7 @@ import {
   normalizeCcusageDailyRows,
   readProviderUsage,
 } from "./ccusage.js";
+import { providers } from "@token-burn/shared";
 
 const tempDirs: string[] = [];
 
@@ -488,6 +489,51 @@ describe("buildCcusageArgs", () => {
       "20260606",
     ]);
   });
+
+  it("maps every supported provider to its focused ccusage daily command", () => {
+    const expectedCommands = {
+      claude_code: "claude",
+      codex: "codex",
+      opencode: "opencode",
+      amp: "amp",
+      droid: "droid",
+      codebuff: "codebuff",
+      hermes: "hermes",
+      pi: "pi",
+      goose: "goose",
+      kilo: "kilo",
+      copilot: "copilot",
+      gemini: "gemini",
+      kimi: "kimi",
+      qwen: "qwen",
+      openclaw: "openclaw",
+    } as const;
+
+    for (const provider of providers) {
+      const args = buildCcusageArgs(provider);
+      expect(args.slice(0, 5)).toEqual([
+        expectedCommands[provider],
+        "daily",
+        "--json",
+        "--timezone",
+        "UTC",
+      ]);
+    }
+  });
+
+  it("adds YYYYMMDD since and until flags for new providers", () => {
+    expect(buildCcusageArgs("opencode", false, { since: "2026-06-05", until: "2026-06-06" })).toEqual([
+      "opencode",
+      "daily",
+      "--json",
+      "--timezone",
+      "UTC",
+      "--since",
+      "20260605",
+      "--until",
+      "20260606",
+    ]);
+  });
 });
 
 describe("readProviderUsage", () => {
@@ -610,6 +656,26 @@ describe("readProviderUsage", () => {
 
     expect(runCommand).toHaveBeenCalledOnce();
     expect(runCommand.mock.calls[0]?.[1]).toEqual(["codex", "daily", "--json", "--timezone", "UTC"]);
+  });
+
+  it("passes new provider UTC daily JSON args to ccusage", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({
+        daily: [
+          {
+            date: "2026-06-01",
+            inputTokens: 25,
+            outputTokens: 5,
+          },
+        ],
+      }),
+      stderr: "",
+    });
+
+    await readProviderUsage("opencode", { runCommand });
+
+    expect(runCommand).toHaveBeenCalledOnce();
+    expect(runCommand.mock.calls[0]?.[1]).toEqual(["opencode", "daily", "--json", "--timezone", "UTC"]);
   });
 
   it("normalizes daily rows from object output", async () => {
@@ -785,5 +851,51 @@ describe("readProviderUsage", () => {
       },
     ]);
     expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("reads fixture rows for new providers", async () => {
+    const fixtureDir = await createFixtureDir();
+    const runCommand = vi.fn().mockRejectedValue(new Error("ccusage should not be invoked in fixture mode"));
+
+    await writeFile(
+      join(fixtureDir, "opencode.json"),
+      JSON.stringify({
+        daily: [
+          {
+            date: "2026-06-03",
+            inputTokens: 100,
+            outputTokens: 50,
+            totalTokens: 150,
+          },
+        ],
+      }),
+      "utf8",
+    );
+    vi.stubEnv("TOKEN_BURN_E2E_FIXTURE_DIR", fixtureDir);
+
+    await expect(readProviderUsage("opencode", { runCommand })).resolves.toEqual([
+      {
+        provider: "opencode",
+        date: "2026-06-03",
+        tokenCategories: {
+          input: 100,
+          output: 50,
+          cacheCreate: 0,
+          cacheRead: 0,
+        },
+        totalTokens: 150,
+      },
+    ]);
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
+  it("classifies unsupported provider commands from older ccusage versions", async () => {
+    const runCommand = vi.fn().mockRejectedValue(new Error("Unknown command: opencode"));
+
+    await expect(readProviderUsage("opencode", { runCommand })).rejects.toMatchObject({
+      name: "UnsupportedCcusageProviderError",
+      provider: "opencode",
+      message: "ccusage does not support OpenCode usage in the installed version.",
+    });
   });
 });
