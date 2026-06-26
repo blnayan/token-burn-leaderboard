@@ -889,6 +889,16 @@ describe("readProviderUsage", () => {
     expect(runCommand).not.toHaveBeenCalled();
   });
 
+  it("treats missing provider fixture files as empty usage", async () => {
+    const fixtureDir = await createFixtureDir();
+    const runCommand = vi.fn().mockRejectedValue(new Error("ccusage should not be invoked in fixture mode"));
+
+    vi.stubEnv("TOKEN_BURN_E2E_FIXTURE_DIR", fixtureDir);
+
+    await expect(readProviderUsage("opencode", { runCommand })).resolves.toEqual([]);
+    expect(runCommand).not.toHaveBeenCalled();
+  });
+
   it("classifies unsupported provider commands from older ccusage versions", async () => {
     const runCommand = vi.fn().mockRejectedValue(new Error("Unknown command: opencode"));
 

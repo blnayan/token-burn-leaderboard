@@ -250,11 +250,26 @@ export async function readCcusageVersion(): Promise<string> {
 
 async function readProviderUsageFixture(provider: CcusageProvider, fixtureDir: string): Promise<NormalizedUsageRow[]> {
   const fixturePath = join(fixtureDir, `${provider}.json`);
-  const raw = await readFile(fixturePath, "utf8");
+  let raw: string;
+
+  try {
+    raw = await readFile(fixturePath, "utf8");
+  } catch (error) {
+    if (isFileNotFoundError(error)) {
+      return [];
+    }
+
+    throw error;
+  }
+
   const parsed = JSON.parse(raw) as unknown;
   const rows = Array.isArray(parsed) ? parsed : readDailyArray(parsed);
 
   return normalizeCcusageDailyRows(provider, rows);
+}
+
+function isFileNotFoundError(error: unknown): boolean {
+  return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
 
 function spawnCommand(command: string, args: string[]): Promise<CommandResult> {

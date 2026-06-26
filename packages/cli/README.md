@@ -1,6 +1,6 @@
 # Token Burn CLI
 
-Sync local Claude Code and Codex usage totals to a Token Burn leaderboard.
+Sync local coding-agent usage totals reported by ccusage to a Token Burn leaderboard.
 
 ## Quick Start
 
