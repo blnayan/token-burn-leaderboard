@@ -1,4 +1,10 @@
-import { syncPayloadSchema, type Provider, type SyncPayload, type SyncWindowsResponse } from "@token-burn/shared";
+import {
+  providers,
+  syncPayloadSchema,
+  type Provider,
+  type SyncPayload,
+  type SyncWindowsResponse,
+} from "@token-burn/shared";
 
 import type { NormalizedUsageRow, ProviderUsageWindow } from "./ccusage.js";
 import {
@@ -34,8 +40,6 @@ export type SyncCollectionOptions = {
   readCcusageVersion?: () => Promise<string>;
 };
 
-const supportedProviders: Provider[] = ["claude_code", "codex"];
-
 export async function collectAndSubmitUsage({
   token,
   deviceId,
@@ -54,7 +58,7 @@ export async function collectAndSubmitUsage({
   const skipped: Array<{ provider: Provider; error: Error }> = [];
   let submitted = 0;
 
-  for (const provider of supportedProviders) {
+  for (const provider of providers) {
     try {
       const providerWindow = providerWindows.get(provider);
       const rows = await readProviderUsage(provider, {
@@ -118,8 +122,8 @@ function buildPayload(
 function normalizeProviderError(error: unknown): Error {
   const normalizedError = toError(error);
 
-  if (isMissingClaudeDataError(normalizedError)) {
-    return new Error("No valid Claude data directories found");
+  if (isMissingProviderDataError(normalizedError)) {
+    return new Error(trimTrailingPeriod(normalizedError.message));
   }
 
   if (isCcusageNativeBinaryPermissionError(normalizedError)) {
@@ -134,11 +138,13 @@ function normalizeProviderError(error: unknown): Error {
 function isSkippableProviderError(error: unknown): boolean {
   if (isUnsupportedCcusageProviderError(error)) return true;
 
-  return isMissingClaudeDataError(toError(error));
+  return isMissingProviderDataError(toError(error));
 }
 
-function isMissingClaudeDataError(error: Error): boolean {
-  return error.message.includes("No valid Claude data directories found");
+function isMissingProviderDataError(error: Error): boolean {
+  return (
+    /No valid .+ data directories found/i.test(error.message) || /No .+ usage data found/i.test(error.message)
+  );
 }
 
 function isCcusageNativeBinaryPermissionError(error: Error): boolean {

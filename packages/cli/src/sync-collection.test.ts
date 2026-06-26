@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { providers } from "@token-burn/shared";
 import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import { collectAndSubmitUsage } from "./sync-collection.js";
 
@@ -45,36 +46,56 @@ describe("collectAndSubmitUsage", () => {
           ];
         }
 
-        return [
-          {
-            provider,
-            date: "2026-05-31",
-            tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
-            tokenDetails: { reasoningOutput: 5 },
-            totalTokens: 125,
-            costUsd: 0.123456,
-            costSource: "ccusage",
-            costMetadata: { currency: "USD" },
-            sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
-            models: [
-              {
-                modelName: "gpt-5.5",
-                tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
-                tokenDetails: { reasoningOutput: 5 },
-                totalTokens: 125,
-                metadata: { isFallback: false },
-              },
-            ],
-          },
-        ];
+        if (provider === "opencode") {
+          return [
+            {
+              provider,
+              date: "2026-05-31",
+              tokenCategories: { input: 30, output: 5 },
+              totalTokens: 35,
+            },
+          ];
+        }
+
+        if (provider === "codex") {
+          return [
+            {
+              provider,
+              date: "2026-05-31",
+              tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
+              tokenDetails: { reasoningOutput: 5 },
+              totalTokens: 125,
+              costUsd: 0.123456,
+              costSource: "ccusage",
+              costMetadata: { currency: "USD" },
+              sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
+              models: [
+                {
+                  modelName: "gpt-5.5",
+                  tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
+                  tokenDetails: { reasoningOutput: 5 },
+                  totalTokens: 125,
+                  metadata: { isFallback: false },
+                },
+              ],
+            },
+          ];
+        }
+
+        return [];
       },
     });
 
-    expect(result).toEqual({ submitted: 2, failedProviders: [], skippedProviders: [] });
-    expect(readProviderUsageCalls).toEqual([
-      { provider: "claude_code", window: { since: "2026-05-31", until: "2026-06-01" } },
-      { provider: "codex", window: undefined },
-    ]);
+    expect(result).toEqual({ submitted: 3, failedProviders: [], skippedProviders: [] });
+    expect(readProviderUsageCalls).toEqual(
+      providers.map((provider) => ({
+        provider,
+        window:
+          provider === "claude_code"
+            ? { since: "2026-05-31", until: "2026-06-01" }
+            : undefined,
+      })),
+    );
     expect(submissions).toEqual([
       {
         token: "secret",
@@ -112,6 +133,21 @@ describe("collectAndSubmitUsage", () => {
               metadata: { isFallback: false },
             },
           ],
+          ccusageVersion: "20.0.6",
+          deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+          deviceName: "nayan-vps",
+          cliVersion: "0.1.0",
+          os: "linux",
+          syncedAt: "2026-06-01T00:00:00.000Z",
+        },
+      },
+      {
+        token: "secret",
+        payload: {
+          provider: "opencode",
+          date: "2026-05-31",
+          tokenCategories: { input: 30, output: 5 },
+          totalTokens: 35,
           ccusageVersion: "20.0.6",
           deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
           deviceName: "nayan-vps",
@@ -165,10 +201,7 @@ describe("collectAndSubmitUsage", () => {
       readCcusageVersion: async () => "20.0.6",
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
-          throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
-Error: No valid Claude data directories found. Please ensure at least one of the following exists:
-- /home/me/.config/claude/projects
-- /home/me/.claude/projects`);
+          throw new Error("No valid Claude data directories found");
         }
 
         return [];
@@ -180,6 +213,33 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       failedProviders: [],
       skippedProviders: [{ provider: "claude_code", message: "No valid Claude data directories found" }],
     });
+  });
+
+  it("classifies missing data for new providers as skipped", async () => {
+    const result = await collectAndSubmitUsage({
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      platform: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+      syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
+      serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
+      readCcusageVersion: async () => "20.0.6",
+      readProviderUsage: async (provider) => {
+        if (provider === "opencode") {
+          throw new Error("No valid OpenCode data directories found");
+        }
+
+        return [];
+      },
+    });
+
+    expect(result.skippedProviders).toContainEqual({
+      provider: "opencode",
+      message: "No valid OpenCode data directories found",
+    });
+    expect(result.failedProviders).toEqual([]);
   });
 
   it("normalizes native binary permission failures", async () => {
