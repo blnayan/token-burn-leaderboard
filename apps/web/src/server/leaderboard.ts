@@ -126,6 +126,21 @@ type UsageTotals = {
   totalCostUsd: number;
 };
 
+type MemberUsagePeriodPlan = {
+  summaryDateFilter: DateFilter | undefined;
+  trendDateFilter: DateFilter | undefined;
+  trendDates: string[] | null;
+};
+
+type MemberUsageQueryPlan = {
+  hasModelFilters: boolean;
+  summaryWhere: ReturnType<typeof usageWhere>;
+  trendWhere: ReturnType<typeof usageWhere>;
+  breakdownWhere: ReturnType<typeof usageWhere>;
+  providerCostWhere: ReturnType<typeof usageWhere> | null;
+  providerTrendCostWhere: ReturnType<typeof usageWhere> | null;
+};
+
 const publicOperatingSystems = ["darwin", "linux", "win32"] as const;
 type PublicOperatingSystem = (typeof publicOperatingSystems)[number];
 
@@ -147,46 +162,8 @@ export async function getMemberUsageDetail(
 
   if (!member) return null;
 
-  let summaryDateFilter: DateFilter | undefined;
-  let trendDates: string[] | null = null;
-
-  if (isMemberUsageRange(period)) {
-    trendDates = getRecentUtcDateWindow(getMemberUsageRangeDays(period), now);
-    summaryDateFilter = dateWindowFilter(
-      trendDates[0] as string,
-      trendDates[trendDates.length - 1] as string,
-    );
-  } else {
-    summaryDateFilter = getPeriodDateFilter(period, now);
-    trendDates = period === "all-time" ? getRecentUtcDateWindow(30, now) : null;
-  }
-
-  const hasModelFilters = filters.models.length > 0;
-  const summaryWhere = hasModelFilters
-    ? usageWhere(member.id, summaryDateFilter, {
-        models: filters.models,
-        devices: filters.devices,
-      })
-    : usageWhere(member.id, summaryDateFilter, {
-        providers: filters.providers,
-        devices: filters.devices,
-      });
-  const trendDateFilter = trendDates
-    ? dateWindowFilter(
-        trendDates[0] as string,
-        trendDates[trendDates.length - 1] as string,
-      )
-    : summaryDateFilter;
-  const trendWhere = hasModelFilters
-    ? usageWhere(member.id, trendDateFilter, {
-        models: filters.models,
-        devices: filters.devices,
-      })
-    : usageWhere(member.id, trendDateFilter, {
-        providers: filters.providers,
-        devices: filters.devices,
-      });
-  const breakdownWhere = usageWhere(member.id, summaryDateFilter);
+  const periodPlan = planMemberUsagePeriod(period, now);
+  const queryPlan = planMemberUsageQueries(member.id, filters, periodPlan);
 
   const [
     summary,
@@ -197,93 +174,78 @@ export async function getMemberUsageDetail(
     providerTrendCostRows,
     deviceRows,
   ] = await Promise.all([
-    hasModelFilters
+    queryPlan.hasModelFilters
       ? prisma.dailyModelUsage.groupBy({
           by: ["provider", "modelName"],
           _sum: { totalTokens: true, costUsd: true },
-          where: summaryWhere,
+          where: queryPlan.summaryWhere,
         })
       : prisma.dailyProviderUsage.aggregate({
           _sum: { totalTokens: true, costUsd: true },
-          where: summaryWhere,
+          where: queryPlan.summaryWhere,
         }),
-    hasModelFilters
+    queryPlan.hasModelFilters
       ? prisma.dailyModelUsage.groupBy({
           by: ["date", "provider", "modelName"],
           _sum: { totalTokens: true, costUsd: true },
-          where: trendWhere,
+          where: queryPlan.trendWhere,
           orderBy: { date: "asc" },
         })
       : prisma.dailyProviderUsage.groupBy({
           by: ["date"],
           _sum: { totalTokens: true, costUsd: true },
-          where: trendWhere,
+          where: queryPlan.trendWhere,
           orderBy: { date: "asc" },
         }),
     prisma.dailyProviderUsage.groupBy({
       by: ["provider"],
       _sum: { totalTokens: true, costUsd: true },
-      where: breakdownWhere,
+      where: queryPlan.breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
     }),
     prisma.dailyModelUsage.groupBy({
       by: ["provider", "modelName"],
       _sum: { totalTokens: true, costUsd: true },
-      where: breakdownWhere,
+      where: queryPlan.breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
     }),
-    hasModelFilters
+    queryPlan.providerCostWhere
       ? prisma.dailyProviderUsage.groupBy({
           by: ["provider"],
           _sum: { totalTokens: true, costUsd: true },
-          where: usageWhere(member.id, summaryDateFilter, {
-            providers: uniqueProvidersForModels(filters.models),
-            devices: filters.devices,
-          }),
+          where: queryPlan.providerCostWhere,
           orderBy: { _sum: { totalTokens: "desc" } },
         })
       : Promise.resolve(null),
-    hasModelFilters
+    queryPlan.providerTrendCostWhere
       ? prisma.dailyProviderUsage.groupBy({
           by: ["date", "provider"],
           _sum: { totalTokens: true, costUsd: true },
-          where: usageWhere(member.id, trendDateFilter, {
-            providers: uniqueProvidersForModels(filters.models),
-            devices: filters.devices,
-          }),
+          where: queryPlan.providerTrendCostWhere,
           orderBy: { date: "asc" },
         })
       : Promise.resolve(null),
     prisma.dailyProviderUsage.groupBy({
       by: ["deviceId"],
       _sum: { totalTokens: true, costUsd: true },
-      where: breakdownWhere,
+      where: queryPlan.breakdownWhere,
       orderBy: { _sum: { totalTokens: "desc" } },
     }),
   ]);
 
-  const breakdownProviderTotalsByProvider = new Map(
-    providerRows.map((row) => [
-      row.provider,
-      sumToTotals(row),
-    ]),
+  const breakdownProviderTotalsByProvider = totalsByProvider(providerRows);
+  const summaryProviderTotalsByProvider = totalsByProvider(
+    providerCostRows ?? providerRows,
   );
-  const summaryProviderTotalsByProvider = new Map(
-    (providerCostRows ?? providerRows).map((row) => [
-      row.provider,
-      sumToTotals(row),
-    ]),
+  const providerTrendTotalsByDateProvider = totalsByDateProvider(
+    providerTrendCostRows ?? [],
   );
-  const providerTrendTotalsByDateProvider = new Map(
-    (providerTrendCostRows ?? []).map((row) => [
-      dateProviderKey(row.date, row.provider),
-      sumToTotals(row),
-    ]),
+  const deviceTotals = (deviceRows as Array<SumRow & { deviceId: string }>).map(
+    (row) => ({
+      deviceId: row.deviceId,
+      ...sumToTotals(row),
+    }),
   );
-  const deviceTotals = (deviceRows as Array<SumRow & { deviceId: string }>).map((row) => ({
-    deviceId: row.deviceId,
-    ...sumToTotals(row),
-  }));
 
   const devices = await prisma.device.findMany({
     where: {
@@ -298,20 +260,23 @@ export async function getMemberUsageDetail(
     },
   });
   const devicesById = new Map(devices.map((device) => [device.id, device]));
-  const summaryTotals = hasModelFilters
+  const summaryTotals = queryPlan.hasModelFilters
     ? modelRowsToTotals(
         summary as Array<SumRow & { provider: string }>,
         summaryProviderTotalsByProvider,
       )
     : sumToTotals(summary as SumRow);
-  const trend = hasModelFilters
+  const trend = queryPlan.hasModelFilters
     ? modelTrendRowsToTrend(
         trendRows as Array<SumRow & { date: Date; provider: string }>,
         providerTrendTotalsByDateProvider,
-        trendDates,
+        periodPlan.trendDates,
       )
-    : trendDates
-      ? zeroFillTrend(trendDates, trendRows as Array<SumRow & { date: Date }>)
+    : periodPlan.trendDates
+      ? zeroFillTrend(
+          periodPlan.trendDates,
+          trendRows as Array<SumRow & { date: Date }>,
+        )
       : (trendRows as Array<SumRow & { date: Date }>).map((row) => ({
           date: toIsoDate(row.date),
           ...sumToTotals(row),
@@ -328,42 +293,18 @@ export async function getMemberUsageDetail(
       ...summaryTotals,
     },
     trend,
-    providers: providerRows.flatMap((row) => {
-      const provider = parseProvider(row.provider);
-      if (!provider) return [];
-
-      return [
-        {
-          provider,
-          ...sumToTotals(row),
-        },
-      ];
-    }),
-    models: modelRows.flatMap((row) => {
-      const provider = parseProvider(row.provider);
-      if (!provider) return [];
-
-      return [
-        {
-          provider,
-          modelName: row.modelName,
-          ...modelToTotals(row, breakdownProviderTotalsByProvider),
-        },
-      ];
-    }),
-    devices: deviceTotals.flatMap((row) => {
-      const device = devicesById.get(row.deviceId);
-      const os = parseOperatingSystem(device?.os);
-      if (!device || !os) return [];
-
-      return [{ deviceName: device.name, os, ...row }];
-    }),
+    providers: mapProviderBreakdownRows(providerRows),
+    models: mapModelBreakdownRows(modelRows, breakdownProviderTotalsByProvider),
+    devices: mapDeviceBreakdownRows(deviceTotals, devicesById),
   };
 }
 
 function modelToTotals(
   row: SumRow & { provider: string },
-  providerTotalsByProvider: Map<string, { totalTokens: number; totalCostUsd: number }>,
+  providerTotalsByProvider: Map<
+    string,
+    { totalTokens: number; totalCostUsd: number }
+  >,
 ): {
   totalTokens: number;
   totalCostUsd: number;
@@ -372,13 +313,19 @@ function modelToTotals(
   if (row._sum.costUsd != null) return totals;
 
   const providerTotals = providerTotalsByProvider.get(row.provider);
-  if (!providerTotals || providerTotals.totalTokens === 0 || totals.totalTokens === 0) {
+  if (
+    !providerTotals ||
+    providerTotals.totalTokens === 0 ||
+    totals.totalTokens === 0
+  ) {
     return totals;
   }
 
   return {
     totalTokens: totals.totalTokens,
-    totalCostUsd: providerTotals.totalCostUsd * (totals.totalTokens / providerTotals.totalTokens),
+    totalCostUsd:
+      providerTotals.totalCostUsd *
+      (totals.totalTokens / providerTotals.totalTokens),
   };
 }
 
@@ -412,7 +359,10 @@ function modelTrendRowsToTrend(
       row,
       providerTotalsByDateProvider.get(dateProviderKey(row.date, row.provider)),
     );
-    const current = totalsByDate.get(date) ?? { totalTokens: 0, totalCostUsd: 0 };
+    const current = totalsByDate.get(date) ?? {
+      totalTokens: 0,
+      totalCostUsd: 0,
+    };
     totalsByDate.set(date, {
       totalTokens: current.totalTokens + rowTotals.totalTokens,
       totalCostUsd: current.totalCostUsd + rowTotals.totalCostUsd,
@@ -438,13 +388,116 @@ function modelToTotalsForProvider(
   const totals = sumToTotals(row);
   if (row._sum.costUsd != null) return totals;
 
-  if (!providerTotals || providerTotals.totalTokens === 0 || totals.totalTokens === 0) {
+  if (
+    !providerTotals ||
+    providerTotals.totalTokens === 0 ||
+    totals.totalTokens === 0
+  ) {
     return totals;
   }
 
   return {
     totalTokens: totals.totalTokens,
-    totalCostUsd: providerTotals.totalCostUsd * (totals.totalTokens / providerTotals.totalTokens),
+    totalCostUsd:
+      providerTotals.totalCostUsd *
+      (totals.totalTokens / providerTotals.totalTokens),
+  };
+}
+
+function totalsByProvider(
+  rows: Array<SumRow & { provider: string }>,
+): Map<string, UsageTotals> {
+  return new Map(rows.map((row) => [row.provider, sumToTotals(row)]));
+}
+
+function totalsByDateProvider(
+  rows: Array<SumRow & { date: Date; provider: string }>,
+): Map<string, UsageTotals> {
+  return new Map(
+    rows.map((row) => [
+      dateProviderKey(row.date, row.provider),
+      sumToTotals(row),
+    ]),
+  );
+}
+
+function mapProviderBreakdownRows(
+  rows: Array<SumRow & { provider: string }>,
+): MemberUsageDetail["providers"] {
+  return rows.flatMap((row) => {
+    const provider = parseProvider(row.provider);
+    if (!provider) return [];
+
+    return [{ provider, ...sumToTotals(row) }];
+  });
+}
+
+function mapModelBreakdownRows(
+  rows: Array<SumRow & { provider: string; modelName: string }>,
+  providerTotalsByProvider: Map<string, UsageTotals>,
+): MemberUsageDetail["models"] {
+  return rows.flatMap((row) => {
+    const provider = parseProvider(row.provider);
+    if (!provider) return [];
+
+    return [
+      {
+        provider,
+        modelName: row.modelName,
+        ...modelToTotals(row, providerTotalsByProvider),
+      },
+    ];
+  });
+}
+
+function mapDeviceBreakdownRows(
+  deviceTotals: Array<UsageTotals & { deviceId: string }>,
+  devicesById: Map<string, { id: string; name: string; os: string }>,
+): MemberUsageDetail["devices"] {
+  return deviceTotals.flatMap((row) => {
+    const device = devicesById.get(row.deviceId);
+    const os = parseOperatingSystem(device?.os);
+    if (!device || !os) return [];
+
+    return [{ deviceName: device.name, os, ...row }];
+  });
+}
+
+function planMemberUsagePeriod(
+  period: MemberUsageRequestPeriod,
+  now: Date,
+): MemberUsagePeriodPlan {
+  if (isMemberUsageRange(period)) {
+    const trendDates = getRecentUtcDateWindow(
+      getMemberUsageRangeDays(period),
+      now,
+    );
+    const summaryDateFilter = dateWindowFilter(
+      trendDates[0] as string,
+      trendDates[trendDates.length - 1] as string,
+    );
+
+    return {
+      summaryDateFilter,
+      trendDateFilter: summaryDateFilter,
+      trendDates,
+    };
+  }
+
+  const summaryDateFilter = getPeriodDateFilter(period, now);
+  const trendDates =
+    period === "all-time" ? getRecentUtcDateWindow(30, now) : null;
+  const trendDateFilter = trendDates
+    ? dateWindowFilter(
+        trendDates[0] as string,
+        trendDates[trendDates.length - 1] as string,
+      )
+    : summaryDateFilter;
+
+  return {
+    summaryDateFilter,
+    trendDateFilter,
+    trendDates,
   };
 }
 
@@ -458,7 +511,9 @@ function getPeriodDateFilter(
     : undefined;
 }
 
-function isMemberUsageRange(period: MemberUsageRequestPeriod): period is MemberUsageRange {
+function isMemberUsageRange(
+  period: MemberUsageRequestPeriod,
+): period is MemberUsageRange {
   return period === "7d" || period === "30d";
 }
 
@@ -474,6 +529,44 @@ function uniqueProvidersForModels(
 
 function dateProviderKey(date: Date, provider: string): string {
   return `${toIsoDate(date)}:${provider}`;
+}
+
+function planMemberUsageQueries(
+  memberId: string,
+  filters: MemberUsageFilters,
+  periodPlan: MemberUsagePeriodPlan,
+): MemberUsageQueryPlan {
+  const hasModelFilters = filters.models.length > 0;
+  const summaryFilters = hasModelFilters
+    ? { models: filters.models, devices: filters.devices }
+    : { providers: filters.providers, devices: filters.devices };
+  const providerCostFilters = hasModelFilters
+    ? {
+        providers: uniqueProvidersForModels(filters.models),
+        devices: filters.devices,
+      }
+    : {};
+
+  return {
+    hasModelFilters,
+    summaryWhere: usageWhere(
+      memberId,
+      periodPlan.summaryDateFilter,
+      summaryFilters,
+    ),
+    trendWhere: usageWhere(
+      memberId,
+      periodPlan.trendDateFilter,
+      summaryFilters,
+    ),
+    breakdownWhere: usageWhere(memberId, periodPlan.summaryDateFilter),
+    providerCostWhere: hasModelFilters
+      ? usageWhere(memberId, periodPlan.summaryDateFilter, providerCostFilters)
+      : null,
+    providerTrendCostWhere: hasModelFilters
+      ? usageWhere(memberId, periodPlan.trendDateFilter, providerCostFilters)
+      : null,
+  };
 }
 
 function usageWhere(
