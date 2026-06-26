@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { providers } from "@token-burn/shared";
 
 import { buildSyncWindows, type SyncWindowsPrisma } from "./sync-windows";
 
@@ -19,10 +20,11 @@ describe("buildSyncWindows", () => {
     ).resolves.toEqual({
       serverTime: "2026-06-06T12:00:00.000Z",
       until: "2026-06-06",
-      providers: [
-        { provider: "claude_code", since: "2026-06-05" },
-        { provider: "codex", since: "2026-06-06" },
-      ],
+      providers: providers.map((provider) => {
+        if (provider === "claude_code") return { provider, since: "2026-06-05" };
+        if (provider === "codex") return { provider, since: "2026-06-06" };
+        return { provider };
+      }),
     });
   });
 
@@ -48,7 +50,9 @@ describe("buildSyncWindows", () => {
     ).resolves.toEqual({
       serverTime: "2026-06-06T12:00:00.000Z",
       until: "2026-06-06",
-      providers: [{ provider: "claude_code", since: "2026-06-05" }, { provider: "codex" }],
+      providers: providers.map((provider) =>
+        provider === "claude_code" ? { provider, since: "2026-06-05" } : { provider },
+      ),
     });
 
     expect(groupBy).toHaveBeenCalledWith({

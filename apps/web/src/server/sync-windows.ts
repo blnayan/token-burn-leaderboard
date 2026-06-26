@@ -59,7 +59,7 @@ export async function buildSyncWindows({
 }
 
 function isProvider(value: string): value is Provider {
-  return (providers as readonly string[]).includes(value);
+  return providers.includes(value as Provider);
 }
 
 function toUtcDate(value: Date): string {

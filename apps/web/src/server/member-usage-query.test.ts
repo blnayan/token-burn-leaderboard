@@ -41,6 +41,7 @@ describe("parseMemberUsageQuery", () => {
         ["range", "7d"],
         ["provider", "codex"],
         ["provider", "claude_code"],
+        ["provider", "opencode"],
         ["device", "device-1"],
         ["device", "device-2"],
       ]),
@@ -49,7 +50,7 @@ describe("parseMemberUsageQuery", () => {
     expect(providerQuery).toEqual({
       period: "7d",
       filters: {
-        providers: ["codex", "claude_code"],
+        providers: ["codex", "claude_code", "opencode"],
         models: [],
         devices: ["device-1", "device-2"],
       },
@@ -59,6 +60,7 @@ describe("parseMemberUsageQuery", () => {
       new URLSearchParams([
         ["range", "30d"],
         ["model", "codex:gpt-5.4"],
+        ["model", "gemini:gemini-2.5-pro"],
         ["model", "claude_code:opus"],
       ]),
     );
@@ -69,6 +71,7 @@ describe("parseMemberUsageQuery", () => {
         providers: [],
         models: [
           { provider: "codex", modelName: "gpt-5.4" },
+          { provider: "gemini", modelName: "gemini-2.5-pro" },
           { provider: "claude_code", modelName: "opus" },
         ],
         devices: [],
@@ -116,14 +119,14 @@ describe("encodeMemberUsageQuery", () => {
     const providerParams = encodeMemberUsageQuery({
       period: "7d",
       filters: {
-        providers: ["codex", "claude_code"],
+        providers: ["codex", "claude_code", "opencode"],
         models: [],
         devices: ["device-1", "device-2"],
       },
     });
 
     expect(providerParams.toString()).toBe(
-      "range=7d&provider=codex&provider=claude_code&device=device-1&device=device-2",
+      "range=7d&provider=codex&provider=claude_code&provider=opencode&device=device-1&device=device-2",
     );
 
     const modelParams = encodeMemberUsageQuery({

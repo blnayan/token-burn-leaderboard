@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { providers } from "@token-burn/shared";
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -55,7 +56,9 @@ describe("GET /api/cli/sync-windows", () => {
     await expect(response.json()).resolves.toEqual({
       serverTime: "2026-06-06T12:00:00.000Z",
       until: "2026-06-06",
-      providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
+      providers: providers.map((provider) =>
+        provider === "codex" ? { provider, since: "2026-06-06" } : { provider },
+      ),
     });
   });
 
