@@ -1,9 +1,42 @@
 import { z } from "zod";
 import { sumTokenCategories } from "./tokens.js";
 
-export const providerSchema = z.enum(["claude_code", "codex"]);
-export const providers = providerSchema.options;
+export const providerDefinitions = [
+  { id: "claude_code", label: "Claude Code", ccusageCommand: "claude" },
+  { id: "codex", label: "Codex", ccusageCommand: "codex" },
+  { id: "opencode", label: "OpenCode", ccusageCommand: "opencode" },
+  { id: "amp", label: "Amp", ccusageCommand: "amp" },
+  { id: "droid", label: "Droid", ccusageCommand: "droid" },
+  { id: "codebuff", label: "Codebuff", ccusageCommand: "codebuff" },
+  { id: "hermes", label: "Hermes Agent", ccusageCommand: "hermes" },
+  { id: "pi", label: "pi-agent", ccusageCommand: "pi" },
+  { id: "goose", label: "Goose", ccusageCommand: "goose" },
+  { id: "kilo", label: "Kilo", ccusageCommand: "kilo" },
+  { id: "copilot", label: "GitHub Copilot CLI", ccusageCommand: "copilot" },
+  { id: "gemini", label: "Gemini CLI", ccusageCommand: "gemini" },
+  { id: "kimi", label: "Kimi", ccusageCommand: "kimi" },
+  { id: "qwen", label: "Qwen", ccusageCommand: "qwen" },
+  { id: "openclaw", label: "OpenClaw", ccusageCommand: "openclaw" },
+] as const;
+
+type ProviderDefinition = (typeof providerDefinitions)[number];
+type ProviderId = ProviderDefinition["id"];
+
+export const providers = providerDefinitions.map((provider) => provider.id) as [
+  ProviderId,
+  ...ProviderId[],
+];
+
+export const providerSchema = z.enum(providers);
 export type Provider = z.infer<typeof providerSchema>;
+
+export const providerMetadata = Object.fromEntries(
+  providerDefinitions.map((provider) => [provider.id, provider]),
+) as Record<Provider, ProviderDefinition>;
+
+export function formatProvider(provider: Provider): string {
+  return providerMetadata[provider].label;
+}
 
 export const periodSchema = z.enum(["daily", "weekly", "monthly", "all-time"]);
 export type LeaderboardPeriod = z.infer<typeof periodSchema>;

@@ -1,19 +1,60 @@
 import { describe, expect, it } from "vitest";
 import {
+  formatProvider,
   leaderboardRowSchema,
   memberUsageDetailSchema,
   memberUsageRangeSchema,
   periodSchema,
+  providerMetadata,
   providerSchema,
+  providers,
   syncPayloadSchema,
   syncWindowsResponseSchema,
   tokenCategoriesSchema,
 } from "./schemas";
 
 describe("providerSchema", () => {
-  it("accepts MVP providers", () => {
-    expect(providerSchema.parse("claude_code")).toBe("claude_code");
-    expect(providerSchema.parse("codex")).toBe("codex");
+  it("accepts every supported ccusage provider in stable order", () => {
+    expect(providers).toEqual([
+      "claude_code",
+      "codex",
+      "opencode",
+      "amp",
+      "droid",
+      "codebuff",
+      "hermes",
+      "pi",
+      "goose",
+      "kilo",
+      "copilot",
+      "gemini",
+      "kimi",
+      "qwen",
+      "openclaw",
+    ]);
+
+    for (const provider of providers) {
+      expect(providerSchema.parse(provider)).toBe(provider);
+    }
+  });
+
+  it("exports readable labels and ccusage command names", () => {
+    expect(providerMetadata.claude_code).toEqual({
+      id: "claude_code",
+      label: "Claude Code",
+      ccusageCommand: "claude",
+    });
+    expect(providerMetadata.copilot).toEqual({
+      id: "copilot",
+      label: "GitHub Copilot CLI",
+      ccusageCommand: "copilot",
+    });
+    expect(formatProvider("opencode")).toBe("OpenCode");
+    expect(formatProvider("gemini")).toBe("Gemini CLI");
+  });
+
+  it("rejects unknown providers", () => {
+    expect(() => providerSchema.parse("future_provider")).toThrow();
   });
 });
 
@@ -74,6 +115,28 @@ describe("syncPayloadSchema", () => {
     });
 
     expect(payload.totalTokens).toBe(375);
+  });
+
+  it("accepts expanded ccusage providers in sync payloads", () => {
+    const payload = syncPayloadSchema.parse({
+      provider: "opencode",
+      date: "2026-06-01",
+      tokenCategories: {
+        input: 50,
+        output: 25,
+        cacheCreate: 0,
+        cacheRead: 5,
+      },
+      totalTokens: 80,
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      ccusageVersion: "20.0.6",
+      os: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+    });
+
+    expect(payload.provider).toBe("opencode");
   });
 
   it("rejects totals that do not match token categories", () => {
@@ -404,15 +467,15 @@ describe("memberUsageDetailSchema", () => {
         ],
         providers: [
           {
-            provider: "codex",
+            provider: "gemini",
             totalTokens: 100,
             totalCostUsd: 1.25,
           },
         ],
         models: [
           {
-            modelName: "gpt-5-codex",
-            provider: "codex",
+            modelName: "gemini-2.5-pro",
+            provider: "gemini",
             totalTokens: 80,
             totalCostUsd: 1,
           },
