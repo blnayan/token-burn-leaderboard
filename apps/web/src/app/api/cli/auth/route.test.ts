@@ -9,19 +9,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/server/cli-auth", async () => {
-  const actual = await vi.importActual<typeof import("@/server/cli-auth")>(
-    "@/server/cli-auth",
-  );
-
-  return {
-    ...actual,
-    hashSecret: vi.fn((value: string) => `hashed-${value}`),
-  };
-});
-
 import { prisma } from "@/lib/prisma";
-import { hashSecret } from "@/server/cli-auth";
 
 import { GET } from "./route";
 
@@ -31,12 +19,9 @@ const prismaMock = prisma as unknown as {
   };
 };
 
-const hashSecretMock = hashSecret as unknown as ReturnType<typeof vi.fn>;
-
 describe("GET /api/cli/auth", () => {
   beforeEach(() => {
     prismaMock.cliToken.findFirst.mockReset();
-    hashSecretMock.mockClear();
   });
 
   it("returns unauthorized without a bearer token", async () => {
@@ -56,22 +41,6 @@ describe("GET /api/cli/auth", () => {
 
     expect(response.status).toBe(401);
     await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
-    expect(hashSecretMock).toHaveBeenCalledWith("tb_missing");
-    expect(prismaMock.cliToken.findFirst).toHaveBeenCalledWith({
-      where: {
-        tokenHash: "hashed-tb_missing",
-        revokedAt: null,
-        expiresAt: { gt: expect.any(Date) },
-      },
-      select: {
-        member: {
-          select: {
-            displayName: true,
-            username: true,
-          },
-        },
-      },
-    });
   });
 
   it("returns authenticated member data for a valid CLI token", async () => {

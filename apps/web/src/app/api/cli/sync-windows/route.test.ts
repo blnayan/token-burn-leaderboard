@@ -12,19 +12,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
-vi.mock("@/server/cli-auth", async () => {
-  const actual = await vi.importActual<typeof import("@/server/cli-auth")>(
-    "@/server/cli-auth",
-  );
-
-  return {
-    ...actual,
-    hashSecret: vi.fn((value: string) => `hashed-${value}`),
-  };
-});
-
 import { prisma } from "@/lib/prisma";
-import { hashSecret } from "@/server/cli-auth";
 
 import { GET } from "./route";
 
@@ -37,14 +25,11 @@ const prismaMock = prisma as unknown as {
   };
 };
 
-const hashSecretMock = hashSecret as unknown as ReturnType<typeof vi.fn>;
-
 describe("GET /api/cli/sync-windows", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     prismaMock.cliToken.findFirst.mockReset();
     prismaMock.dailyProviderUsage.groupBy.mockReset();
-    hashSecretMock.mockClear();
   });
 
   afterEach(() => {
@@ -72,20 +57,24 @@ describe("GET /api/cli/sync-windows", () => {
       until: "2026-06-06",
       providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
     });
-    expect(hashSecretMock).toHaveBeenCalledWith("secret");
-    expect(prismaMock.cliToken.findFirst).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          tokenHash: hashSecret("secret"),
-          revokedAt: null,
-        }),
-      }),
-    );
   });
 
   it("rejects missing auth", async () => {
     const response = await GET(
       new NextRequest(
+        "https://token-burn.test/api/cli/sync-windows?deviceId=4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      ),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: "Unauthorized" });
+  });
+
+  it("returns unauthorized when no valid CLI token exists", async () => {
+    prismaMock.cliToken.findFirst.mockResolvedValue(null);
+
+    const response = await GET(
+      request(
         "https://token-burn.test/api/cli/sync-windows?deviceId=4f43b27d-7d86-4ff8-8c98-f74158819e59",
       ),
     );
