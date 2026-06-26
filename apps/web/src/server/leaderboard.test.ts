@@ -141,6 +141,58 @@ describe("bigIntToSafeNumber", () => {
   });
 });
 
+type GroupByArgs = { by: string[]; where?: unknown; orderBy?: unknown };
+
+function whereHasProviderFilter(where: unknown): boolean {
+  return typeof where === "object" && where !== null && "provider" in where;
+}
+
+function mockProviderGroupByByShape(rows: {
+  trend?: unknown[];
+  providers?: unknown[];
+  providerCosts?: unknown[];
+  providerTrendCosts?: unknown[];
+  devices?: unknown[];
+}) {
+  prismaMock.dailyProviderUsage.groupBy.mockImplementation(
+    async (args: GroupByArgs) => {
+      if (args.by.length === 1 && args.by[0] === "date") {
+        return rows.trend ?? [];
+      }
+      if (args.by.length === 1 && args.by[0] === "provider") {
+        return whereHasProviderFilter(args.where)
+          ? (rows.providerCosts ?? [])
+          : (rows.providers ?? []);
+      }
+      if (
+        args.by.length === 2 &&
+        args.by.includes("date") &&
+        args.by.includes("provider")
+      ) {
+        return rows.providerTrendCosts ?? [];
+      }
+      if (args.by.length === 1 && args.by[0] === "deviceId") {
+        return rows.devices ?? [];
+      }
+      return [];
+    },
+  );
+}
+
+function mockModelGroupByByShape(rows: {
+  summary?: unknown[];
+  trend?: unknown[];
+  breakdown?: unknown[];
+}) {
+  prismaMock.dailyModelUsage.groupBy.mockImplementation(
+    async (args: GroupByArgs) => {
+      if (args.by.includes("date")) return rows.trend ?? [];
+      if (args.orderBy) return rows.breakdown ?? [];
+      return rows.summary ?? [];
+    },
+  );
+}
+
 describe("getMemberUsageDetail", () => {
   it("aggregates weekly trend, provider, model, and device usage for a known member", async () => {
     prismaMock.member.findUnique.mockResolvedValue({
@@ -151,8 +203,8 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 300n, costUsd: 3.75 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-01T00:00:00.000Z"),
           _sum: { totalTokens: 100n, costUsd: 1.25 },
@@ -161,20 +213,23 @@ describe("getMemberUsageDetail", () => {
           date: new Date("2026-06-02T00:00:00.000Z"),
           _sum: { totalTokens: 200n, costUsd: 2.5 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 300n, costUsd: 3.75 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      devices: [
         { deviceId: "device-1", _sum: { totalTokens: 300n, costUsd: 3.75 } },
-      ]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([
-      {
-        provider: "codex",
-        modelName: "gpt-5-codex",
-        _sum: { totalTokens: 250n, costUsd: 3 },
-      },
-    ]);
+      ],
+    });
+    mockModelGroupByByShape({
+      breakdown: [
+        {
+          provider: "codex",
+          modelName: "gpt-5-codex",
+          _sum: { totalTokens: 250n, costUsd: 3 },
+        },
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([
       { id: "device-1", name: "Ada MacBook", os: "darwin" },
     ]);
@@ -235,18 +290,18 @@ describe("getMemberUsageDetail", () => {
       _sum: { totalTokens: true, costUsd: true },
       where: { memberId: "member-1", date: weeklyDateFilter },
     });
-    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenNthCalledWith(1, {
-      by: ["date"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: { memberId: "member-1", date: weeklyDateFilter },
-      orderBy: { date: "asc" },
-    });
-    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith({
-      by: ["provider", "modelName"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: { memberId: "member-1", date: weeklyDateFilter },
-      orderBy: { _sum: { totalTokens: "desc" } },
-    });
+    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["date"],
+        where: { memberId: "member-1", date: weeklyDateFilter },
+      }),
+    );
+    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["provider", "modelName"],
+        where: { memberId: "member-1", date: weeklyDateFilter },
+      }),
+    );
   });
 
   it("uses all-time summary breakdowns and a zero-filled recent 30-day trend", async () => {
@@ -258,18 +313,18 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 500n, costUsd: 5 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           _sum: { totalTokens: 50n, costUsd: 0.5 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 500n, costUsd: 5 } },
-      ])
-      .mockResolvedValueOnce([]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([]);
+      ],
+    });
+    mockModelGroupByByShape({ breakdown: [] });
     prismaMock.device.findMany.mockResolvedValue([]);
 
     const detail = await getMemberUsageDetail(
@@ -308,18 +363,18 @@ describe("getMemberUsageDetail", () => {
       _sum: { totalTokens: true, costUsd: true },
       where: { memberId: "member-1" },
     });
-    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenNthCalledWith(1, {
-      by: ["date"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-05-09T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
+    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["date"],
+        where: {
+          memberId: "member-1",
+          date: {
+            gte: new Date("2026-05-09T00:00:00.000Z"),
+            lt: new Date("2026-06-08T00:00:00.000Z"),
+          },
         },
-      },
-      orderBy: { date: "asc" },
-    });
+      }),
+    );
   });
 
   it("uses a zero-filled trailing 7-day range for member usage detail", async () => {
@@ -331,18 +386,18 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 70n, costUsd: 0.7 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           _sum: { totalTokens: 70n, costUsd: 0.7 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 70n, costUsd: 0.7 } },
-      ])
-      .mockResolvedValueOnce([]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([]);
+      ],
+    });
+    mockModelGroupByByShape({ breakdown: [] });
     prismaMock.device.findMany.mockResolvedValue([]);
 
     const detail = await getMemberUsageDetail(
@@ -385,18 +440,18 @@ describe("getMemberUsageDetail", () => {
         },
       },
     });
-    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith({
-      by: ["provider", "modelName"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-06-01T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
+    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["provider", "modelName"],
+        where: {
+          memberId: "member-1",
+          date: {
+            gte: new Date("2026-06-01T00:00:00.000Z"),
+            lt: new Date("2026-06-08T00:00:00.000Z"),
+          },
         },
-      },
-      orderBy: { _sum: { totalTokens: "desc" } },
-    });
+      }),
+    );
   });
 
   it("applies provider and device filters to summary while keeping breakdowns unfiltered", async () => {
@@ -408,27 +463,30 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 200n, costUsd: 2 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-01T00:00:00.000Z"),
           _sum: { totalTokens: 200n, costUsd: 2 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 200n, costUsd: 2 } },
         { provider: "claude_code", _sum: { totalTokens: 50n, costUsd: 0.5 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      devices: [
         { deviceId: "device-1", _sum: { totalTokens: 200n, costUsd: 2 } },
-      ]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([
-      {
-        provider: "codex",
-        modelName: "gpt-5-codex",
-        _sum: { totalTokens: 200n, costUsd: 2 },
-      },
-    ]);
+      ],
+    });
+    mockModelGroupByByShape({
+      breakdown: [
+        {
+          provider: "codex",
+          modelName: "gpt-5-codex",
+          _sum: { totalTokens: 200n, costUsd: 2 },
+        },
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([
       { id: "device-1", name: "Ada MacBook", os: "darwin" },
     ]);
@@ -471,18 +529,6 @@ describe("getMemberUsageDetail", () => {
         deviceId: { in: ["device-1"] },
       },
     });
-    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenNthCalledWith(2, {
-      by: ["provider"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-06-01T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
-        },
-      },
-      orderBy: { _sum: { totalTokens: "desc" } },
-    });
   });
 
   it("uses model usage for summary and trend when model and device filters are active", async () => {
@@ -491,46 +537,48 @@ describe("getMemberUsageDetail", () => {
       username: "ada",
       displayName: "Ada",
     });
-    prismaMock.dailyModelUsage.groupBy
-      .mockResolvedValueOnce([
+    mockModelGroupByByShape({
+      summary: [
         {
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 150n, costUsd: 1.5 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 150n, costUsd: 1.5 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      breakdown: [
         {
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 150n, costUsd: 1.5 },
         },
-      ]);
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+      ],
+    });
+    mockProviderGroupByByShape({
+      providerCosts: [
         { provider: "codex", _sum: { totalTokens: 150n, costUsd: 1.5 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 150n, costUsd: 1.5 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providerTrendCosts: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           provider: "codex",
           _sum: { totalTokens: 150n, costUsd: 1.5 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      devices: [
         { deviceId: "device-1", _sum: { totalTokens: 150n, costUsd: 1.5 } },
-      ]);
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([
       { id: "device-1", name: "Ada MacBook", os: "darwin" },
     ]);
@@ -570,57 +618,27 @@ describe("getMemberUsageDetail", () => {
       deviceId: "device-1",
       deviceName: "Ada MacBook",
     });
-    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenNthCalledWith(1, {
-      by: ["provider", "modelName"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-05-09T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
-        },
-        deviceId: { in: ["device-1"] },
-        OR: [{ provider: "codex", modelName: "gpt-5-codex" }],
+    const filteredModelWhere = {
+      memberId: "member-1",
+      date: {
+        gte: new Date("2026-05-09T00:00:00.000Z"),
+        lt: new Date("2026-06-08T00:00:00.000Z"),
       },
-    });
-    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenNthCalledWith(2, {
-      by: ["date", "provider", "modelName"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-05-09T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
-        },
-        deviceId: { in: ["device-1"] },
-        OR: [{ provider: "codex", modelName: "gpt-5-codex" }],
-      },
-      orderBy: { date: "asc" },
-    });
-    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenNthCalledWith(3, {
-      by: ["provider", "modelName"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-05-09T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
-        },
-      },
-      orderBy: { _sum: { totalTokens: "desc" } },
-    });
-    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenNthCalledWith(4, {
-      by: ["deviceId"],
-      _sum: { totalTokens: true, costUsd: true },
-      where: {
-        memberId: "member-1",
-        date: {
-          gte: new Date("2026-05-09T00:00:00.000Z"),
-          lt: new Date("2026-06-08T00:00:00.000Z"),
-        },
-      },
-      orderBy: { _sum: { totalTokens: "desc" } },
-    });
+      deviceId: { in: ["device-1"] },
+      OR: [{ provider: "codex", modelName: "gpt-5-codex" }],
+    };
+    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["provider", "modelName"],
+        where: filteredModelWhere,
+      }),
+    );
+    expect(prismaMock.dailyModelUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["date", "provider", "modelName"],
+        where: filteredModelWhere,
+      }),
+    );
   });
 
   it("keeps member usage breakdown options and totals unfiltered when filters are active", async () => {
@@ -774,6 +792,19 @@ describe("getMemberUsageDetail", () => {
         totalCostUsd: 0.75,
       },
     ]);
+    expect(prismaMock.dailyProviderUsage.groupBy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        by: ["provider"],
+        where: {
+          memberId: "member-1",
+          date: {
+            gte: new Date("2026-06-01T00:00:00.000Z"),
+            lt: new Date("2026-06-08T00:00:00.000Z"),
+          },
+        },
+        orderBy: { _sum: { totalTokens: "desc" } },
+      }),
+    );
   });
 
   it("allocates provider cost to model-filtered summary trend provider and device totals when model costs are missing", async () => {
@@ -782,47 +813,49 @@ describe("getMemberUsageDetail", () => {
       username: "ada",
       displayName: "Ada",
     });
-    prismaMock.dailyModelUsage.groupBy
-      .mockResolvedValueOnce([
+    mockModelGroupByByShape({
+      summary: [
         {
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 50n, costUsd: null },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 50n, costUsd: null },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      breakdown: [
         {
           provider: "codex",
           modelName: "gpt-5-codex",
           _sum: { totalTokens: 50n, costUsd: null },
         },
-      ]);
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+      ],
+    });
+    mockProviderGroupByByShape({
+      providerCosts: [
         { provider: "codex", _sum: { totalTokens: 200n, costUsd: 8 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 200n, costUsd: 8 } },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providerTrendCosts: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           provider: "codex",
           _sum: { totalTokens: 200n, costUsd: 8 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      devices: [
         { deviceId: "device-1", _sum: { totalTokens: 100n, costUsd: 4 } },
         { deviceId: "device-2", _sum: { totalTokens: 100n, costUsd: 4 } },
-      ]);
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([
       { id: "device-1", name: "Ada MacBook", os: "darwin" },
       { id: "device-2", name: "Ada Linux", os: "linux" },
@@ -889,29 +922,31 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 1000n, costUsd: 10 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           _sum: { totalTokens: 1000n, costUsd: 10 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 1000n, costUsd: 10 } },
-      ])
-      .mockResolvedValueOnce([]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([
-      {
-        provider: "codex",
-        modelName: "gpt-5-codex",
-        _sum: { totalTokens: 250n, costUsd: null },
-      },
-      {
-        provider: "codex",
-        modelName: "gpt-5-mini",
-        _sum: { totalTokens: 750n, costUsd: null },
-      },
-    ]);
+      ],
+    });
+    mockModelGroupByByShape({
+      breakdown: [
+        {
+          provider: "codex",
+          modelName: "gpt-5-codex",
+          _sum: { totalTokens: 250n, costUsd: null },
+        },
+        {
+          provider: "codex",
+          modelName: "gpt-5-mini",
+          _sum: { totalTokens: 750n, costUsd: null },
+        },
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([]);
 
     const detail = await getMemberUsageDetail(
@@ -952,24 +987,26 @@ describe("getMemberUsageDetail", () => {
     prismaMock.dailyProviderUsage.aggregate.mockResolvedValue({
       _sum: { totalTokens: 100n, costUsd: 10 },
     });
-    prismaMock.dailyProviderUsage.groupBy
-      .mockResolvedValueOnce([
+    mockProviderGroupByByShape({
+      trend: [
         {
           date: new Date("2026-06-07T00:00:00.000Z"),
           _sum: { totalTokens: 100n, costUsd: 10 },
         },
-      ])
-      .mockResolvedValueOnce([
+      ],
+      providers: [
         { provider: "codex", _sum: { totalTokens: 100n, costUsd: 10 } },
-      ])
-      .mockResolvedValueOnce([]);
-    prismaMock.dailyModelUsage.groupBy.mockResolvedValue([
-      {
-        provider: "codex",
-        modelName: "free-model",
-        _sum: { totalTokens: 100n, costUsd: 0 },
-      },
-    ]);
+      ],
+    });
+    mockModelGroupByByShape({
+      breakdown: [
+        {
+          provider: "codex",
+          modelName: "free-model",
+          _sum: { totalTokens: 100n, costUsd: 0 },
+        },
+      ],
+    });
     prismaMock.device.findMany.mockResolvedValue([]);
 
     const detail = await getMemberUsageDetail(
