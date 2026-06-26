@@ -12,6 +12,13 @@ import {
 } from "@/components/ui/chart";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import {
+  encodeMemberUsageModelFilter,
+  hasMemberUsageFilters,
+  isSameMemberUsageModelFilter,
+  type MemberUsageFilters,
+  type MemberUsageModelFilter,
+} from "@/server/member-usage-query";
 
 export const memberUsageChartConfig = {
   totalTokens: {
@@ -23,18 +30,8 @@ export const memberUsageChartConfig = {
   },
 } satisfies ChartConfig;
 
-export type MemberUsageProviderFilter = MemberUsageDetail["providers"][number]["provider"];
-
-export type MemberUsageModelFilter = Pick<
-  MemberUsageDetail["models"][number],
-  "modelName" | "provider"
->;
-
-export type MemberUsageSelectedFilters = {
-  providers: MemberUsageProviderFilter[];
-  models: MemberUsageModelFilter[];
-  devices: MemberUsageDetail["devices"][number]["deviceId"][];
-};
+type MemberUsageSelectedFilters = MemberUsageFilters;
+type MemberUsageProviderFilter = MemberUsageFilters["providers"][number];
 
 const emptySelectedFilters: MemberUsageSelectedFilters = {
   providers: [],
@@ -55,7 +52,7 @@ export function MemberUsageCharts({
   onToggleModel?: (model: MemberUsageModelFilter) => void;
   onToggleProvider?: (provider: MemberUsageProviderFilter) => void;
 }) {
-  const hasActiveFilters = hasSelectedFilters(selectedFilters);
+  const hasActiveFilters = hasMemberUsageFilters(selectedFilters);
 
   return (
     <div className="flex flex-col gap-6">
@@ -113,12 +110,14 @@ export function MemberUsageCharts({
         <Breakdown
           title="Models"
           items={detail.models.map((item) => ({
-            key: `${item.provider}:${item.modelName}`,
+            key: encodeMemberUsageModelFilter(item),
             label: item.modelName,
             meta: formatProvider(item.provider),
             tokens: item.totalTokens,
             costUsd: item.totalCostUsd,
-            selected: selectedFilters.models.some((model) => isSameModelFilter(model, item)),
+            selected: selectedFilters.models.some((model) =>
+              isSameMemberUsageModelFilter(model, item),
+            ),
             onToggle: () =>
               onToggleModel?.({ provider: item.provider, modelName: item.modelName }),
           }))}
@@ -199,17 +198,6 @@ function Breakdown({
       )}
     </section>
   );
-}
-
-function hasSelectedFilters(filters: MemberUsageSelectedFilters): boolean {
-  return filters.providers.length > 0 || filters.models.length > 0 || filters.devices.length > 0;
-}
-
-function isSameModelFilter(
-  left: MemberUsageModelFilter,
-  right: MemberUsageModelFilter,
-): boolean {
-  return left.provider === right.provider && left.modelName === right.modelName;
 }
 
 function TrendTooltipValue({ tokens, costUsd }: { tokens: number; costUsd: number }) {

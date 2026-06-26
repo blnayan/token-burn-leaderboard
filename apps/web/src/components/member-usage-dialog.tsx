@@ -10,8 +10,6 @@ import {
 import React from "react";
 
 import {
-  type MemberUsageSelectedFilters,
-  type MemberUsageModelFilter,
   MemberUsageCharts,
 } from "@/components/member-usage-charts";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +24,15 @@ import {
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  encodeMemberUsageQuery,
+  emptyMemberUsageFilters,
+  toggleMemberUsageDeviceFilter,
+  toggleMemberUsageModelFilter,
+  toggleMemberUsageProviderFilter,
+  type MemberUsageFilters,
+  type MemberUsageModelFilter,
+} from "@/server/member-usage-query";
 
 type MemberSummary = { username: string; displayName: string; rank: number };
 
@@ -44,12 +51,6 @@ const usageRanges: { label: string; value: MemberUsageRange }[] = [
   { label: "Past 7 days", value: "7d" },
   { label: "Past 30 days", value: "30d" },
 ];
-
-const emptySelectedFilters: MemberUsageSelectedFilters = {
-  providers: [],
-  models: [],
-  devices: [],
-};
 
 export function MemberUsageDialog({
   member,
@@ -80,27 +81,27 @@ function MemberUsageDialogInner({
   const [filterState, setFilterState] = React.useState<{
     username: string;
     range: MemberUsageRange;
-    filters: MemberUsageSelectedFilters;
+    filters: MemberUsageFilters;
   }>({
     username: "",
     range: "7d",
-    filters: emptySelectedFilters,
+    filters: emptyMemberUsageFilters,
   });
   const selectedRange = member && rangeState.username === member.username ? rangeState.range : "7d";
   const selectedFilters =
     member && filterState.username === member.username && filterState.range === selectedRange
       ? filterState.filters
-      : emptySelectedFilters;
+      : emptyMemberUsageFilters;
 
   const updateFilters = React.useCallback(
-    (updater: (filters: MemberUsageSelectedFilters) => MemberUsageSelectedFilters) => {
+    (updater: (filters: MemberUsageFilters) => MemberUsageFilters) => {
       if (!member) return;
 
       setFilterState((current) => {
         const currentFilters =
           current.username === member.username && current.range === selectedRange
             ? current.filters
-            : emptySelectedFilters;
+            : emptyMemberUsageFilters;
 
         return {
           username: member.username,
@@ -114,50 +115,21 @@ function MemberUsageDialogInner({
 
   const toggleProvider = React.useCallback(
     (provider: MemberUsageDetail["providers"][number]["provider"]) => {
-      updateFilters((filters) => {
-        const selected = filters.providers.includes(provider);
-
-        return {
-          providers: selected
-            ? filters.providers.filter((selectedProvider) => selectedProvider !== provider)
-            : [...filters.providers, provider],
-          models: [],
-          devices: filters.devices,
-        };
-      });
+      updateFilters((filters) => toggleMemberUsageProviderFilter(filters, provider));
     },
     [updateFilters],
   );
 
   const toggleModel = React.useCallback(
     (model: MemberUsageModelFilter) => {
-      updateFilters((filters) => {
-        const selected = filters.models.some((selectedModel) => isSameModelFilter(selectedModel, model));
-
-        return {
-          providers: [],
-          models: selected
-            ? filters.models.filter((selectedModel) => !isSameModelFilter(selectedModel, model))
-            : [...filters.models, model],
-          devices: filters.devices,
-        };
-      });
+      updateFilters((filters) => toggleMemberUsageModelFilter(filters, model));
     },
     [updateFilters],
   );
 
   const toggleDevice = React.useCallback(
     (deviceId: MemberUsageDetail["devices"][number]["deviceId"]) => {
-      updateFilters((filters) => {
-        const selected = filters.devices.includes(deviceId);
-
-        return {
-          ...filters,
-          devices: selected
-            ? filters.devices.filter((selectedDeviceId) => selectedDeviceId !== deviceId)
-            : [...filters.devices, deviceId],
-        };
-      });
+      updateFilters((filters) => toggleMemberUsageDeviceFilter(filters, deviceId));
     },
     [updateFilters],
   );
@@ -231,7 +203,7 @@ function MemberUsageDialogInner({
               setFilterState({
                 username: member.username,
                 range: value,
-                filters: emptySelectedFilters,
+                filters: emptyMemberUsageFilters,
               });
             }}
           >
@@ -279,30 +251,10 @@ function MemberUsageDialogInner({
 function buildMemberUsageUrl(
   username: string,
   range: MemberUsageRange,
-  filters: MemberUsageSelectedFilters,
+  filters: MemberUsageFilters,
 ): string {
-  const params = new URLSearchParams({ range });
-
-  for (const provider of filters.providers) {
-    params.append("provider", provider);
-  }
-
-  for (const model of filters.models) {
-    params.append("model", `${model.provider}:${model.modelName}`);
-  }
-
-  for (const device of filters.devices) {
-    params.append("device", device);
-  }
-
+  const params = encodeMemberUsageQuery({ period: range, filters });
   return `/api/leaderboard/members/${encodeURIComponent(username)}?${params.toString()}`;
-}
-
-function isSameModelFilter(
-  left: MemberUsageModelFilter,
-  right: MemberUsageModelFilter,
-): boolean {
-  return left.provider === right.provider && left.modelName === right.modelName;
 }
 
 function MemberUsageLoading() {
