@@ -49,6 +49,21 @@ describe("POST /api/sync CLI version enforcement", () => {
     });
     expect(persistSyncPayloadMock).not.toHaveBeenCalled();
   });
+
+  it("persists sync payloads for authenticated CLI tokens", async () => {
+    const response = await POST(createSyncRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ accepted: true });
+    expect(persistSyncPayloadMock).toHaveBeenCalledWith({
+      cliTokenId: "cli-token-1",
+      memberId: "member-1",
+      payload: expect.objectContaining({
+        provider: "codex",
+        cliVersion: requiredCliVersion,
+      }),
+    });
+  });
 });
 
 function createSyncRequest(overrides: Record<string, unknown> = {}) {

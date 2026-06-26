@@ -2,8 +2,7 @@ import { syncPayloadSchema } from "@token-burn/shared";
 import { NextResponse, type NextRequest } from "next/server";
 import { ZodError } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { hashSecret } from "@/server/cli-auth";
+import { authenticateCliRequest, unauthorizedCliResponse } from "@/server/cli-auth";
 import { formatRequiredCliVersionError, requiredCliVersion } from "@/server/cli-version";
 import { buildClientRateLimitKey, checkRateLimit, rateLimitResponse } from "@/server/rate-limit";
 import { persistSyncPayload } from "@/server/sync-ingest";
@@ -24,7 +23,7 @@ const syncTokenLimit = {
 };
 
 export async function POST(request: NextRequest) {
-  const token = readBearerToken(request);
+  const token = readBearerTokenForRateLimit(request);
   if (!token) {
     const rateLimit = checkRateLimit({
       key: buildClientRateLimitKey(request, "sync-missing-auth"),
@@ -32,7 +31,7 @@ export async function POST(request: NextRequest) {
     });
     if (!rateLimit.ok) return rateLimitResponse(rateLimit);
 
-    return unauthorized();
+    return unauthorizedCliResponse();
   }
 
   const clientRateLimit = checkRateLimit({
@@ -41,25 +40,19 @@ export async function POST(request: NextRequest) {
   });
   if (!clientRateLimit.ok) return rateLimitResponse(clientRateLimit);
 
+  const auth = await authenticateCliRequest(request, {
+    select: {
+      cliToken: { id: true },
+      member: { id: true },
+    },
+  });
+  if (!auth.ok) return auth.response;
+
   const rateLimit = checkRateLimit({
-    key: `sync-token:${hashSecret(token)}`,
+    key: `sync-token:${auth.context.tokenHash}`,
     ...syncTokenLimit,
   });
   if (!rateLimit.ok) return rateLimitResponse(rateLimit);
-
-  const cliToken = await prisma.cliToken.findFirst({
-    where: {
-      tokenHash: hashSecret(token),
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-    },
-    select: {
-      id: true,
-      member: { select: { id: true } },
-    },
-  });
-
-  if (!cliToken) return unauthorized();
 
   const body = await request.json().catch(() => null);
 
@@ -77,8 +70,8 @@ export async function POST(request: NextRequest) {
     }
 
     await persistSyncPayload({
-      cliTokenId: cliToken.id,
-      memberId: cliToken.member.id,
+      cliTokenId: auth.context.cliToken.id,
+      memberId: auth.context.member.id,
       payload,
     });
 
@@ -91,12 +84,8 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function readBearerToken(request: NextRequest): string | null {
+function readBearerTokenForRateLimit(request: NextRequest): string | null {
   const authorization = request.headers.get("authorization");
   const match = authorization?.match(/^Bearer (.+)$/i);
   return match?.[1] ?? null;
-}
-
-function unauthorized() {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }

@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { z, ZodError } from "zod";
 
-import { prisma } from "@/lib/prisma";
-import { hashSecret } from "@/server/cli-auth";
+import { authenticateCliRequest } from "@/server/cli-auth";
 import { DeviceMergeError, mergeMemberDevices } from "@/server/devices";
 
 const mergeRequestSchema = z.object({
@@ -11,28 +10,19 @@ const mergeRequestSchema = z.object({
 });
 
 export async function POST(request: NextRequest) {
-  const token = readBearerToken(request);
-  if (!token) return unauthorized();
-
-  const cliToken = await prisma.cliToken.findFirst({
-    where: {
-      tokenHash: hashSecret(token),
-      revokedAt: null,
-      expiresAt: { gt: new Date() },
-    },
+  const auth = await authenticateCliRequest(request, {
     select: {
-      member: { select: { id: true } },
+      member: { id: true },
     },
   });
-
-  if (!cliToken) return unauthorized();
+  if (!auth.ok) return auth.response;
 
   const body = await request.json().catch(() => null);
 
   try {
     const payload = mergeRequestSchema.parse(body);
     const result = await mergeMemberDevices({
-      memberId: cliToken.member.id,
+      memberId: auth.context.member.id,
       sourceDeviceId: payload.sourceDeviceId,
       targetDeviceId: payload.targetDeviceId,
     });
@@ -49,14 +39,4 @@ export async function POST(request: NextRequest) {
 
     throw error;
   }
-}
-
-function readBearerToken(request: NextRequest): string | null {
-  const authorization = request.headers.get("authorization");
-  const match = authorization?.match(/^Bearer (.+)$/i);
-  return match?.[1] ?? null;
-}
-
-function unauthorized() {
-  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 }
