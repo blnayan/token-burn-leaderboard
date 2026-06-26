@@ -1,18 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { hostname, platform as readPlatform } from "node:os";
 
-import { syncPayloadSchema, type Provider, type SyncPayload, type SyncWindowsResponse } from "@token-burn/shared";
-
-import type { NormalizedUsageRow, ProviderUsageWindow } from "./ccusage.js";
-import {
-  isUnsupportedCcusageProviderError,
-  readCcusageVersion as readCcusageVersionFromPackage,
-  readProviderUsage as readProviderUsageFromCcusage,
-} from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import { readConfig as readConfigFile, writeConfig as writeConfigFile } from "./config.js";
 import { defaultServerUrl } from "./defaults.js";
 import { createTokenBurnServerClient, type TokenBurnServerClient } from "./server-client.js";
+import {
+  collectAndSubmitUsage as collectAndSubmitUsageFromProviders,
+  type SyncCollectionIssue,
+  type SyncCollectionResult,
+} from "./sync-collection.js";
 import { cliVersion as packageCliVersion } from "./version.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
@@ -21,8 +18,7 @@ export type SyncDependencies = {
   readConfig?: () => Promise<CliConfig | null>;
   writeConfig?: (config: CliConfig) => Promise<void>;
   serverClient?: Pick<TokenBurnServerClient, "readHealth" | "readSyncWindows" | "submitSyncPayload">;
-  readProviderUsage?: (provider: Provider, options?: { window?: ProviderUsageWindow }) => Promise<NormalizedUsageRow[]>;
-  readCcusageVersion?: () => Promise<string>;
+  collectAndSubmitUsage?: typeof collectAndSubmitUsageFromProviders;
   now?: () => Date;
   platform?: SyncPlatform;
   cliVersion?: string;
@@ -31,10 +27,7 @@ export type SyncDependencies = {
   log?: (message: string) => void;
 };
 
-export type SyncProviderIssue = {
-  provider: Provider;
-  message: string;
-};
+export type SyncProviderIssue = SyncCollectionIssue;
 
 export type SyncResult = {
   failedProviders: SyncProviderIssue[];
@@ -44,14 +37,11 @@ export type SyncResult = {
   syncedAt: string;
 };
 
-const providers: Provider[] = ["claude_code", "codex"];
-
 export async function syncUsage({
   readConfig = readConfigFile,
   writeConfig = writeConfigFile,
   serverClient,
-  readProviderUsage = readProviderUsageFromCcusage,
-  readCcusageVersion = readCcusageVersionFromPackage,
+  collectAndSubmitUsage = collectAndSubmitUsageFromProviders,
   now = () => new Date(),
   platform = normalizePlatform(readPlatform()),
   cliVersion,
@@ -77,14 +67,22 @@ export async function syncUsage({
   const configWithDevice = { ...config, deviceId, deviceName };
   await writeConfig(configWithDevice);
 
-  let ccusageVersion: string;
-  let syncWindows: SyncWindowsResponse;
+  let collection: SyncCollectionResult;
 
   try {
-    ccusageVersion = await readCcusageVersion();
-    syncWindows = await client.readSyncWindows({ token: config.token, deviceId });
+    const syncWindows = await client.readSyncWindows({ token: config.token, deviceId });
+    collection = await collectAndSubmitUsage({
+      token: config.token,
+      deviceId,
+      deviceName,
+      cliVersion: version,
+      platform,
+      syncedAt,
+      syncWindows,
+      serverClient: client,
+    });
   } catch (error) {
-    const normalizedError = normalizeProviderError(error);
+    const normalizedError = error instanceof Error ? error : new Error(String(error));
     const lastSync = {
       ok: false,
       message: `Submitted 0 usage rows. Failed before provider collection: ${trimTrailingPeriod(normalizedError.message)}.`,
@@ -94,87 +92,28 @@ export async function syncUsage({
     throw normalizedError;
   }
 
-  const providerWindows = new Map(syncWindows.providers.map((window) => [window.provider, window]));
-  const failures: Array<{ provider: Provider; error: Error }> = [];
-  const skipped: Array<{ provider: Provider; error: Error }> = [];
-  let submitted = 0;
-
-  for (const provider of providers) {
-    try {
-      const providerWindow = providerWindows.get(provider);
-      const rows = await readProviderUsage(provider, {
-        window: providerWindow?.since ? { since: providerWindow.since, until: syncWindows.until } : undefined,
-      });
-
-      for (const row of rows) {
-        const payload = buildPayload(row, { cliVersion: version, ccusageVersion, deviceId, deviceName, platform, syncedAt });
-        await client.submitSyncPayload({ token: config.token, payload });
-        submitted += 1;
-      }
-    } catch (error) {
-      const normalizedError = normalizeProviderError(error);
-
-      if (isSkippableProviderError(error)) {
-        skipped.push({ provider, error: normalizedError });
-      } else {
-        failures.push({ provider, error: normalizedError });
-      }
-    }
-  }
-
-  const message = formatSyncMessage(submitted, failures, skipped);
+  const message = formatSyncMessage(collection.submitted, collection.failedProviders, collection.skippedProviders);
   const lastSync = {
-    ok: failures.length === 0,
+    ok: collection.failedProviders.length === 0,
     message,
     at: syncedAt,
   };
 
   await writeConfig({ ...configWithDevice, lastSync });
 
-  if (submitted === 0 && failures.length > 0) {
-    throw new Error(`All supported providers failed: ${formatFailures(failures)}.`);
+  if (collection.submitted === 0 && collection.failedProviders.length > 0) {
+    throw new Error(`All supported providers failed: ${formatFailures(collection.failedProviders)}.`);
   }
 
   log(message);
 
   return {
-    failedProviders: failures.map(({ provider, error }) => ({ provider, message: trimTrailingPeriod(error.message) })),
+    failedProviders: collection.failedProviders,
     lastSync,
-    skippedProviders: skipped.map(({ provider, error }) => ({ provider, message: trimTrailingPeriod(error.message) })),
-    submitted,
+    skippedProviders: collection.skippedProviders,
+    submitted: collection.submitted,
     syncedAt,
   };
-}
-
-function buildPayload(
-  row: NormalizedUsageRow,
-  metadata: {
-    cliVersion: string;
-    ccusageVersion: string;
-    deviceId: string;
-    deviceName: string;
-    platform: SyncPlatform;
-    syncedAt: string;
-  },
-): SyncPayload {
-  return syncPayloadSchema.parse({
-    provider: row.provider,
-    date: row.date,
-    tokenCategories: row.tokenCategories,
-    ...(row.tokenDetails ? { tokenDetails: row.tokenDetails } : {}),
-    totalTokens: row.totalTokens,
-    ...(row.costUsd === undefined ? {} : { costUsd: row.costUsd }),
-    ...(row.costSource ? { costSource: row.costSource } : {}),
-    ...(row.costMetadata ? { costMetadata: row.costMetadata } : {}),
-    ...(row.sourceSnapshot ? { sourceSnapshot: row.sourceSnapshot } : {}),
-    ...(row.models ? { models: row.models } : {}),
-    deviceId: metadata.deviceId,
-    deviceName: metadata.deviceName,
-    cliVersion: metadata.cliVersion,
-    ccusageVersion: metadata.ccusageVersion,
-    os: metadata.platform,
-    syncedAt: metadata.syncedAt,
-  });
 }
 
 function normalizeDeviceName(value: string): string {
@@ -198,11 +137,7 @@ function normalizePlatform(value: NodeJS.Platform): SyncPlatform {
   throw new Error(`Unsupported platform for sync: ${value}.`);
 }
 
-function formatSyncMessage(
-  submitted: number,
-  failures: Array<{ provider: Provider; error: Error }>,
-  skipped: Array<{ provider: Provider; error: Error }>,
-): string {
+function formatSyncMessage(submitted: number, failures: SyncProviderIssue[], skipped: SyncProviderIssue[]): string {
   const parts = [`Submitted ${submitted} usage ${submitted === 1 ? "row" : "rows"}`];
 
   if (failures.length > 0) {
@@ -216,46 +151,8 @@ function formatSyncMessage(
   return `${parts.join(". ")}.`;
 }
 
-function formatFailures(failures: Array<{ provider: Provider; error: Error }>): string {
-  return failures.map(({ provider, error }) => `${provider}: ${trimTrailingPeriod(error.message)}`).join("; ");
-}
-
-function toError(error: unknown): Error {
-  return error instanceof Error ? error : new Error(String(error));
-}
-
-function normalizeProviderError(error: unknown): Error {
-  const normalizedError = toError(error);
-
-  if (isMissingClaudeDataError(normalizedError)) {
-    return new Error("No valid Claude data directories found");
-  }
-
-  if (isCcusageNativeBinaryPermissionError(normalizedError)) {
-    return new Error(
-      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
-    );
-  }
-
-  return normalizedError;
-}
-
-function isSkippableProviderError(error: unknown): boolean {
-  if (isUnsupportedCcusageProviderError(error)) return true;
-
-  return isMissingClaudeDataError(toError(error));
-}
-
-function isMissingClaudeDataError(error: Error): boolean {
-  return error.message.includes("No valid Claude data directories found");
-}
-
-function isCcusageNativeBinaryPermissionError(error: Error): boolean {
-  return (
-    error.message.includes("ccusage native binary is not executable") &&
-    error.message.includes("EPERM") &&
-    error.message.includes("chmod")
-  );
+function formatFailures(failures: SyncProviderIssue[]): string {
+  return failures.map(({ provider, message }) => `${provider}: ${trimTrailingPeriod(message)}`).join("; ");
 }
 
 function trimTrailingPeriod(message: string): string {

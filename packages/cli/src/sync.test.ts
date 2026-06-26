@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import type { SyncPayload, SyncWindowsResponse } from "@token-burn/shared";
+import type { SyncWindowsResponse } from "@token-burn/shared";
 
-import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import type { CliConfig } from "./config.js";
 import type { TokenBurnServerClient } from "./server-client.js";
 import { syncUsage } from "./sync.js";
+import type { SyncCollectionOptions } from "./sync-collection.js";
 import { cliVersion as currentCliVersion } from "./version.js";
 
 type SyncServerClient = Pick<TokenBurnServerClient, "readHealth" | "readSyncWindows" | "submitSyncPayload">;
@@ -29,7 +29,6 @@ describe("syncUsage", () => {
 
   it("posts payloads and writes successful lastSync after a successful sync", async () => {
     const writes: CliConfig[] = [];
-    const submissions: Array<{ payload: SyncPayload; token: string }> = [];
     const logs: string[] = [];
 
     await syncUsage({
@@ -37,41 +36,12 @@ describe("syncUsage", () => {
       writeConfig: async (config) => {
         writes.push(config);
       },
-      serverClient: matchingServerClient({
-        submitSyncPayload: async ({ token, payload }) => {
-          submissions.push({ token, payload });
-          return { accepted: true };
-        },
+      serverClient: matchingServerClient(),
+      collectAndSubmitUsage: async () => ({
+        submitted: 2,
+        failedProviders: [],
+        skippedProviders: [],
       }),
-      readProviderUsage: async (provider) => [
-        {
-          provider,
-          date: "2026-05-31",
-          tokenCategories:
-            provider === "codex"
-              ? { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 }
-              : { input: 50, output: 25 },
-          ...(provider === "codex" ? { tokenDetails: { reasoningOutput: 5 } } : {}),
-          totalTokens: provider === "codex" ? 125 : 75,
-          ...(provider === "codex"
-            ? {
-                costUsd: 0.123456,
-                costSource: "ccusage" as const,
-                sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
-                models: [
-                  {
-                    modelName: "gpt-5.5",
-                    tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
-                    tokenDetails: { reasoningOutput: 5 },
-                    totalTokens: 125,
-                    metadata: { isFallback: false },
-                  },
-                ],
-              }
-            : {}),
-        },
-      ],
-      readCcusageVersion: async () => "16.2.5",
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -82,47 +52,6 @@ describe("syncUsage", () => {
       },
     });
 
-    expect(submissions).toHaveLength(2);
-    expect(submissions[0]).toMatchObject({ token: "secret" });
-    expect(submissions.map((submission) => submission.payload)).toEqual([
-      {
-        provider: "claude_code",
-        date: "2026-05-31",
-        tokenCategories: { input: 50, output: 25 },
-        totalTokens: 75,
-        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        deviceName: "nayan-vps",
-        cliVersion: "0.1.0",
-        ccusageVersion: "16.2.5",
-        os: "linux",
-        syncedAt: "2026-06-01T00:00:00.000Z",
-      },
-      {
-        provider: "codex",
-        date: "2026-05-31",
-        tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
-        tokenDetails: { reasoningOutput: 5 },
-        totalTokens: 125,
-        costUsd: 0.123456,
-        costSource: "ccusage",
-        sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
-        models: [
-          {
-            modelName: "gpt-5.5",
-            tokenCategories: { input: 100, output: 25, cacheCreate: 0, cacheRead: 0 },
-            tokenDetails: { reasoningOutput: 5 },
-            totalTokens: 125,
-            metadata: { isFallback: false },
-          },
-        ],
-        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        deviceName: "nayan-vps",
-        cliVersion: "0.1.0",
-        ccusageVersion: "16.2.5",
-        os: "linux",
-        syncedAt: "2026-06-01T00:00:00.000Z",
-      },
-    ]);
     expect(writes).toEqual([
       {
         serverUrl: "https://token-burn.test",
@@ -150,19 +79,11 @@ describe("syncUsage", () => {
       readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
       writeConfig: async () => {},
       serverClient: matchingServerClient(),
-      readProviderUsage: async (provider) => {
-        if (provider === "codex") return [];
-
-        return [
-          {
-            provider,
-            date: "2026-05-31",
-            tokenCategories: { input: 100 },
-            totalTokens: 100,
-          },
-        ];
-      },
-      readCcusageVersion: async () => "16.2.5",
+      collectAndSubmitUsage: async () => ({
+        submitted: 1,
+        failedProviders: [],
+        skippedProviders: [],
+      }),
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -184,10 +105,9 @@ describe("syncUsage", () => {
     });
   });
 
-  it("fetches server sync windows and passes provider windows to ccusage", async () => {
-    const readProviderUsageCalls: Array<{ provider: string; window: unknown }> = [];
+  it("fetches server sync windows and passes them to collection", async () => {
     const readSyncWindowsCalls: Array<{ token: string; deviceId: string }> = [];
-    const submissions: Array<{ payload: SyncPayload; token: string }> = [];
+    const collectionCalls: SyncCollectionOptions[] = [];
 
     await syncUsage({
       readConfig: async () => ({
@@ -208,16 +128,11 @@ describe("syncUsage", () => {
             ],
           };
         },
-        submitSyncPayload: async ({ token, payload }) => {
-          submissions.push({ token, payload });
-          return { accepted: true };
-        },
       }),
-      readProviderUsage: async (provider, options) => {
-        readProviderUsageCalls.push({ provider, window: options?.window });
-        return [{ provider, date: "2026-06-06", tokenCategories: { input: 10 }, totalTokens: 10 }];
+      collectAndSubmitUsage: async (options) => {
+        collectionCalls.push(options);
+        return { submitted: 2, failedProviders: [], skippedProviders: [] };
       },
-      readCcusageVersion: async () => "16.2.5",
       now: () => new Date("2026-06-06T12:30:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -228,74 +143,23 @@ describe("syncUsage", () => {
     expect(readSyncWindowsCalls).toEqual([
       { token: "secret", deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59" },
     ]);
-    expect(readProviderUsageCalls).toEqual([
-      { provider: "claude_code", window: { since: "2026-06-05", until: "2026-06-06" } },
-      { provider: "codex", window: { since: "2026-06-06", until: "2026-06-06" } },
-    ]);
-    expect(submissions).toHaveLength(2);
-  });
-
-  it("does full-history collection when the server omits provider since", async () => {
-    const windows: unknown[] = [];
-
-    await syncUsage({
-      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
-      writeConfig: async () => {},
-      serverClient: matchingServerClient({
-        readSyncWindows: async () => ({
-          serverTime: "2026-06-06T12:00:00.000Z",
-          until: "2026-06-06",
-          providers: [{ provider: "claude_code" }, { provider: "codex", since: "2026-06-06" }],
-        }),
-      }),
-      readProviderUsage: async (provider, options) => {
-        windows.push(options?.window);
-        return provider === "claude_code"
-          ? [{ provider, date: "2026-05-31", tokenCategories: { input: 10 }, totalTokens: 10 }]
-          : [];
-      },
-      readCcusageVersion: async () => "16.2.5",
-      now: () => new Date("2026-06-06T12:30:00.000Z"),
-      platform: "linux",
+    expect(collectionCalls).toHaveLength(1);
+    expect(collectionCalls[0]).toMatchObject({
+      token: "secret",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
       cliVersion: "0.1.0",
-      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-      readDeviceName: () => "nayan-vps",
-      log: () => {},
-    });
-
-    expect(windows).toEqual([undefined, { since: "2026-06-06", until: "2026-06-06" }]);
-  });
-
-  it("ignores unknown provider windows from the server", async () => {
-    const providers: string[] = [];
-
-    await syncUsage({
-      readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
-      writeConfig: async () => {},
-      serverClient: matchingServerClient({
-        readSyncWindows: async () => ({
-          serverTime: "2026-06-06T12:00:00.000Z",
-          until: "2026-06-06",
-          providers: [
-            { provider: "other_provider", since: "2026-06-06" },
-            { provider: "codex", since: "2026-06-06" },
-          ],
-        }),
-      }),
-      readProviderUsage: async (provider) => {
-        providers.push(provider);
-        return [];
-      },
-      readCcusageVersion: async () => "16.2.5",
-      now: () => new Date("2026-06-06T12:30:00.000Z"),
       platform: "linux",
-      cliVersion: "0.1.0",
-      createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-      readDeviceName: () => "nayan-vps",
-      log: () => {},
+      syncedAt: "2026-06-06T12:30:00.000Z",
+      syncWindows: {
+        serverTime: "2026-06-06T12:00:00.000Z",
+        until: "2026-06-06",
+        providers: [
+          { provider: "claude_code", since: "2026-06-05" },
+          { provider: "codex", since: "2026-06-06" },
+        ],
+      },
     });
-
-    expect(providers).toEqual(["claude_code", "codex"]);
   });
 
   it("records failed lastSync when sync-window lookup fails before provider collection", async () => {
@@ -312,10 +176,9 @@ describe("syncUsage", () => {
             throw new Error("sync windows unavailable");
           },
         }),
-        readProviderUsage: async () => {
+        collectAndSubmitUsage: async () => {
           throw new Error("should not collect providers");
         },
-        readCcusageVersion: async () => "16.2.5",
         now: () => new Date("2026-06-06T12:30:00.000Z"),
         platform: "linux",
         cliVersion: "0.1.0",
@@ -360,10 +223,9 @@ describe("syncUsage", () => {
             throw new Error("Invalid sync windows response");
           },
         }),
-        readProviderUsage: async () => {
+        collectAndSubmitUsage: async () => {
           throw new Error("should not collect providers");
         },
-        readCcusageVersion: async () => "16.2.5",
         now: () => new Date("2026-06-06T12:30:00.000Z"),
         platform: "linux",
         cliVersion: "0.1.0",
@@ -394,7 +256,7 @@ describe("syncUsage", () => {
   });
 
   it("refuses to sync when the server requires a different CLI version", async () => {
-    let readProviderUsageCalled = false;
+    let collectAndSubmitUsageCalled = false;
     let submitSyncPayloadCalled = false;
     const serverRequiredCliVersion = createDifferentVersion(currentCliVersion);
 
@@ -411,11 +273,10 @@ describe("syncUsage", () => {
             return { accepted: true };
           },
         }),
-        readProviderUsage: async () => {
-          readProviderUsageCalled = true;
-          return [];
+        collectAndSubmitUsage: async () => {
+          collectAndSubmitUsageCalled = true;
+          return { submitted: 0, failedProviders: [], skippedProviders: [] };
         },
-        readCcusageVersion: async () => "20.0.6",
         cliVersion: currentCliVersion,
         log: () => {},
       }),
@@ -423,12 +284,12 @@ describe("syncUsage", () => {
       `Token Burn requires token-burn ${serverRequiredCliVersion}. You have ${currentCliVersion}. Run npm install -g @blnayan/token-burn@latest.`,
     );
 
-    expect(readProviderUsageCalled).toBe(false);
+    expect(collectAndSubmitUsageCalled).toBe(false);
     expect(submitSyncPayloadCalled).toBe(false);
   });
 
   it("reuses remembered device identity instead of creating a new one", async () => {
-    const submissions: Array<{ payload: SyncPayload }> = [];
+    const collectionCalls: SyncCollectionOptions[] = [];
 
     await syncUsage({
       readConfig: async () => ({
@@ -438,21 +299,11 @@ describe("syncUsage", () => {
         deviceName: "workstation",
       }),
       writeConfig: async () => {},
-      serverClient: matchingServerClient({
-        submitSyncPayload: async ({ payload }) => {
-          submissions.push({ payload });
-          return { accepted: true };
-        },
-      }),
-      readProviderUsage: async (provider) => [
-        {
-          provider,
-          date: "2026-05-31",
-          tokenCategories: { input: 1 },
-          totalTokens: 1,
-        },
-      ],
-      readCcusageVersion: async () => "20.0.6",
+      serverClient: matchingServerClient(),
+      collectAndSubmitUsage: async (options) => {
+        collectionCalls.push(options);
+        return { submitted: 2, failedProviders: [], skippedProviders: [] };
+      },
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -463,16 +314,11 @@ describe("syncUsage", () => {
       log: () => {},
     });
 
-    expect(submissions.map((submission) => submission.payload)).toMatchObject([
-      {
-        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        deviceName: "renamed-workstation",
-      },
-      {
-        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        deviceName: "renamed-workstation",
-      },
-    ]);
+    expect(collectionCalls).toHaveLength(1);
+    expect(collectionCalls[0]).toMatchObject({
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "renamed-workstation",
+    });
   });
 
   it("records skipped unsupported providers as a successful sync when supported providers submit", async () => {
@@ -485,21 +331,16 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       serverClient: matchingServerClient(),
-      readProviderUsage: async (provider) => {
-        if (provider === "codex") {
-          throw new UnsupportedCcusageProviderError(provider);
-        }
-
-        return [
+      collectAndSubmitUsage: async () => ({
+        submitted: 1,
+        failedProviders: [],
+        skippedProviders: [
           {
-            provider,
-            date: "2026-05-31",
-            tokenCategories: { input: 100 },
-            totalTokens: 100,
+            provider: "codex",
+            message: "ccusage does not support Codex usage in the installed version",
           },
-        ];
-      },
-      readCcusageVersion: async () => "16.2.5",
+        ],
+      }),
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -545,17 +386,17 @@ describe("syncUsage", () => {
         writes.push(config);
       },
       serverClient: matchingServerClient(),
-      readProviderUsage: async (provider) => {
-        if (provider === "claude_code") {
-          throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
-Error: No valid Claude data directories found. Please ensure at least one of the following exists:
-- /home/me/.config/claude/projects
-- /home/me/.claude/projects`);
-        }
-
-        throw new UnsupportedCcusageProviderError(provider);
-      },
-      readCcusageVersion: async () => "16.2.5",
+      collectAndSubmitUsage: async () => ({
+        submitted: 0,
+        failedProviders: [],
+        skippedProviders: [
+          { provider: "claude_code", message: "No valid Claude data directories found" },
+          {
+            provider: "codex",
+            message: "ccusage does not support Codex usage in the installed version",
+          },
+        ],
+      }),
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -601,21 +442,11 @@ Error: No valid Claude data directories found. Please ensure at least one of the
         writes.push(config);
       },
       serverClient: matchingServerClient(),
-      readProviderUsage: async (provider) => {
-        if (provider === "claude_code") {
-          throw new Error("ccusage daily failed");
-        }
-
-        return [
-          {
-            provider,
-            date: "2026-05-31",
-            tokenCategories: { input: 100 },
-            totalTokens: 100,
-          },
-        ];
-      },
-      readCcusageVersion: async () => "16.2.5",
+      collectAndSubmitUsage: async () => ({
+        submitted: 1,
+        failedProviders: [{ provider: "claude_code", message: "ccusage daily failed" }],
+        skippedProviders: [],
+      }),
       now: () => new Date("2026-06-01T00:00:00.000Z"),
       platform: "linux",
       cliVersion: "0.1.0",
@@ -650,9 +481,6 @@ Error: No valid Claude data directories found. Please ensure at least one of the
 
   it("explains ccusage native binary chmod failures without suggesting sudo sync", async () => {
     const writes: CliConfig[] = [];
-    const nativeBinaryError = new Error(
-      "ccusage native binary is not executable: EPERM: operation not permitted, chmod '/usr/lib/node_modules/@blnayan/token-burn/node_modules/@ccusage/ccusage-linux-x64/bin/ccusage'",
-    );
 
     await expect(
       syncUsage({
@@ -661,10 +489,17 @@ Error: No valid Claude data directories found. Please ensure at least one of the
           writes.push(config);
         },
         serverClient: matchingServerClient(),
-        readProviderUsage: async () => {
-          throw nativeBinaryError;
-        },
-        readCcusageVersion: async () => "20.0.6",
+        collectAndSubmitUsage: async () => ({
+          submitted: 0,
+          failedProviders: [
+            {
+              provider: "claude_code",
+              message:
+                "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo",
+            },
+          ],
+          skippedProviders: [],
+        }),
         now: () => new Date("2026-06-01T00:00:00.000Z"),
         platform: "linux",
         cliVersion: "0.1.0",
@@ -691,14 +526,16 @@ Error: No valid Claude data directories found. Please ensure at least one of the
           writes.push(config);
         },
         serverClient: matchingServerClient(),
-        readProviderUsage: async (provider) => {
-          if (provider === "codex") {
-            throw new UnsupportedCcusageProviderError(provider);
-          }
-
-          throw new Error("ccusage daily failed");
-        },
-        readCcusageVersion: async () => "16.2.5",
+        collectAndSubmitUsage: async () => ({
+          submitted: 0,
+          failedProviders: [{ provider: "claude_code", message: "ccusage daily failed" }],
+          skippedProviders: [
+            {
+              provider: "codex",
+              message: "ccusage does not support Codex usage in the installed version",
+            },
+          ],
+        }),
         now: () => new Date("2026-06-01T00:00:00.000Z"),
         platform: "linux",
         cliVersion: "0.1.0",
