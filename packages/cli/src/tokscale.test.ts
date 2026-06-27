@@ -8,8 +8,10 @@ import { providers, type Provider } from "@token-burn/shared";
 import {
   UnsupportedTokscaleProviderError,
   buildTokscaleGraphArgs,
+  isUnsupportedTokscaleProviderError,
   normalizeTokscaleGraph,
   readProviderUsage,
+  readTokscaleVersion,
 } from "./tokscale.js";
 
 const tempDirs: string[] = [];
@@ -95,6 +97,15 @@ describe("buildTokscaleGraphArgs", () => {
       expect(args[clientIndex + 1]).toBe(client);
       expect(args).toContain("--no-spinner");
     }
+  });
+});
+
+describe("UnsupportedTokscaleProviderError", () => {
+  it("exports a type guard for unsupported tokscale providers", () => {
+    const error = new UnsupportedTokscaleProviderError("grok");
+
+    expect(isUnsupportedTokscaleProviderError(error)).toBe(true);
+    expect(isUnsupportedTokscaleProviderError(new Error("other failure"))).toBe(false);
   });
 });
 
@@ -220,6 +231,12 @@ describe("normalizeTokscaleGraph", () => {
         ],
       }),
     ).toThrow("tokscale daily contribution total does not match token breakdown");
+  });
+});
+
+describe("readTokscaleVersion", () => {
+  it("reads the installed tokscale package version", async () => {
+    await expect(readTokscaleVersion()).resolves.toBe("4.0.4");
   });
 });
 

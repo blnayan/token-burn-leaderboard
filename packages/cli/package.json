@@ -43,6 +43,7 @@
     "cli-table3": "^0.6.5",
     "commander": "^15.0.0",
     "picocolors": "^1.1.1",
+    "tokscale": "^4.0.4",
     "wrap-ansi": "^10.0.0",
     "zod": "^4.4.3"
   },

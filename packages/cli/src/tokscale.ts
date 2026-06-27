@@ -94,6 +94,10 @@ export class UnsupportedTokscaleProviderError extends Error {
   }
 }
 
+export function isUnsupportedTokscaleProviderError(error: unknown): error is UnsupportedTokscaleProviderError {
+  return error instanceof UnsupportedTokscaleProviderError;
+}
+
 export function buildTokscaleGraphArgs(provider: TokscaleProvider, window?: ProviderUsageWindow): string[] {
   const client = readTokscaleClient(provider);
   const args = ["graph", "--client", client];
@@ -157,23 +161,20 @@ export async function readProviderUsage(
   return rows;
 }
 
-export async function readTokscaleVersion(): Promise<string | null> {
-  let packageJsonPath: string;
-
+export async function readTokscaleVersion(): Promise<string> {
   try {
-    packageJsonPath = requireFromCli.resolve("tokscale/package.json");
-  } catch {
-    return null;
-  }
-
-  try {
+    const packageJsonPath = requireFromCli.resolve("tokscale/package.json");
     const raw = await readFile(packageJsonPath, "utf8");
     const parsed = JSON.parse(raw) as unknown;
     const version = toRecord(parsed).version;
 
-    return typeof version === "string" && version ? version : null;
-  } catch {
-    return null;
+    if (typeof version !== "string" || !version) {
+      throw new Error("tokscale package.json does not include a version.");
+    }
+
+    return version;
+  } catch (error) {
+    throw new Error("Unable to determine tokscale version.", { cause: error });
   }
 }
 
