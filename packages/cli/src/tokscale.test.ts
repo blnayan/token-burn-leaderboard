@@ -285,7 +285,7 @@ describe("readProviderUsage", () => {
     const runCommand = vi.fn().mockRejectedValue(new Error("tokscale should not be invoked in fixture mode"));
 
     await writeFile(
-      join(fixtureDir, "grok.json"),
+      join(fixtureDir, "claude_code.json"),
       JSON.stringify({
         contributions: [
           {
@@ -294,9 +294,9 @@ describe("readProviderUsage", () => {
             tokenBreakdown: { input: 5, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
             clients: [
               {
-                client: "grok",
-                modelId: "grok-code-fast-1",
-                providerId: "xai",
+                client: "claude",
+                modelId: "claude-sonnet-4",
+                providerId: "anthropic",
                 tokens: { input: 5, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
                 cost: 0.02,
                 messages: 1,
@@ -309,8 +309,8 @@ describe("readProviderUsage", () => {
     );
     vi.stubEnv("TOKEN_BURN_E2E_FIXTURE_DIR", fixtureDir);
 
-    await expect(readProviderUsage("grok", { runCommand })).resolves.toMatchObject([
-      { provider: "grok", date: "2026-06-01", totalTokens: 5 },
+    await expect(readProviderUsage("claude_code", { runCommand })).resolves.toMatchObject([
+      { provider: "claude_code", date: "2026-06-01", totalTokens: 5 },
     ]);
     expect(runCommand).not.toHaveBeenCalled();
   });
