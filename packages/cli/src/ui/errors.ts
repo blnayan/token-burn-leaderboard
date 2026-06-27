@@ -12,10 +12,6 @@ export function classifyError(error: unknown): UiError {
     return { code: "CLI_VERSION_REQUIRED", message, nextAction: "npm install -g @blnayan/token-burn@latest" };
   }
 
-  if (message.includes("ccusage native binary is not executable")) {
-    return { code: "CCUSAGE_BINARY_PERMISSION", message };
-  }
-
   if (
     normalizedMessage.includes("automatic sync was not installed")
     || normalizedMessage.includes("systemd user timer unavailable")

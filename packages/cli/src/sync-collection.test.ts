@@ -201,7 +201,7 @@ describe("collectAndSubmitUsage", () => {
       readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
-          throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
+          throw new Error(`file:///repo/node_modules/tokscale/dist/data-loader.js:2186
 Error: No valid Claude data directories found. Please ensure at least one of the following exists:
 - /home/me/.config/claude/projects
 - /home/me/.claude/projects`);

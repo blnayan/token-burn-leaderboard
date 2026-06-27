@@ -337,7 +337,7 @@ describe("syncUsage", () => {
         skippedProviders: [
           {
             provider: "codex",
-            message: "ccusage does not support Codex usage in the installed version",
+            message: "tokscale does not support Codex usage in the installed version",
           },
         ],
       }),
@@ -366,13 +366,13 @@ describe("syncUsage", () => {
         lastSync: {
           ok: true,
           message:
-            "Submitted 1 usage row. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+            "Submitted 1 usage row. Skipped providers: codex: tokscale does not support Codex usage in the installed version.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },
     ]);
     expect(logs).toEqual([
-      "Submitted 1 usage row. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+      "Submitted 1 usage row. Skipped providers: codex: tokscale does not support Codex usage in the installed version.",
     ]);
   });
 
@@ -393,7 +393,7 @@ describe("syncUsage", () => {
           { provider: "claude_code", message: "No valid Claude data directories found" },
           {
             provider: "codex",
-            message: "ccusage does not support Codex usage in the installed version",
+            message: "tokscale does not support Codex usage in the installed version",
           },
         ],
       }),
@@ -422,13 +422,13 @@ describe("syncUsage", () => {
         lastSync: {
           ok: true,
           message:
-            "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: ccusage does not support Codex usage in the installed version.",
+            "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: tokscale does not support Codex usage in the installed version.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },
     ]);
     expect(logs).toEqual([
-      "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: ccusage does not support Codex usage in the installed version.",
+      "Submitted 0 usage rows. Skipped providers: claude_code: No valid Claude data directories found; codex: tokscale does not support Codex usage in the installed version.",
     ]);
   });
 
@@ -444,7 +444,7 @@ describe("syncUsage", () => {
       serverClient: matchingServerClient(),
       collectAndSubmitUsage: async () => ({
         submitted: 1,
-        failedProviders: [{ provider: "claude_code", message: "ccusage daily failed" }],
+        failedProviders: [{ provider: "claude_code", message: "tokscale daily failed" }],
         skippedProviders: [],
       }),
       now: () => new Date("2026-06-01T00:00:00.000Z"),
@@ -471,49 +471,12 @@ describe("syncUsage", () => {
         deviceName: "nayan-vps",
         lastSync: {
           ok: false,
-          message: "Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed.",
+          message: "Submitted 1 usage row. Failed providers: claude_code: tokscale daily failed.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },
     ]);
-    expect(logs).toEqual(["Submitted 1 usage row. Failed providers: claude_code: ccusage daily failed."]);
-  });
-
-  it("explains ccusage native binary chmod failures without suggesting sudo sync", async () => {
-    const writes: CliConfig[] = [];
-
-    await expect(
-      syncUsage({
-        readConfig: async () => ({ serverUrl: "https://token-burn.test", token: "secret" }),
-        writeConfig: async (config) => {
-          writes.push(config);
-        },
-        serverClient: matchingServerClient(),
-        collectAndSubmitUsage: async () => ({
-          submitted: 0,
-          failedProviders: [
-            {
-              provider: "claude_code",
-              message:
-                "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo",
-            },
-          ],
-          skippedProviders: [],
-        }),
-        now: () => new Date("2026-06-01T00:00:00.000Z"),
-        platform: "linux",
-        cliVersion: "0.1.0",
-        createDeviceId: () => "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-        readDeviceName: () => "nayan-vps",
-        log: () => {},
-      }),
-    ).rejects.toThrow(
-      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
-    );
-
-    expect(writes[1]?.lastSync?.message).toContain(
-      "ccusage native binary is not executable because the global npm install is not user-writable",
-    );
+    expect(logs).toEqual(["Submitted 1 usage row. Failed providers: claude_code: tokscale daily failed."]);
   });
 
   it("writes failed lastSync before throwing when supported providers fail and unsupported providers are skipped", async () => {
@@ -528,11 +491,11 @@ describe("syncUsage", () => {
         serverClient: matchingServerClient(),
         collectAndSubmitUsage: async () => ({
           submitted: 0,
-          failedProviders: [{ provider: "claude_code", message: "ccusage daily failed" }],
+          failedProviders: [{ provider: "claude_code", message: "tokscale daily failed" }],
           skippedProviders: [
             {
               provider: "codex",
-              message: "ccusage does not support Codex usage in the installed version",
+              message: "tokscale does not support Codex usage in the installed version",
             },
           ],
         }),
@@ -543,7 +506,7 @@ describe("syncUsage", () => {
         readDeviceName: () => "nayan-vps",
         log: () => {},
       }),
-    ).rejects.toThrow("All supported providers failed: claude_code: ccusage daily failed.");
+    ).rejects.toThrow("All supported providers failed: claude_code: tokscale daily failed.");
 
     expect(writes).toEqual([
       {
@@ -560,7 +523,7 @@ describe("syncUsage", () => {
         lastSync: {
           ok: false,
           message:
-            "Submitted 0 usage rows. Failed providers: claude_code: ccusage daily failed. Skipped providers: codex: ccusage does not support Codex usage in the installed version.",
+            "Submitted 0 usage rows. Failed providers: claude_code: tokscale daily failed. Skipped providers: codex: tokscale does not support Codex usage in the installed version.",
           at: "2026-06-01T00:00:00.000Z",
         },
       },

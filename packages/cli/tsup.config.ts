@@ -10,5 +10,5 @@ export default defineConfig({
   splitting: false,
   sourcemap: false,
   dts: false,
-  external: ["ccusage", "commander", "tokscale", "zod"],
+  external: ["commander", "tokscale", "zod"],
 });

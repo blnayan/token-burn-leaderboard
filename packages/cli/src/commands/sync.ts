@@ -37,7 +37,7 @@ export function renderSyncResult(result: SyncResult, ui: UiRenderer): void {
 }
 
 export function createSyncCommand(): Command {
-  const command = new Command("sync").description("Sync ccusage totals to Token Burn").action(async () => {
+  const command = new Command("sync").description("Sync tokscale totals to Token Burn").action(async () => {
     const flags = command.parent?.opts<OutputFlags>() ?? {};
     const ui = createRenderer(resolveOutputMode({ flags }));
     const result = await syncUsage({ log: () => undefined });

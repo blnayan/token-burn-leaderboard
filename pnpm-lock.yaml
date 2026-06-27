@@ -157,9 +157,6 @@ importers:
       '@clack/prompts':
         specifier: ^1.5.1
         version: 1.5.1
-      ccusage:
-        specifier: ^20.0.6
-        version: 20.0.6
       cli-table3:
         specifier: ^0.6.5
         version: 0.6.5
@@ -319,36 +316,6 @@ packages:
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
-
-  '@ccusage/ccusage-darwin-arm64@20.0.6':
-    resolution: {integrity: sha512-9CiPBzq5QpcSkeCcYgQctLq5YOuxAomUBQIBHLa60zzUWg+Bb5r+3KAJOUYFJu21qmyUNWFePKb4UtL4yX9Mig==}
-    cpu: [arm64]
-    os: [darwin]
-
-  '@ccusage/ccusage-darwin-x64@20.0.6':
-    resolution: {integrity: sha512-5fdUQiUBN+u4S5dfDYnHGV1uZr/2XJ/r24IeqTNdPGXL3zJHclq6YgVnM92Xh/3/LOwvJwtDz4axW6HnCCUUmw==}
-    cpu: [x64]
-    os: [darwin]
-
-  '@ccusage/ccusage-linux-arm64@20.0.6':
-    resolution: {integrity: sha512-msx6A5eBA7TN6H8YtYJ8CChdM9wHv6jZ1vR1b9kWIKIhSDcy2QBx7gjKUH7Da3kMRHfJ/nlc8+8q3cXJ7EwbrQ==}
-    cpu: [arm64]
-    os: [linux]
-
-  '@ccusage/ccusage-linux-x64@20.0.6':
-    resolution: {integrity: sha512-9HZiRMYPa3gUb7ae1R0vXQyhkrLgfqeTwX5TJegunW5Zvsa2PK5i4ib7Wq1E8Hvr8VqRkT3FCZxfLTAx/9C3uA==}
-    cpu: [x64]
-    os: [linux]
-
-  '@ccusage/ccusage-win32-arm64@20.0.6':
-    resolution: {integrity: sha512-SXH1ODfMFwTq0J1EgQMCiu5Msz9CBob/ABKVRfUcQp+vIWQbEFCuqdktmwtoZONelqnO8/JFfEkyHUUsW/YNxw==}
-    cpu: [arm64]
-    os: [win32]
-
-  '@ccusage/ccusage-win32-x64@20.0.6':
-    resolution: {integrity: sha512-lC3UGZskeQg8T2HaD7lirNBTqQb8biuVSSK/93OeIV4lROCKBRcVxlEecBZW0rGuUDdPNUMUwBty0qM9FUvEoA==}
-    cpu: [x64]
-    os: [win32]
 
   '@clack/core@1.4.1':
     resolution: {integrity: sha512-FILJa1gGKEFTGZAJE9RpVhrjKz3c3h4ar60dSv6cGuDqufQ84YEIS3GAGvZiN+H6yaLbbvTFNejjCC4tXpZEuw==}
@@ -2276,10 +2243,6 @@ packages:
 
   caniuse-lite@1.0.30001793:
     resolution: {integrity: sha512-iwSsYWaCOoh26cV8NwNRViHlrfUvYsHDfRVcbtmw0Kg6PJIZZXwMkj1442FYLBGkeUf1juAsU3DTfxW579mrPA==}
-
-  ccusage@20.0.6:
-    resolution: {integrity: sha512-Z3Aa5zQPkU2Y9+p6Pjh4iEf66O09PtTJCVTbzpQGL1oYdDXKR0nNLX+c4ASQHl6f/Gl9/T3R0hpEiZ5g1Po0dg==}
-    hasBin: true
 
   chai@6.2.2:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
@@ -4463,24 +4426,6 @@ snapshots:
     dependencies:
       css-tree: 3.2.1
 
-  '@ccusage/ccusage-darwin-arm64@20.0.6':
-    optional: true
-
-  '@ccusage/ccusage-darwin-x64@20.0.6':
-    optional: true
-
-  '@ccusage/ccusage-linux-arm64@20.0.6':
-    optional: true
-
-  '@ccusage/ccusage-linux-x64@20.0.6':
-    optional: true
-
-  '@ccusage/ccusage-win32-arm64@20.0.6':
-    optional: true
-
-  '@ccusage/ccusage-win32-x64@20.0.6':
-    optional: true
-
   '@clack/core@1.4.1':
     dependencies:
       fast-wrap-ansi: 0.2.2
@@ -6142,15 +6087,6 @@ snapshots:
 
   caniuse-lite@1.0.30001793: {}
 
-  ccusage@20.0.6:
-    optionalDependencies:
-      '@ccusage/ccusage-darwin-arm64': 20.0.6
-      '@ccusage/ccusage-darwin-x64': 20.0.6
-      '@ccusage/ccusage-linux-arm64': 20.0.6
-      '@ccusage/ccusage-linux-x64': 20.0.6
-      '@ccusage/ccusage-win32-arm64': 20.0.6
-      '@ccusage/ccusage-win32-x64': 20.0.6
-
   chai@6.2.2: {}
 
   chalk@4.1.2:
@@ -6533,7 +6469,7 @@ snapshots:
       '@next/eslint-plugin-next': 16.2.6
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-import: 2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-jsx-a11y: 6.10.2(eslint@9.39.4(jiti@2.7.0))
       eslint-plugin-react: 7.37.5(eslint@9.39.4(jiti@2.7.0))
@@ -6556,7 +6492,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       '@nolyfill/is-core-module': 1.0.39
       debug: 4.4.3
@@ -6571,14 +6507,14 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0)):
+  eslint-module-utils@2.13.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)):
     dependencies:
       debug: 3.2.7
     optionalDependencies:
       '@typescript-eslint/parser': 8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3)
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.4(jiti@2.7.0))
+      eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
     transitivePeerDependencies:
       - supports-color
 
@@ -6593,7 +6529,7 @@ snapshots:
       doctrine: 2.1.0
       eslint: 9.39.4(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
-      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1)(eslint@9.39.4(jiti@2.7.0))
+      eslint-module-utils: 2.13.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint-import-resolver-node@0.3.10)(eslint-import-resolver-typescript@3.10.1(eslint-plugin-import@2.32.0(@typescript-eslint/parser@8.60.0(eslint@9.39.4(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0)))(eslint@9.39.4(jiti@2.7.0))
       hasown: 2.0.4
       is-core-module: 2.16.2
       is-glob: 4.0.3

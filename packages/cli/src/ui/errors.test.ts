@@ -46,13 +46,6 @@ describe("classifyError", () => {
     });
   });
 
-  it("classifies ccusage native binary permissions", () => {
-    expect(classifyError(new Error("ccusage native binary is not executable at /usr/bin/ccusage"))).toEqual({
-      code: "CCUSAGE_BINARY_PERMISSION",
-      message: "ccusage native binary is not executable at /usr/bin/ccusage",
-    });
-  });
-
   it("classifies scheduler setup failures case-insensitively", () => {
     expect(classifyError(new Error("Automatic sync was not installed because launchd failed."))).toEqual({
       code: "SCHEDULER_ERROR",

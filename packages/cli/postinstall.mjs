@@ -6,6 +6,6 @@ const packageRoot = dirname(fileURLToPath(import.meta.url));
 const builtPostinstallPath = join(packageRoot, "dist", "postinstall.js");
 
 if (existsSync(builtPostinstallPath)) {
-  const { fixCcusageNativeBinaryPermissions } = await import(pathToFileURL(builtPostinstallPath).href);
-  await fixCcusageNativeBinaryPermissions();
+  const { runPostinstallCompatibilityHook } = await import(pathToFileURL(builtPostinstallPath).href);
+  await runPostinstallCompatibilityHook();
 }
