@@ -128,8 +128,16 @@ describe("normalizeTokscaleGraph", () => {
               client: "codex",
               modelId: "gpt-5",
               providerId: "openai",
-              tokens: { input: 80, output: 70, cacheRead: 30, cacheWrite: 20, reasoning: 0 },
-              cost: 0.2,
+              tokens: { input: 60, output: 40, cacheRead: 20, cacheWrite: 10, reasoning: 0 },
+              cost: 0.12,
+              messages: 1,
+            },
+            {
+              client: "codex",
+              modelId: "gpt-5",
+              providerId: "openai",
+              tokens: { input: 20, output: 30, cacheRead: 10, cacheWrite: 10, reasoning: 0 },
+              cost: 0.08,
               messages: 1,
             },
             {
@@ -148,7 +156,18 @@ describe("normalizeTokscaleGraph", () => {
     expect(rows[0]?.tokenCategories).toEqual({ input: 100, output: 100, cacheCreate: 50, cacheRead: 50 });
     expect(rows[0]?.totalTokens).toBe(300);
     expect(rows[0]?.costUsd).toBe(0.3);
+    expect(rows[0]?.models).toHaveLength(2);
     expect(rows[0]?.models?.map((model) => model.modelName)).toEqual(["gpt-5", "gpt-5-mini"]);
+    expect(rows[0]?.models?.find((model) => model.modelName === "gpt-5")).toMatchObject({
+      tokenCategories: { input: 80, output: 70, cacheCreate: 20, cacheRead: 30 },
+      totalTokens: 200,
+      costUsd: 0.2,
+    });
+    expect(rows[0]?.models?.find((model) => model.modelName === "gpt-5-mini")).toMatchObject({
+      tokenCategories: { input: 20, output: 30, cacheCreate: 30, cacheRead: 20 },
+      totalTokens: 100,
+      costUsd: 0.1,
+    });
   });
 
   it("rejects malformed totals instead of fabricating usage", () => {
