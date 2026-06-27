@@ -14,7 +14,7 @@ import {
 } from "./schemas";
 
 describe("providerSchema", () => {
-  it("accepts every supported ccusage provider in stable order", () => {
+  it("accepts every supported tokscale local provider in stable order", () => {
     expect(providers).toEqual([
       "claude_code",
       "codex",
@@ -31,6 +31,20 @@ describe("providerSchema", () => {
       "kimi",
       "qwen",
       "openclaw",
+      "roocode",
+      "kilocode",
+      "mux",
+      "zed",
+      "kiro",
+      "cline",
+      "gjc",
+      "grok",
+      "jcode",
+      "micode",
+      "commandcode",
+      "antigravity_cli",
+      "junie",
+      "zcode",
     ]);
 
     for (const provider of providers) {
@@ -38,16 +52,21 @@ describe("providerSchema", () => {
     }
   });
 
-  it("exports readable labels and ccusage command names", () => {
+  it("exports readable labels and tokscale client names", () => {
     expect(providerMetadata.claude_code).toEqual({
       id: "claude_code",
       label: "Claude Code",
-      ccusageCommand: "claude",
+      tokscaleClient: "claude",
     });
-    expect(providerMetadata.copilot).toEqual({
-      id: "copilot",
-      label: "GitHub Copilot CLI",
-      ccusageCommand: "copilot",
+    expect(providerMetadata.grok).toEqual({
+      id: "grok",
+      label: "Grok Build",
+      tokscaleClient: "grok",
+    });
+    expect(providerMetadata.antigravity_cli).toEqual({
+      id: "antigravity_cli",
+      label: "Antigravity CLI",
+      tokscaleClient: "antigravity-cli",
     });
     expect(formatProvider("opencode")).toBe("OpenCode");
     expect(formatProvider("gemini")).toBe("Gemini CLI");
@@ -241,7 +260,7 @@ describe("syncPayloadSchema", () => {
       },
       totalTokens: 1000,
       costUsd: 1.234567,
-      costSource: "ccusage",
+      costSource: "tokscale",
       costMetadata: {
         speed: "fast",
       },
@@ -279,6 +298,25 @@ describe("syncPayloadSchema", () => {
     expect(payload.costUsd).toBe(1.234567);
     expect(payload.tokenDetails?.reasoningOutput).toBe(20);
     expect(payload.models?.[0]?.modelName).toBe("gpt-5.5");
+  });
+
+  it("accepts legacy ccusage cost source values", () => {
+    const payload = syncPayloadSchema.parse({
+      provider: "codex",
+      date: "2026-06-01",
+      tokenCategories: { input: 100 },
+      totalTokens: 100,
+      costUsd: 0.01,
+      costSource: "ccusage",
+      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+      deviceName: "nayan-vps",
+      cliVersion: "0.1.0",
+      ccusageVersion: "20.0.6",
+      os: "linux",
+      syncedAt: "2026-06-01T00:00:00.000Z",
+    });
+
+    expect(payload.costSource).toBe("ccusage");
   });
 
   it("rejects negative cost and model totals that do not match scoring categories", () => {
