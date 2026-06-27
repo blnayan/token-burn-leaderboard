@@ -6,12 +6,12 @@ import {
   type SyncWindowsResponse,
 } from "@token-burn/shared";
 
-import type { NormalizedUsageRow, ProviderUsageWindow } from "./ccusage.js";
+import type { NormalizedUsageRow, ProviderUsageWindow } from "./tokscale.js";
 import {
-  isUnsupportedCcusageProviderError,
-  readCcusageVersion as readCcusageVersionFromPackage,
-  readProviderUsage as readProviderUsageFromCcusage,
-} from "./ccusage.js";
+  isUnsupportedTokscaleProviderError,
+  readProviderUsage as readProviderUsageFromTokscale,
+  readTokscaleVersion,
+} from "./tokscale.js";
 import type { TokenBurnServerClient } from "./server-client.js";
 
 type SyncPlatform = Extract<NodeJS.Platform, "darwin" | "linux" | "win32">;
@@ -37,7 +37,7 @@ export type SyncCollectionOptions = {
   syncWindows: SyncWindowsResponse;
   serverClient: Pick<TokenBurnServerClient, "submitSyncPayload">;
   readProviderUsage?: (provider: Provider, options?: { window?: ProviderUsageWindow }) => Promise<NormalizedUsageRow[]>;
-  readCcusageVersion?: () => Promise<string>;
+  readSourceVersion?: () => Promise<string>;
 };
 
 export async function collectAndSubmitUsage({
@@ -49,10 +49,10 @@ export async function collectAndSubmitUsage({
   syncedAt,
   syncWindows,
   serverClient,
-  readProviderUsage = readProviderUsageFromCcusage,
-  readCcusageVersion = readCcusageVersionFromPackage,
+  readProviderUsage = readProviderUsageFromTokscale,
+  readSourceVersion = readTokscaleVersion,
 }: SyncCollectionOptions): Promise<SyncCollectionResult> {
-  const ccusageVersion = await readCcusageVersion();
+  const sourceVersion = await readSourceVersion();
   const providerWindows = new Map(syncWindows.providers.map((window) => [window.provider, window]));
   const failures: Array<{ provider: Provider; error: Error }> = [];
   const skipped: Array<{ provider: Provider; error: Error }> = [];
@@ -66,7 +66,7 @@ export async function collectAndSubmitUsage({
       });
 
       for (const row of rows) {
-        const payload = buildPayload(row, { cliVersion, ccusageVersion, deviceId, deviceName, platform, syncedAt });
+        const payload = buildPayload(row, { cliVersion, sourceVersion, deviceId, deviceName, platform, syncedAt });
         await serverClient.submitSyncPayload({ token, payload });
         submitted += 1;
       }
@@ -92,10 +92,10 @@ function buildPayload(
   row: NormalizedUsageRow,
   metadata: {
     cliVersion: string;
-    ccusageVersion: string;
     deviceId: string;
     deviceName: string;
     platform: SyncPlatform;
+    sourceVersion: string;
     syncedAt: string;
   },
 ): SyncPayload {
@@ -113,7 +113,7 @@ function buildPayload(
     deviceId: metadata.deviceId,
     deviceName: metadata.deviceName,
     cliVersion: metadata.cliVersion,
-    ccusageVersion: metadata.ccusageVersion,
+    ccusageVersion: metadata.sourceVersion,
     os: metadata.platform,
     syncedAt: metadata.syncedAt,
   });
@@ -127,17 +127,11 @@ function normalizeProviderError(error: unknown): Error {
     return new Error(trimTrailingPeriod(missingProviderDataMessage));
   }
 
-  if (isCcusageNativeBinaryPermissionError(normalizedError)) {
-    return new Error(
-      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo.",
-    );
-  }
-
   return normalizedError;
 }
 
 function isSkippableProviderError(error: unknown): boolean {
-  if (isUnsupportedCcusageProviderError(error)) return true;
+  if (isUnsupportedTokscaleProviderError(error)) return true;
 
   return isMissingProviderDataError(toError(error));
 }
@@ -160,14 +154,6 @@ function readMissingProviderDataMessage(message: string): string | null {
   }
 
   return null;
-}
-
-function isCcusageNativeBinaryPermissionError(error: Error): boolean {
-  return (
-    error.message.includes("ccusage native binary is not executable") &&
-    error.message.includes("EPERM") &&
-    error.message.includes("chmod")
-  );
 }
 
 function toError(error: unknown): Error {

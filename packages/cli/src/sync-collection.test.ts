@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { providers } from "@token-burn/shared";
-import { UnsupportedCcusageProviderError } from "./ccusage.js";
 import { collectAndSubmitUsage } from "./sync-collection.js";
+import { UnsupportedTokscaleProviderError } from "./tokscale.js";
 
 describe("collectAndSubmitUsage", () => {
   it("maps provider windows, builds sync payloads, and submits rows", async () => {
@@ -31,7 +31,7 @@ describe("collectAndSubmitUsage", () => {
           return { accepted: true };
         },
       },
-      readCcusageVersion: async () => "20.0.6",
+      readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider, options) => {
         readProviderUsageCalls.push({ provider, window: options?.window });
 
@@ -66,7 +66,7 @@ describe("collectAndSubmitUsage", () => {
               tokenDetails: { reasoningOutput: 5 },
               totalTokens: 125,
               costUsd: 0.123456,
-              costSource: "ccusage",
+              costSource: "tokscale",
               costMetadata: { currency: "USD" },
               sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
               models: [
@@ -104,7 +104,7 @@ describe("collectAndSubmitUsage", () => {
           date: "2026-05-31",
           tokenCategories: { input: 10 },
           totalTokens: 10,
-          ccusageVersion: "20.0.6",
+          ccusageVersion: "4.0.4",
           deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
           deviceName: "nayan-vps",
           cliVersion: "0.1.0",
@@ -121,7 +121,7 @@ describe("collectAndSubmitUsage", () => {
           tokenDetails: { reasoningOutput: 5 },
           totalTokens: 125,
           costUsd: 0.123456,
-          costSource: "ccusage",
+          costSource: "tokscale",
           costMetadata: { currency: "USD" },
           sourceSnapshot: { costUSD: 0.123456, totalTokens: 125 },
           models: [
@@ -133,7 +133,7 @@ describe("collectAndSubmitUsage", () => {
               metadata: { isFallback: false },
             },
           ],
-          ccusageVersion: "20.0.6",
+          ccusageVersion: "4.0.4",
           deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
           deviceName: "nayan-vps",
           cliVersion: "0.1.0",
@@ -148,7 +148,7 @@ describe("collectAndSubmitUsage", () => {
           date: "2026-05-31",
           tokenCategories: { input: 30, output: 5 },
           totalTokens: 35,
-          ccusageVersion: "20.0.6",
+          ccusageVersion: "4.0.4",
           deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
           deviceName: "nayan-vps",
           cliVersion: "0.1.0",
@@ -159,7 +159,7 @@ describe("collectAndSubmitUsage", () => {
     ]);
   });
 
-  it("classifies unsupported ccusage providers as skipped", async () => {
+  it("classifies unsupported tokscale providers as skipped", async () => {
     const result = await collectAndSubmitUsage({
       token: "secret",
       deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
@@ -169,9 +169,9 @@ describe("collectAndSubmitUsage", () => {
       syncedAt: "2026-06-01T00:00:00.000Z",
       syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
       serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
-      readCcusageVersion: async () => "20.0.6",
+      readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider) => {
-        if (provider === "codex") throw new UnsupportedCcusageProviderError("codex");
+        if (provider === "codex") throw new UnsupportedTokscaleProviderError("codex");
         return [];
       },
     });
@@ -182,7 +182,7 @@ describe("collectAndSubmitUsage", () => {
       skippedProviders: [
         {
           provider: "codex",
-          message: "ccusage does not support Codex usage in the installed version",
+          message: "tokscale does not support Codex usage in the installed version",
         },
       ],
     });
@@ -198,7 +198,7 @@ describe("collectAndSubmitUsage", () => {
       syncedAt: "2026-06-01T00:00:00.000Z",
       syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
       serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
-      readCcusageVersion: async () => "20.0.6",
+      readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider) => {
         if (provider === "claude_code") {
           throw new Error(`file:///repo/node_modules/ccusage/dist/data-loader.js:2186
@@ -228,7 +228,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       syncedAt: "2026-06-01T00:00:00.000Z",
       syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
       serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
-      readCcusageVersion: async () => "20.0.6",
+      readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider) => {
         if (provider === "opencode") {
           throw new Error("No valid OpenCode data directories found");
@@ -255,7 +255,7 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       syncedAt: "2026-06-01T00:00:00.000Z",
       syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
       serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
-      readCcusageVersion: async () => "20.0.6",
+      readSourceVersion: async () => "4.0.4",
       readProviderUsage: async (provider) => {
         if (provider === "opencode") {
           throw new Error("No OpenCode usage data found");
@@ -270,26 +270,5 @@ Error: No valid Claude data directories found. Please ensure at least one of the
       message: "No OpenCode usage data found",
     });
     expect(result.failedProviders).toEqual([]);
-  });
-
-  it("normalizes native binary permission failures", async () => {
-    const result = await collectAndSubmitUsage({
-      token: "secret",
-      deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
-      deviceName: "nayan-vps",
-      cliVersion: "0.1.0",
-      platform: "linux",
-      syncedAt: "2026-06-01T00:00:00.000Z",
-      syncWindows: { serverTime: "2026-06-01T00:00:00.000Z", until: "2026-06-01", providers: [] },
-      serverClient: { submitSyncPayload: async () => ({ accepted: true }) },
-      readCcusageVersion: async () => "20.0.6",
-      readProviderUsage: async () => {
-        throw new Error("ccusage native binary is not executable: EPERM chmod");
-      },
-    });
-
-    expect(result.failedProviders[0]?.message).toBe(
-      "ccusage native binary is not executable because the global npm install is not user-writable. Reinstall @blnayan/token-burn in a user-writable Node environment, or fix the binary execute bit once. Do not run token-burn sync with sudo",
-    );
   });
 });
