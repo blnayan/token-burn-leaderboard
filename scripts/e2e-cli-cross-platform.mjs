@@ -251,25 +251,18 @@ async function writeFixtures(fixtureDir) {
     join(fixtureDir, "claude_code.json"),
     `${JSON.stringify(
       {
-        daily: [
+        contributions: [
           {
             date: fixtureDate,
-            inputTokens: 1000,
-            outputTokens: 200,
-            cacheCreationTokens: 30,
-            cacheReadTokens: 70,
-            totalTokens: 1300,
-            totalCost: 0.12,
-            modelBreakdowns: {
-              "claude-sonnet-4": {
-                inputTokens: 1000,
-                outputTokens: 200,
-                cacheCreationTokens: 30,
-                cacheReadTokens: 70,
-                totalTokens: 1300,
-                totalCost: 0.12,
+            totals: { tokens: 1300, cost: 0.12 },
+            tokenBreakdown: { input: 1000, output: 200, cacheWrite: 30, cacheRead: 70, reasoning: 0 },
+            clients: [
+              {
+                modelId: "claude-sonnet-4",
+                tokens: { input: 1000, output: 200, cacheWrite: 30, cacheRead: 70, reasoning: 0 },
+                cost: 0.12,
               },
-            },
+            ],
           },
         ],
       },
@@ -281,29 +274,22 @@ async function writeFixtures(fixtureDir) {
   await writeFile(
     join(fixtureDir, "codex.json"),
     `${JSON.stringify(
-      [
-        {
-          date: fixtureDate,
-          inputTokens: 500,
-          outputTokens: 300,
-          cachedInputTokens: 200,
-          reasoningOutputTokens: 50,
-          totalTokens: 1000,
-          costUSD: 0.34,
-          models: [
-            {
-              model: "gpt-5.1",
-              inputTokens: 500,
-              outputTokens: 300,
-              cachedInputTokens: 200,
-              reasoningOutputTokens: 50,
-              totalTokens: 1000,
-              costUSD: 0.34,
-              isFallback: false,
-            },
-          ],
-        },
-      ],
+      {
+        contributions: [
+          {
+            date: fixtureDate,
+            totals: { tokens: 1000, cost: 0.34 },
+            tokenBreakdown: { input: 500, output: 300, cacheWrite: 0, cacheRead: 200, reasoning: 50 },
+            clients: [
+              {
+                modelId: "gpt-5.1",
+                tokens: { input: 500, output: 300, cacheWrite: 0, cacheRead: 200, reasoning: 50 },
+                cost: 0.34,
+              },
+            ],
+          },
+        ],
+      },
       null,
       2,
     )}\n`,
@@ -328,6 +314,7 @@ function assertSyncPayloads(requests) {
     [
       "ccusageVersion",
       "cliVersion",
+      "costMetadata",
       "costSource",
       "costUsd",
       "date",
@@ -351,6 +338,7 @@ function assertSyncPayloads(requests) {
   assertEqual(claude.totalTokens, 1300, "claude total tokens");
   assertEqual(claude.costUsd, 0.12, "claude cost");
   assertEqual(claude.costSource, "tokscale", "claude cost source");
+  assertExactRecord(claude.costMetadata, { client: "claude" }, "claude cost metadata");
   assertEqual(claude.models.length, 1, "claude model row count");
   assertPayloadKeys(
     claude.models[0],
@@ -372,6 +360,7 @@ function assertSyncPayloads(requests) {
       cacheReadTokens: 70,
       inputTokens: 1000,
       outputTokens: 200,
+      reasoningOutputTokens: 0,
       totalCost: 0.12,
       totalTokens: 1300,
     },
@@ -384,6 +373,7 @@ function assertSyncPayloads(requests) {
     [
       "ccusageVersion",
       "cliVersion",
+      "costMetadata",
       "costSource",
       "costUsd",
       "date",
@@ -409,10 +399,11 @@ function assertSyncPayloads(requests) {
   assertEqual(codex.totalTokens, 1000, "codex total tokens");
   assertEqual(codex.costUsd, 0.34, "codex cost");
   assertEqual(codex.costSource, "tokscale", "codex cost source");
+  assertExactRecord(codex.costMetadata, { client: "codex" }, "codex cost metadata");
   assertEqual(codex.models.length, 1, "codex model row count");
   assertPayloadKeys(
     codex.models[0],
-    ["costUsd", "metadata", "modelName", "tokenCategories", "tokenDetails", "totalTokens"],
+    ["costUsd", "modelName", "tokenCategories", "tokenDetails", "totalTokens"],
     "codex model keys",
   );
   assertEqual(codex.models[0].modelName, "gpt-5.1", "codex model name");
@@ -424,15 +415,15 @@ function assertSyncPayloads(requests) {
   assertExactRecord(codex.models[0].tokenDetails, { reasoningOutput: 50 }, "codex model token details");
   assertEqual(codex.models[0].totalTokens, 1000, "codex model total tokens");
   assertEqual(codex.models[0].costUsd, 0.34, "codex model cost");
-  assertExactRecord(codex.models[0].metadata, { isFallback: false }, "codex model metadata");
   assertExactRecord(
     codex.sourceSnapshot,
     {
-      cachedInputTokens: 200,
-      costUSD: 0.34,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 200,
       inputTokens: 500,
       outputTokens: 300,
       reasoningOutputTokens: 50,
+      totalCost: 0.34,
       totalTokens: 1000,
     },
     "codex source snapshot",

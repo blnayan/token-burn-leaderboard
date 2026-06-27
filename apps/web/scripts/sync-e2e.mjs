@@ -28,13 +28,14 @@ const expectedProviders = {
     tokenCategories: { input: 100, output: 200, cacheCreate: 300, cacheRead: 400 },
     tokenDetails: null,
     costUsd: "1.234567",
-    costMetadata: { currency: "USD", pricingVersion: "e2e-claude" },
+    costMetadata: { client: "claude" },
     sourceSnapshot: {
       cacheCreationTokens: 300,
       cacheReadTokens: 400,
-      costUSD: 1.234567,
       inputTokens: 100,
       outputTokens: 200,
+      reasoningOutputTokens: 0,
+      totalCost: 1.234567,
       totalTokens: 1000,
     },
     models: [
@@ -47,13 +48,14 @@ const expectedProviders = {
     tokenCategories: { input: 100, output: 200, cacheCreate: 0, cacheRead: 300 },
     tokenDetails: { reasoningOutput: 50 },
     costUsd: "0.654321",
-    costMetadata: { currency: "USD", pricingVersion: "e2e-codex" },
+    costMetadata: { client: "codex" },
     sourceSnapshot: {
-      cachedInputTokens: 300,
-      costUSD: 0.654321,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 300,
       inputTokens: 100,
       outputTokens: 200,
       reasoningOutputTokens: 50,
+      totalCost: 0.654321,
       totalTokens: 600,
     },
     models: [
@@ -287,34 +289,23 @@ async function writeFixtures() {
   await writeFile(
     join(dir, "claude_code.json"),
     JSON.stringify({
-      daily: [
+      contributions: [
         {
-          cacheCreationTokens: 300,
-          cacheReadTokens: 400,
-          costMetadata: { currency: "USD", pricingVersion: "e2e-claude" },
-          costUSD: 1.234567,
           date: expectedDate,
-          inputTokens: 100,
-          models: {
-            "claude-haiku-3.5": {
-              cacheCreationTokens: 100,
-              cacheReadTokens: 100,
-              costUSD: 0.345678,
-              inputTokens: 50,
-              outputTokens: 150,
-              totalTokens: 400,
+          totals: { tokens: 1000, cost: 1.234567 },
+          tokenBreakdown: { input: 100, output: 200, cacheWrite: 300, cacheRead: 400, reasoning: 0 },
+          clients: [
+            {
+              modelId: "claude-haiku-3.5",
+              tokens: { input: 50, output: 150, cacheWrite: 100, cacheRead: 100, reasoning: 0 },
+              cost: 0.345678,
             },
-            "claude-sonnet-4": {
-              cacheCreationTokens: 200,
-              cacheReadTokens: 300,
-              costUSD: 0.888889,
-              inputTokens: 50,
-              outputTokens: 50,
-              totalTokens: 600,
+            {
+              modelId: "claude-sonnet-4",
+              tokens: { input: 50, output: 50, cacheWrite: 200, cacheRead: 300, reasoning: 0 },
+              cost: 0.888889,
             },
-          },
-          outputTokens: 200,
-          totalTokens: 1000,
+          ],
         },
       ],
     }),
@@ -323,39 +314,27 @@ async function writeFixtures() {
 
   await writeFile(
     join(dir, "codex.json"),
-    JSON.stringify([
-      {
-        cachedInputTokens: 300,
-        costMetadata: { currency: "USD", pricingVersion: "e2e-codex" },
-        costUSD: 0.654321,
-        date: expectedDate,
-        inputTokens: 100,
-        models: [
-          {
-            cachedInputTokens: 250,
-            costUSD: 0.444444,
-            inputTokens: 75,
-            isFallback: false,
-            model: "gpt-5.5",
-            outputTokens: 125,
-            reasoningOutputTokens: 50,
-            totalTokens: 450,
-          },
-          {
-            cachedInputTokens: 50,
-            costUSD: 0.111111,
-            inputTokens: 25,
-            isFallback: true,
-            model: "gpt-5.5-mini",
-            outputTokens: 75,
-            totalTokens: 150,
-          },
-        ],
-        outputTokens: 200,
-        reasoningOutputTokens: 50,
-        totalTokens: 600,
-      },
-    ]),
+    JSON.stringify({
+      contributions: [
+        {
+          date: expectedDate,
+          totals: { tokens: 600, cost: 0.654321 },
+          tokenBreakdown: { input: 100, output: 200, cacheWrite: 0, cacheRead: 300, reasoning: 50 },
+          clients: [
+            {
+              modelId: "gpt-5.5",
+              tokens: { input: 75, output: 125, cacheWrite: 0, cacheRead: 250, reasoning: 50 },
+              cost: 0.444444,
+            },
+            {
+              modelId: "gpt-5.5-mini",
+              tokens: { input: 25, output: 75, cacheWrite: 0, cacheRead: 50, reasoning: 0 },
+              cost: 0.111111,
+            },
+          ],
+        },
+      ],
+    }),
     "utf8",
   );
 
