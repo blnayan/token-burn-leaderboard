@@ -184,6 +184,49 @@ describe("persistSyncPayload", () => {
     expect(tx.dailyModelUsage.createMany).not.toHaveBeenCalled();
   });
 
+  it("persists tokscale cost source rows while retaining ccusageVersion compatibility", async () => {
+    const tx = createTransactionMock();
+    const prisma = createPrismaMock(tx);
+    const payload = createPayload({
+      provider: "grok",
+      tokenCategories: { input: 75, output: 25 },
+      totalTokens: 100,
+      costUsd: 0.42,
+      costSource: "tokscale",
+      costMetadata: { client: "grok", providerId: "xai" },
+      ccusageVersion: "4.0.4",
+      models: [],
+    });
+
+    await persistSyncPayload({
+      prisma,
+      cliTokenId: "cli-token-1",
+      memberId: "member-1",
+      payload,
+    });
+
+    expect(tx.dailyProviderUsage.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: "grok",
+          costUsd: "0.420000",
+          costSource: "tokscale",
+          costMetadata: { client: "grok", providerId: "xai" },
+          ccusageVersion: "4.0.4",
+        }),
+      }),
+    );
+    expect(tx.dailyProviderUsage.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          provider: "grok",
+          costSource: "tokscale",
+          ccusageVersion: "4.0.4",
+        }),
+      }),
+    );
+  });
+
   it("accepts an equal total and refreshes provider details", async () => {
     const tx = createTransactionMock();
     tx.dailyProviderUsage.updateMany.mockResolvedValue({ count: 1 });

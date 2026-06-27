@@ -108,6 +108,8 @@ describe("MemberUsageCharts", () => {
             { provider: "opencode", totalTokens: 4000, totalCostUsd: 4 },
             { provider: "copilot", totalTokens: 3000, totalCostUsd: 3 },
             { provider: "gemini", totalTokens: 2000, totalCostUsd: 2 },
+            { provider: "grok", totalTokens: 1000, totalCostUsd: 1 },
+            { provider: "antigravity_cli", totalTokens: 500, totalCostUsd: 0.5 },
           ],
           models: [
             { provider: "opencode", modelName: "gpt-oss", totalTokens: 4000, totalCostUsd: 4 },
@@ -121,6 +123,8 @@ describe("MemberUsageCharts", () => {
     expect(within(providersSection).getByRole("button", { name: /OpenCode/ })).toBeTruthy();
     expect(within(providersSection).getByRole("button", { name: /GitHub Copilot CLI/ })).toBeTruthy();
     expect(within(providersSection).getByRole("button", { name: /Gemini CLI/ })).toBeTruthy();
+    expect(within(providersSection).getByRole("button", { name: /Grok Build/ })).toBeTruthy();
+    expect(within(providersSection).getByRole("button", { name: /Antigravity CLI/ })).toBeTruthy();
   });
 
   it("truncates long breakdown labels inside a bounded row", () => {

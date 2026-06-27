@@ -42,6 +42,7 @@ describe("parseMemberUsageQuery", () => {
         ["provider", "codex"],
         ["provider", "claude_code"],
         ["provider", "opencode"],
+        ["provider", "grok"],
         ["device", "device-1"],
         ["device", "device-2"],
       ]),
@@ -50,7 +51,7 @@ describe("parseMemberUsageQuery", () => {
     expect(providerQuery).toEqual({
       period: "7d",
       filters: {
-        providers: ["codex", "claude_code", "opencode"],
+        providers: ["codex", "claude_code", "opencode", "grok"],
         models: [],
         devices: ["device-1", "device-2"],
       },
@@ -60,6 +61,7 @@ describe("parseMemberUsageQuery", () => {
       new URLSearchParams([
         ["range", "30d"],
         ["model", "codex:gpt-5.4"],
+        ["model", "grok:grok-code-fast-1"],
         ["model", "gemini:gemini-2.5-pro"],
         ["model", "claude_code:opus"],
       ]),
@@ -71,6 +73,7 @@ describe("parseMemberUsageQuery", () => {
         providers: [],
         models: [
           { provider: "codex", modelName: "gpt-5.4" },
+          { provider: "grok", modelName: "grok-code-fast-1" },
           { provider: "gemini", modelName: "gemini-2.5-pro" },
           { provider: "claude_code", modelName: "opus" },
         ],
@@ -119,14 +122,14 @@ describe("encodeMemberUsageQuery", () => {
     const providerParams = encodeMemberUsageQuery({
       period: "7d",
       filters: {
-        providers: ["codex", "claude_code", "opencode"],
+        providers: ["codex", "claude_code", "opencode", "grok"],
         models: [],
         devices: ["device-1", "device-2"],
       },
     });
 
     expect(providerParams.toString()).toBe(
-      "range=7d&provider=codex&provider=claude_code&provider=opencode&device=device-1&device=device-2",
+      "range=7d&provider=codex&provider=claude_code&provider=opencode&provider=grok&device=device-1&device=device-2",
     );
 
     const modelParams = encodeMemberUsageQuery({
@@ -135,6 +138,7 @@ describe("encodeMemberUsageQuery", () => {
         providers: [],
         models: [
           { provider: "codex", modelName: "gpt-5" },
+          { provider: "grok", modelName: "grok-code-fast-1" },
           { provider: "claude_code", modelName: "opus:sonnet" },
         ],
         devices: ["device-2"],
@@ -142,7 +146,7 @@ describe("encodeMemberUsageQuery", () => {
     });
 
     expect(modelParams.toString()).toBe(
-      "range=30d&model=codex%3Agpt-5&model=claude_code%3Aopus%3Asonnet&device=device-2",
+      "range=30d&model=codex%3Agpt-5&model=grok%3Agrok-code-fast-1&model=claude_code%3Aopus%3Asonnet&device=device-2",
     );
   });
 
