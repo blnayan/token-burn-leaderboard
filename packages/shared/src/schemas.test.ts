@@ -136,7 +136,7 @@ describe("syncPayloadSchema", () => {
     expect(payload.totalTokens).toBe(375);
   });
 
-  it("accepts expanded ccusage providers in sync payloads", () => {
+  it("accepts expanded tokscale providers in sync payloads", () => {
     const payload = syncPayloadSchema.parse({
       provider: "opencode",
       date: "2026-06-01",
@@ -317,6 +317,25 @@ describe("syncPayloadSchema", () => {
     });
 
     expect(payload.costSource).toBe("ccusage");
+  });
+
+  it("rejects unsupported cost source values", () => {
+    expect(() =>
+      syncPayloadSchema.parse({
+        provider: "codex",
+        date: "2026-06-01",
+        tokenCategories: { input: 100 },
+        totalTokens: 100,
+        costUsd: 0.01,
+        costSource: "other",
+        deviceId: "4f43b27d-7d86-4ff8-8c98-f74158819e59",
+        deviceName: "nayan-vps",
+        cliVersion: "0.1.0",
+        ccusageVersion: "20.0.6",
+        os: "linux",
+        syncedAt: "2026-06-01T00:00:00.000Z",
+      }),
+    ).toThrow();
   });
 
   it("rejects negative cost and model totals that do not match scoring categories", () => {
