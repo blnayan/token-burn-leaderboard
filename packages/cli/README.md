@@ -2,6 +2,8 @@
 
 Sync local coding-agent usage totals reported by tokscale to a Token Burn leaderboard.
 
+The CLI supports tokscale local/session providers such as Claude Code, Codex, OpenCode, Gemini CLI, Grok Build, and Antigravity CLI. Providers that require a separate login, sync, or cache-refresh flow, such as Cursor, are intentionally excluded for now.
+
 ## Quick Start
 
 Requires Node.js 24 LTS or newer.

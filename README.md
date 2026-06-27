@@ -1,6 +1,6 @@
 # Token Burn
 
-Token Burn is a private-invite leaderboard for aggregate coding-agent token usage reported by `ccusage`. The web app shows member totals, and the `token-burn` CLI syncs local daily usage totals from each member's machine.
+Token Burn is a private-invite leaderboard for aggregate coding-agent token usage reported by `tokscale`. The web app shows member totals, and the `token-burn` CLI syncs local daily usage totals from each member's machine.
 
 Production: <https://tokenburn.nayanbhut.dev>
 
@@ -34,15 +34,17 @@ Stored:
 - Daily token totals by provider and model
 - Token categories such as input, output, cache creation, and cache read
 - Cost estimates and reasoning token details when reported
-- Device name, OS, CLI version, `ccusage` version, and sync timestamp
+- Device name, OS, CLI version, usage collector version, and sync timestamp
 
 Not stored:
 
 - Prompts or raw conversation text
 - Project paths or file paths
 - Session IDs
-- Raw `ccusage` rows
+- Raw `tokscale` rows
 - GitHub OAuth tokens or raw CLI tokens
+
+Token Burn supports tokscale local/session providers such as Claude Code, Codex, OpenCode, Gemini CLI, Grok Build, and Antigravity CLI. Providers that require a separate login, sync, or cache-refresh flow, such as Cursor, are intentionally excluded for now.
 
 Leaderboard periods use UTC boundaries.
 

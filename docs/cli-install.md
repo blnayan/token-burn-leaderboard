@@ -27,7 +27,7 @@ token-burn setup
 
 The default server is `https://tokenburn.nayanbhut.dev`. Use `npx @blnayan/token-burn@latest setup --server-url <url>` only for a different deployment.
 
-If a global npm install reports that the `ccusage` native binary is not executable, do not run `token-burn sync` with `sudo`. Reinstall Node/npm in a user-writable environment such as `nvm`, or fix the native binary execute bit once.
+The CLI uses `tokscale` to read local/session coding-agent usage. Providers that require a separate login, sync, or cache-refresh flow, such as Cursor, are intentionally excluded for now.
 
 ## Device Identity And Recovery
 
