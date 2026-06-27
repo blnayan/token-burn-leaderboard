@@ -267,4 +267,14 @@ describe("readProviderUsage", () => {
       new UnsupportedTokscaleProviderError("grok"),
     );
   });
+
+  it("rejects unknown providers before invoking tokscale", async () => {
+    const runCommand = vi.fn();
+    const provider = "future_provider" as never;
+
+    await expect(readProviderUsage(provider, { runCommand })).rejects.toEqual(
+      new UnsupportedTokscaleProviderError(provider),
+    );
+    expect(runCommand).not.toHaveBeenCalled();
+  });
 });
