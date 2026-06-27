@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 
 import { formatProvider, providerMetadata, sumTokenCategories, type Provider } from "@token-burn/shared";
 
@@ -52,6 +52,10 @@ type CommandResult = {
 };
 
 type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
+type CommandInvocation = {
+  command: string;
+  args: string[];
+};
 
 type TokscaleProvider = Provider;
 
@@ -144,7 +148,13 @@ export async function readProviderUsage(
     throw new Error(`No ${formatProviderName(provider)} usage data found`);
   }
 
-  return normalizeTokscaleGraph(provider, JSON.parse(result.stdout) as unknown);
+  const rows = normalizeTokscaleGraph(provider, JSON.parse(result.stdout) as unknown);
+
+  if (rows.length === 0 && !window?.since) {
+    throw new Error(`No ${formatProviderName(provider)} usage data found`);
+  }
+
+  return rows;
 }
 
 export async function readTokscaleVersion(): Promise<string | null> {
@@ -497,7 +507,7 @@ function assertSupportedProvider(provider: TokscaleProvider): asserts provider i
 function isUnsupportedClientCommandError(error: unknown): boolean {
   const message = errorMessage(error);
 
-  return /invalid value ['"][^'"]+['"] for ['"]--client <CLIENT>['"]/i.test(message);
+  return /invalid value ['"][^'"]+['"] for ['"]--client <CLIENTS?>['"]/i.test(message);
 }
 
 function isNoDataFoundOutput(message: string): boolean {
@@ -513,8 +523,10 @@ function isFileNotFoundError(error: unknown): boolean {
 }
 
 function spawnCommand(command: string, args: string[]): Promise<CommandResult> {
+  const invocation = command === "tokscale" ? resolveTokscaleInvocation(args) : { command, args };
+
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(invocation.command, invocation.args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
     let stderr = "";
 
@@ -537,6 +549,24 @@ function spawnCommand(command: string, args: string[]): Promise<CommandResult> {
       reject(new Error(message));
     });
   });
+}
+
+function resolveTokscaleInvocation(args: string[]): CommandInvocation {
+  const binPath = resolveTokscaleBinPath();
+  return { command: process.execPath, args: [binPath, ...args] };
+}
+
+function resolveTokscaleBinPath(): string {
+  const packageJsonPath = requireFromCli.resolve("tokscale/package.json");
+  const packageRoot = dirname(packageJsonPath);
+  const parsed = requireFromCli(packageJsonPath) as { bin?: string | Record<string, string> };
+  const bin = typeof parsed.bin === "string" ? parsed.bin : parsed.bin?.tokscale;
+
+  if (!bin) {
+    throw new Error("Unable to determine tokscale executable path.");
+  }
+
+  return resolve(packageRoot, bin);
 }
 
 function formatProviderName(provider: TokscaleProvider): string {

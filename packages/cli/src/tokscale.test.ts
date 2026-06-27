@@ -1,3 +1,4 @@
+import { EventEmitter } from "node:events";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -52,6 +53,9 @@ async function createFixtureDir(): Promise<string> {
 
 afterEach(async () => {
   vi.unstubAllEnvs();
+  vi.doUnmock("node:child_process");
+  vi.doUnmock("node:module");
+  vi.resetModules();
   await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { recursive: true, force: true })));
 });
 
@@ -220,6 +224,66 @@ describe("normalizeTokscaleGraph", () => {
 });
 
 describe("readProviderUsage", () => {
+  it("resolves the package-local tokscale bin for the default command runner", async () => {
+    vi.resetModules();
+
+    const stdout = JSON.stringify({
+      contributions: [
+        {
+          date: "2026-06-01",
+          totals: { tokens: 10, cost: 0.01, messages: 1 },
+          tokenBreakdown: { input: 10, output: 0, cacheRead: 0, cacheWrite: 0, reasoning: 0 },
+          clients: [],
+        },
+      ],
+    });
+    const spawn = vi.fn(() => {
+      const child = new EventEmitter() as EventEmitter & {
+        stdout: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> };
+        stderr: EventEmitter & { setEncoding: ReturnType<typeof vi.fn> };
+      };
+      child.stdout = Object.assign(new EventEmitter(), { setEncoding: vi.fn() });
+      child.stderr = Object.assign(new EventEmitter(), { setEncoding: vi.fn() });
+      queueMicrotask(() => {
+        child.stdout.emit("data", stdout);
+        child.emit("close", 0);
+      });
+      return child;
+    });
+    const requireFromCli = Object.assign(
+      vi.fn(() => ({
+        bin: { tokscale: "dist/index.js" },
+      })),
+      {
+        resolve: vi.fn(() => "/workspace/node_modules/tokscale/package.json"),
+      },
+    );
+
+    vi.doMock("node:child_process", () => ({ spawn }));
+    vi.doMock("node:module", () => ({
+      createRequire: () => requireFromCli,
+    }));
+
+    const { readProviderUsage: readProviderUsageWithDefaultRunner } = await import("./tokscale.js");
+
+    await expect(readProviderUsageWithDefaultRunner("codex")).resolves.toMatchObject([
+      { provider: "codex", date: "2026-06-01", totalTokens: 10 },
+    ]);
+    expect(requireFromCli.resolve).toHaveBeenCalledWith("tokscale/package.json");
+    expect(requireFromCli).toHaveBeenCalledWith("/workspace/node_modules/tokscale/package.json");
+    expect(spawn).toHaveBeenCalledWith(
+      process.execPath,
+      [
+        "/workspace/node_modules/tokscale/dist/index.js",
+        "graph",
+        "--client",
+        "codex",
+        "--no-spinner",
+      ],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+  });
+
   it("passes tokscale graph args and parses stdout", async () => {
     const runCommand = vi.fn().mockResolvedValue({
       stdout: JSON.stringify({
@@ -316,6 +380,14 @@ describe("readProviderUsage", () => {
   });
 
   it("classifies unsupported tokscale clients", async () => {
+    const runCommand = vi.fn().mockRejectedValue(new Error("invalid value 'grok' for '--client <CLIENTS>'"));
+
+    await expect(readProviderUsage("grok", { runCommand })).rejects.toEqual(
+      new UnsupportedTokscaleProviderError("grok"),
+    );
+  });
+
+  it("continues to classify singular unsupported-client messages", async () => {
     const runCommand = vi.fn().mockRejectedValue(new Error("invalid value 'grok' for '--client <CLIENT>'"));
 
     await expect(readProviderUsage("grok", { runCommand })).rejects.toEqual(
@@ -327,6 +399,29 @@ describe("readProviderUsage", () => {
     const runCommand = vi.fn().mockRejectedValue(new Error("No data found for client codex"));
 
     await expect(readProviderUsage("codex", { runCommand })).rejects.toThrow("No Codex usage data found");
+  });
+
+  it("treats an empty full-history graph as missing local provider data", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({ contributions: [] }),
+      stderr: "",
+    });
+
+    await expect(readProviderUsage("codex", { runCommand })).rejects.toThrow("No Codex usage data found");
+  });
+
+  it("allows an empty graph inside a sync window", async () => {
+    const runCommand = vi.fn().mockResolvedValue({
+      stdout: JSON.stringify({ contributions: [] }),
+      stderr: "",
+    });
+
+    await expect(
+      readProviderUsage("codex", {
+        runCommand,
+        window: { since: "2026-06-01", until: "2026-06-02" },
+      }),
+    ).resolves.toEqual([]);
   });
 
   it("rejects unknown providers before invoking tokscale", async () => {
