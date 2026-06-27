@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { providers } from "@token-burn/shared";
+import { providerMetadata, providers } from "@token-burn/shared";
 import {
   UnsupportedTokscaleProviderError,
   buildTokscaleGraphArgs,
@@ -52,8 +52,10 @@ describe("buildTokscaleGraphArgs", () => {
   it("maps every supported provider to a tokscale client", () => {
     for (const provider of providers) {
       const args = buildTokscaleGraphArgs(provider);
+      const clientIndex = args.indexOf("--client");
       expect(args[0]).toBe("graph");
       expect(args).toContain("--client");
+      expect(args[clientIndex + 1]).toBe(providerMetadata[provider].tokscaleClient);
       expect(args).toContain("--no-spinner");
     }
   });
@@ -145,6 +147,7 @@ describe("normalizeTokscaleGraph", () => {
 
     expect(rows[0]?.tokenCategories).toEqual({ input: 100, output: 100, cacheCreate: 50, cacheRead: 50 });
     expect(rows[0]?.totalTokens).toBe(300);
+    expect(rows[0]?.costUsd).toBe(0.3);
     expect(rows[0]?.models?.map((model) => model.modelName)).toEqual(["gpt-5", "gpt-5-mini"]);
   });
 
