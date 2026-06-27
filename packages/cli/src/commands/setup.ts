@@ -38,7 +38,7 @@ export async function runSetup({
   serverUrl,
   readConfig = readConfigFile,
   login,
-  sync = syncUsage,
+  sync,
   installScheduler,
   validateAuth = validateAuthFromServer,
   log,
@@ -48,6 +48,7 @@ export async function runSetup({
   const childRenderer = suppressResult(renderer);
   const runSetupLogin = login ?? runLogin;
   const runSetupInstallScheduler = installScheduler ?? runInstallScheduler;
+  const runSetupSync = sync ?? (() => syncUsage({ log: (message) => renderer.info(message) }));
   const normalizedServerUrl = normalizeServerUrl(serverUrl);
 
   renderer.intro("Token Burn setup", [{ label: "Server", value: normalizedServerUrl }]);
@@ -63,7 +64,7 @@ export async function runSetup({
   let syncFailed = false;
   renderer.step("sync", "Submitting usage totals");
   try {
-    await sync();
+    await runSetupSync();
     renderer.success("sync", "First sync complete");
   } catch (error) {
     syncFailed = true;

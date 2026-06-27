@@ -24,11 +24,11 @@ export type CliAuthSelection = {
 
 type SelectedCliToken<Selection extends CliAuthSelection> = Selection["cliToken"] extends object
   ? { [Key in keyof Selection["cliToken"] & string]: string }
-  : {};
+  : object;
 
 type SelectedMember<Selection extends CliAuthSelection> = Selection["member"] extends object
   ? { [Key in keyof Selection["member"] & string]: Key extends "username" ? string | null : string }
-  : {};
+  : object;
 
 export type AuthenticatedCliContext<Selection extends CliAuthSelection> = {
   token: string;

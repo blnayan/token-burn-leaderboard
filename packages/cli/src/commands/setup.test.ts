@@ -283,6 +283,35 @@ describe("runSetup", () => {
       JSON.stringify({ ok: true, authReused: false, schedulerInstalled: true, syncFailed: false }),
     ]);
   });
+
+  it("routes default setup sync output through the setup renderer", async () => {
+    vi.resetModules();
+    const syncUsage = vi.fn(async (options?: { log?: (message: string) => void }) => {
+      (options?.log ?? console.log)("Submitted 2 usage rows.");
+    });
+    vi.doMock("../sync.js", () => ({ syncUsage }));
+
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const calls: string[] = [];
+
+    try {
+      const { runSetup: runSetupWithDefaultSync } = await import("./setup.js");
+
+      await runSetupWithDefaultSync({
+        serverUrl: "https://token-burn.test",
+        readConfig: async () => null,
+        login: async () => undefined,
+        installScheduler: async () => undefined,
+        ui: createRecordingUi(calls),
+      });
+
+      expect(syncUsage).toHaveBeenCalledWith({ log: expect.any(Function) });
+      expect(calls).toContain("info:Submitted 2 usage rows.");
+      expect(consoleLog).not.toHaveBeenCalled();
+    } finally {
+      consoleLog.mockRestore();
+    }
+  });
 });
 
 function config(overrides: Partial<CliConfig>): CliConfig {
