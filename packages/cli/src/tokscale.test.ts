@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { providerMetadata, providers } from "@token-burn/shared";
+import { providers, type Provider } from "@token-burn/shared";
 import {
   UnsupportedTokscaleProviderError,
   buildTokscaleGraphArgs,
@@ -12,6 +12,37 @@ import {
 } from "./tokscale.js";
 
 const tempDirs: string[] = [];
+const providerClientPairs = [
+  ["claude_code", "claude"],
+  ["codex", "codex"],
+  ["opencode", "opencode"],
+  ["amp", "amp"],
+  ["droid", "droid"],
+  ["codebuff", "codebuff"],
+  ["hermes", "hermes"],
+  ["pi", "pi"],
+  ["goose", "goose"],
+  ["kilo", "kilo"],
+  ["copilot", "copilot"],
+  ["gemini", "gemini"],
+  ["kimi", "kimi"],
+  ["qwen", "qwen"],
+  ["openclaw", "openclaw"],
+  ["roocode", "roocode"],
+  ["kilocode", "kilocode"],
+  ["mux", "mux"],
+  ["zed", "zed"],
+  ["kiro", "kiro"],
+  ["cline", "cline"],
+  ["gjc", "gjc"],
+  ["grok", "grok"],
+  ["jcode", "jcode"],
+  ["micode", "micode"],
+  ["commandcode", "commandcode"],
+  ["antigravity_cli", "antigravity-cli"],
+  ["junie", "junie"],
+  ["zcode", "zcode"],
+] as const satisfies ReadonlyArray<readonly [Provider, string]>;
 
 async function createFixtureDir(): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "token-burn-tokscale-fixture-"));
@@ -50,12 +81,14 @@ describe("buildTokscaleGraphArgs", () => {
   });
 
   it("maps every supported provider to a tokscale client", () => {
-    for (const provider of providers) {
+    expect(providerClientPairs.map(([provider]) => provider)).toEqual(providers);
+
+    for (const [provider, client] of providerClientPairs) {
       const args = buildTokscaleGraphArgs(provider);
       const clientIndex = args.indexOf("--client");
       expect(args[0]).toBe("graph");
       expect(args).toContain("--client");
-      expect(args[clientIndex + 1]).toBe(providerMetadata[provider].tokscaleClient);
+      expect(args[clientIndex + 1]).toBe(client);
       expect(args).toContain("--no-spinner");
     }
   });
@@ -211,7 +244,10 @@ describe("readProviderUsage", () => {
       stderr: "",
     });
 
-    await readProviderUsage("claude_code", { runCommand, window: { since: "2026-06-01", until: "2026-06-01" } });
+    const rows = await readProviderUsage("claude_code", {
+      runCommand,
+      window: { since: "2026-06-01", until: "2026-06-01" },
+    });
 
     expect(runCommand).toHaveBeenCalledWith("tokscale", [
       "graph",
@@ -222,6 +258,25 @@ describe("readProviderUsage", () => {
       "--until",
       "2026-06-01",
       "--no-spinner",
+    ]);
+    expect(rows).toMatchObject([
+      {
+        provider: "claude_code",
+        date: "2026-06-01",
+        tokenCategories: { input: 10, output: 0, cacheCreate: 0, cacheRead: 0 },
+        totalTokens: 10,
+        costUsd: 0.01,
+        costSource: "tokscale",
+        models: [
+          {
+            modelName: "claude-sonnet-4",
+            tokenCategories: { input: 10, output: 0, cacheCreate: 0, cacheRead: 0 },
+            totalTokens: 10,
+            costUsd: 0.01,
+            metadata: { client: "claude", messages: 1, providerId: "anthropic" },
+          },
+        ],
+      },
     ]);
   });
 
@@ -266,6 +321,12 @@ describe("readProviderUsage", () => {
     await expect(readProviderUsage("grok", { runCommand })).rejects.toEqual(
       new UnsupportedTokscaleProviderError("grok"),
     );
+  });
+
+  it("normalizes tokscale no-local-data output into a skippable provider message", async () => {
+    const runCommand = vi.fn().mockRejectedValue(new Error("No data found for client codex"));
+
+    await expect(readProviderUsage("codex", { runCommand })).rejects.toThrow("No Codex usage data found");
   });
 
   it("rejects unknown providers before invoking tokscale", async () => {
