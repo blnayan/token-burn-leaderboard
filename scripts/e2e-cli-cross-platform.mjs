@@ -350,7 +350,7 @@ function assertSyncPayloads(requests) {
   );
   assertEqual(claude.totalTokens, 1300, "claude total tokens");
   assertEqual(claude.costUsd, 0.12, "claude cost");
-  assertEqual(claude.costSource, "ccusage", "claude cost source");
+  assertEqual(claude.costSource, "tokscale", "claude cost source");
   assertEqual(claude.models.length, 1, "claude model row count");
   assertPayloadKeys(
     claude.models[0],
@@ -408,7 +408,7 @@ function assertSyncPayloads(requests) {
   assertExactRecord(codex.tokenDetails, { reasoningOutput: 50 }, "codex token details");
   assertEqual(codex.totalTokens, 1000, "codex total tokens");
   assertEqual(codex.costUsd, 0.34, "codex cost");
-  assertEqual(codex.costSource, "ccusage", "codex cost source");
+  assertEqual(codex.costSource, "tokscale", "codex cost source");
   assertEqual(codex.models.length, 1, "codex model row count");
   assertPayloadKeys(
     codex.models[0],

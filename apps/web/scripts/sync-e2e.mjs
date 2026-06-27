@@ -436,7 +436,7 @@ async function assertDatabaseState({ memberId, expectedDeviceId, expectedLastSyn
     assertJsonEqual(usage.tokenCategories, expected.tokenCategories, `${usage.provider} tokenCategories`);
     assertJsonEqual(dbNullToNull(usage.tokenDetails), expected.tokenDetails, `${usage.provider} tokenDetails`);
     assertEqual(usage.costUsd?.toFixed(6), expected.costUsd, `${usage.provider} costUsd`);
-    assertEqual(usage.costSource, "ccusage", `${usage.provider} costSource`);
+    assertEqual(usage.costSource, "tokscale", `${usage.provider} costSource`);
     assertJsonEqual(usage.costMetadata, expected.costMetadata, `${usage.provider} costMetadata`);
     assertJsonEqual(dbNullToNull(usage.sourceSnapshot), expected.sourceSnapshot, `${usage.provider} sourceSnapshot`);
     assert(usage.cliVersion.length > 0, `${usage.provider} cliVersion should be populated.`);

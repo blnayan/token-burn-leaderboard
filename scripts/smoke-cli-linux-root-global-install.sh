@@ -17,24 +17,25 @@ docker run --rm \
 const fs = require("node:fs");
 const path = require("node:path");
 
-const ccusageRoot = "/usr/local/lib/node_modules/@blnayan/token-burn/node_modules/@ccusage";
-const binaries = [];
+const packageRoot = "/usr/local/lib/node_modules/@blnayan/token-burn";
+const tokscalePackageJson = path.join(packageRoot, "node_modules", "tokscale", "package.json");
 
-for (const packageName of fs.readdirSync(ccusageRoot)) {
-  const binaryPath = path.join(ccusageRoot, packageName, "bin", "ccusage");
-  if (!fs.existsSync(binaryPath)) continue;
-
-  const mode = fs.statSync(binaryPath).mode & 0o777;
-  console.log(`${binaryPath} ${mode.toString(8)}`);
-
-  if ((mode & 0o111) !== 0o111) {
-    throw new Error(`${binaryPath} is not executable`);
-  }
-
-  binaries.push(binaryPath);
+if (!fs.existsSync(tokscalePackageJson)) {
+  throw new Error("tokscale package was not installed with token-burn");
 }
 
-if (binaries.length === 0) {
-  throw new Error("No ccusage native binary found");
+const tokscalePackage = JSON.parse(fs.readFileSync(tokscalePackageJson, "utf8"));
+const bin = typeof tokscalePackage.bin === "string" ? tokscalePackage.bin : tokscalePackage.bin?.tokscale;
+
+if (!bin) {
+  throw new Error("tokscale package does not declare a bin");
 }
+
+const binPath = path.resolve(path.dirname(tokscalePackageJson), bin);
+
+if (!fs.existsSync(binPath)) {
+  throw new Error(`tokscale bin not found at ${binPath}`);
+}
+
+console.log(`tokscale ${tokscalePackage.version} ${binPath}`);
 NODE'
